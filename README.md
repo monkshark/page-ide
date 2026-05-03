@@ -69,11 +69,10 @@ graph TD
 - **main 브런치 보호**: 직접 푸시 금지. 모든 변경은 feature 브런치 → PR → CI 통과 → squash 머지.
 - **CI**: ubuntu-latest + Temurin 21 + `./gradlew build`. PR 머지 게이트.
 - **테스트 정책**: 큰 기능 (실 동작 코드) 작업 시 단위 테스트 동반. 골격/스캐폴딩은 면제.
-- **커밋 메시지**: 한국어 본문, 영어는 고유명사/툴/식별자 한정. Conventional Commits prefix (`feat:`, `docs:`) 나 단계 prefix 사용 금지 — 변경 내용만 직접 적는다.
 
 ## 라이선스
 
-> 미정 — pre-alpha 단계.
+> 미정.
 
 ## Contact
 

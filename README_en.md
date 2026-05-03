@@ -65,11 +65,10 @@ graph TD
 - **main branch is protected**: no direct push. All changes go feature branch → PR → CI green → squash merge.
 - **CI**: ubuntu-latest + Temurin 21 + `./gradlew build`. PR merge gate.
 - **Test policy**: unit tests required for big features (real behavior code). Skeleton/scaffolding exempt.
-- **Commit messages**: Korean prose, English only for proper nouns / tools / identifiers. No Conventional Commits prefix (`feat:`, `docs:`) or milestone prefix — just describe the change directly.
 
 ## License
 
-> TBD — pre-alpha.
+> TBD.
 
 ## Contact
 
