@@ -4,4 +4,9 @@ plugins {
 
 dependencies {
     api(project(":page:core"))
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
