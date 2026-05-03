@@ -99,20 +99,6 @@ private fun FileTreePanel(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EditorPanel(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "PAGE shell — editor goes here",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun Divider() {
     Box(
         modifier = Modifier
