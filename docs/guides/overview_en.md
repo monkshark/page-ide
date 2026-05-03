@@ -1,6 +1,6 @@
 # PAGE Overview
 
-> 한국어: [overview.md](./overview.md)
+> 한국어: [overview.md](https://monkshark.github.io/PAGE_IDE/#guides/overview.md)
 
 > Multi-language desktop IDE. The name comes from the initials of four core values — **P**air · **A**tlas · **G**lass · **E**cho.
 
@@ -73,5 +73,5 @@ Four stages, each ending with something shippable.
 
 ## Next document
 
-- [Architecture](./architecture_en.md) — Module structure, dependency direction, and stack choices
-- [Back to index](../README_en.md)
+- [Architecture](https://monkshark.github.io/PAGE_IDE/#guides/architecture_en.md) — Module structure, dependency direction, and stack choices
+- [Back to index](https://monkshark.github.io/PAGE_IDE/#README_en.md)

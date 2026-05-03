@@ -1,6 +1,6 @@
 # Architecture
 
-> 한국어: [architecture.md](./architecture.md)
+> 한국어: [architecture.md](https://monkshark.github.io/PAGE_IDE/#guides/architecture.md)
 
 > Module boundaries, dependency direction, and stack choices.
 
@@ -98,5 +98,5 @@ API keys are stored in the OS keychain (Windows Credential Manager, macOS Keycha
 
 ---
 
-- [Back to overview](./overview_en.md)
-- [Back to index](../README_en.md)
+- [Back to overview](https://monkshark.github.io/PAGE_IDE/#guides/overview_en.md)
+- [Back to index](https://monkshark.github.io/PAGE_IDE/#README_en.md)

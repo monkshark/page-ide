@@ -1,6 +1,6 @@
 # 아키텍처
 
-> English: [architecture_en.md](./architecture_en.md)
+> English: [architecture_en.md](https://monkshark.github.io/PAGE_IDE/#guides/architecture_en.md)
 
 > 모듈 경계, 의존 방향, 기술 스택 결정.
 
@@ -98,5 +98,5 @@ API 키는 OS 키체인에 저장한다 (Windows Credential Manager 등). 평문
 
 ---
 
-- [개요로 돌아가기](./overview.md)
-- [목차로 돌아가기](../README.md)
+- [개요로 돌아가기](https://monkshark.github.io/PAGE_IDE/#guides/overview.md)
+- [목차로 돌아가기](https://monkshark.github.io/PAGE_IDE/#README.md)

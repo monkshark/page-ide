@@ -1,6 +1,6 @@
 # PAGE IDE Docs
 
-> 한국어: [README.md](./README.md)
+> 한국어: [README.md](https://monkshark.github.io/PAGE_IDE/#README.md)
 
 > Multi-language desktop IDE — Pair · Atlas · Glass · Echo
 
@@ -13,8 +13,8 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 ## Table of contents
 
 ### Guides
-- [PAGE overview](./guides/overview_en.md) — The four core values (Pair · Atlas · Glass · Echo) and what we will not build
-- [Architecture](./guides/architecture_en.md) — Module structure, dependency direction, and stack choices
+- [PAGE overview](https://monkshark.github.io/PAGE_IDE/#guides/overview_en.md) — The four core values (Pair · Atlas · Glass · Echo) and what we will not build
+- [Architecture](https://monkshark.github.io/PAGE_IDE/#guides/architecture_en.md) — Module structure, dependency direction, and stack choices
 
 ### Modules
 > Filled in as code lands. Only the skeleton exists right now.
