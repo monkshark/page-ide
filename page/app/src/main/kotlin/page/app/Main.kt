@@ -46,6 +46,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import page.core.PageIdentity
+import page.editor.EditSnapshot
 import page.editor.FileDocument
 import page.editor.FileKind
 import page.editor.FileKinds
@@ -202,6 +203,9 @@ fun main() = application {
         val s = search
         val range = s?.active
         if (s != null && range != null) {
+            book = book.pushHistoryOnActive(
+                EditSnapshot(editorValue.text, editorValue.selection.start)
+            )
             val r = Replace.applyCurrent(editorValue.text, range, s.replace)
             editorValue = TextFieldValue(r.text, TextRange(r.caret))
             book = book.updateActive(r.text, r.caret)
@@ -218,10 +222,36 @@ fun main() = application {
     val onReplaceAll: () -> Unit = {
         val s = search
         if (s != null && s.matches.isNotEmpty()) {
+            book = book.pushHistoryOnActive(
+                EditSnapshot(editorValue.text, editorValue.selection.start)
+            )
             val r = Replace.applyAll(editorValue.text, s.matches, s.replace)
             editorValue = TextFieldValue(r.text, TextRange(r.caret))
             book = book.updateActive(r.text, r.caret)
             search = s.retarget(r.text)
+        }
+    }
+
+    val doUndo: () -> Unit = {
+        val current = EditSnapshot(editorValue.text, editorValue.selection.start)
+        val result = book.undoOnActive(current)
+        if (result != null) {
+            val (newBook, restored) = result
+            book = newBook
+            val caret = restored.caret.coerceIn(0, restored.text.length)
+            editorValue = TextFieldValue(restored.text, TextRange(caret))
+            search = search?.retarget(restored.text)
+        }
+    }
+    val doRedo: () -> Unit = {
+        val current = EditSnapshot(editorValue.text, editorValue.selection.start)
+        val result = book.redoOnActive(current)
+        if (result != null) {
+            val (newBook, restored) = result
+            book = newBook
+            val caret = restored.caret.coerceIn(0, restored.text.length)
+            editorValue = TextFieldValue(restored.text, TextRange(caret))
+            search = search?.retarget(restored.text)
         }
     }
 
@@ -243,6 +273,15 @@ fun main() = application {
                 event.key == Key.W -> { closeActiveTab(); true }
                 event.key == Key.F -> { openSearch(); true }
                 event.key == Key.R -> { openReplace(); true }
+                event.key == Key.Z && event.isShiftPressed -> {
+                    if (search != null) false else { doRedo(); true }
+                }
+                event.key == Key.Z -> {
+                    if (search != null) false else { doUndo(); true }
+                }
+                event.key == Key.Y -> {
+                    if (search != null) false else { doRedo(); true }
+                }
                 else -> false
             }
         } else if (event.key == Key.Escape && search != null) {
@@ -268,6 +307,11 @@ fun main() = application {
                     editorValue = editorValue,
                     onEditorChange = { v ->
                         val textChanged = v.text != editorValue.text
+                        if (textChanged) {
+                            book = book.pushHistoryOnActive(
+                                EditSnapshot(editorValue.text, editorValue.selection.start)
+                            )
+                        }
                         editorValue = v
                         book = book.updateActive(v.text, v.selection.start)
                         if (textChanged) {

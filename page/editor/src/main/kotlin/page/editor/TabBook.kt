@@ -7,6 +7,7 @@ data class OpenTab(
     val text: String,
     val savedText: String = text,
     val caret: Int = 0,
+    val history: EditHistory = EditHistory(),
 ) {
     val dirty: Boolean get() = text != savedText
 }
@@ -52,6 +53,45 @@ data class TabBook(
             it[activeIndex] = current.copy(text = text, caret = caret)
         }
         return copy(tabs = updated)
+    }
+
+    fun pushHistoryOnActive(prev: EditSnapshot): TabBook {
+        if (activeIndex !in tabs.indices) return this
+        val current = tabs[activeIndex]
+        val newHistory = current.history.pushBeforeChange(prev)
+        if (newHistory === current.history) return this
+        val updated = tabs.toMutableList().also {
+            it[activeIndex] = current.copy(history = newHistory)
+        }
+        return copy(tabs = updated)
+    }
+
+    fun undoOnActive(current: EditSnapshot): Pair<TabBook, EditSnapshot>? {
+        if (activeIndex !in tabs.indices) return null
+        val tab = tabs[activeIndex]
+        val (newHistory, restored) = tab.history.undo(current) ?: return null
+        val updated = tabs.toMutableList().also {
+            it[activeIndex] = tab.copy(
+                text = restored.text,
+                caret = restored.caret,
+                history = newHistory,
+            )
+        }
+        return copy(tabs = updated) to restored
+    }
+
+    fun redoOnActive(current: EditSnapshot): Pair<TabBook, EditSnapshot>? {
+        if (activeIndex !in tabs.indices) return null
+        val tab = tabs[activeIndex]
+        val (newHistory, restored) = tab.history.redo(current) ?: return null
+        val updated = tabs.toMutableList().also {
+            it[activeIndex] = tab.copy(
+                text = restored.text,
+                caret = restored.caret,
+                history = newHistory,
+            )
+        }
+        return copy(tabs = updated) to restored
     }
 
     fun markActiveSaved(): TabBook {
