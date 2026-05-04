@@ -32,6 +32,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -56,6 +57,7 @@ fun SearchBar(
     onReplace: () -> Unit,
     onReplaceAll: () -> Unit,
     onClose: () -> Unit,
+    onWindowShortcut: (KeyEvent) -> Boolean,
     modifier: Modifier = Modifier,
 ) {
     val queryFocus = remember { FocusRequester() }
@@ -92,7 +94,7 @@ fun SearchBar(
                                         if (e.isShiftPressed) onPrev() else onNext(); true
                                     }
                                     Key.Escape -> { onClose(); true }
-                                    else -> false
+                                    else -> onWindowShortcut(e)
                                 }
                             },
                     )
@@ -134,7 +136,7 @@ fun SearchBar(
                                     when (e.key) {
                                         Key.Enter -> { onReplace(); true }
                                         Key.Escape -> { onClose(); true }
-                                        else -> false
+                                        else -> onWindowShortcut(e)
                                     }
                                 },
                         )

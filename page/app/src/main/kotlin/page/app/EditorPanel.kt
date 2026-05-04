@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -76,6 +77,7 @@ fun EditorPanel(
     onReplace: () -> Unit,
     onReplaceAll: () -> Unit,
     onSearchClose: () -> Unit,
+    onWindowShortcut: (KeyEvent) -> Boolean,
     lexer: SyntaxLexer?,
     modifier: Modifier = Modifier,
 ) {
@@ -158,6 +160,7 @@ fun EditorPanel(
                 onReplace = onReplace,
                 onReplaceAll = onReplaceAll,
                 onClose = onSearchClose,
+                onWindowShortcut = onWindowShortcut,
             )
         }
         Row(

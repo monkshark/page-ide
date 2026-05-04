@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -225,33 +226,35 @@ fun main() = application {
     }
 
     val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
+    val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
+        if (event.type != KeyEventType.KeyDown) return@handler false
+        val frame = frameRef.value
+        if (event.isCtrlPressed) {
+            when {
+                event.key == Key.O && event.isShiftPressed -> {
+                    if (frame != null) openFolder(frame); true
+                }
+                event.key == Key.O -> {
+                    if (frame != null) openFile(frame); true
+                }
+                event.key == Key.S -> {
+                    if (frame != null) saveFile(frame); true
+                }
+                event.key == Key.W -> { closeActiveTab(); true }
+                event.key == Key.F -> { openSearch(); true }
+                event.key == Key.R -> { openReplace(); true }
+                else -> false
+            }
+        } else if (event.key == Key.Escape && search != null) {
+            closeSearch(); true
+        } else false
+    }
     Window(
         onCloseRequest = requestExit,
         state = windowState,
         title = windowTitle(book.active?.path),
-        onPreviewKeyEvent = handler@{ event ->
-            if (event.type != KeyEventType.KeyDown) return@handler false
-            val frame = frameRef.value
-            if (event.isCtrlPressed) {
-                when {
-                    event.key == Key.O && event.isShiftPressed -> {
-                        if (frame != null) openFolder(frame); true
-                    }
-                    event.key == Key.O -> {
-                        if (frame != null) openFile(frame); true
-                    }
-                    event.key == Key.S -> {
-                        if (frame != null) saveFile(frame); true
-                    }
-                    event.key == Key.W -> { closeActiveTab(); true }
-                    event.key == Key.F -> { openSearch(); true }
-                    event.key == Key.R -> { openReplace(); true }
-                    else -> false
-                }
-            } else if (event.key == Key.Escape && search != null) {
-                closeSearch(); true
-            } else false
-        },
+        onPreviewKeyEvent = handleShortcut,
+        onKeyEvent = handleShortcut,
     ) {
         LaunchedEffect(Unit) { frameRef.value = window }
         GlassTheme {
@@ -291,6 +294,7 @@ fun main() = application {
                     onReplace = onReplace,
                     onReplaceAll = onReplaceAll,
                     onSearchClose = closeSearch,
+                    onWindowShortcut = handleShortcut,
                 )
             }
         }
@@ -355,6 +359,7 @@ private fun Shell(
     onReplace: () -> Unit,
     onReplaceAll: () -> Unit,
     onSearchClose: () -> Unit,
+    onWindowShortcut: (KeyEvent) -> Boolean,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TitleBar(path = activePath)
@@ -395,6 +400,7 @@ private fun Shell(
                         onReplace = onReplace,
                         onReplaceAll = onReplaceAll,
                         onSearchClose = onSearchClose,
+                        onWindowShortcut = onWindowShortcut,
                         lexer = active?.path?.let { SyntaxLexers.forPath(it) },
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
