@@ -32,6 +32,7 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 - [BracketMatch](https://monkshark.github.io/PAGE_IDE/#modules/editor/bracket_match_en.md) — Find the matching bracket
 - [Indent](https://monkshark.github.io/PAGE_IDE/#modules/editor/indent_en.md) — Tab / Enter auto-indent
 - [LineMove](https://monkshark.github.io/PAGE_IDE/#modules/editor/line_move_en.md) — Line move / duplicate
+- [WordBoundary](https://monkshark.github.io/PAGE_IDE/#modules/editor/word_boundary_en.md) — Word-wise motion / deletion boundaries
 - [MarkdownFence](https://monkshark.github.io/PAGE_IDE/#modules/editor/markdown_fence_en.md) — Inside-code-fence detection
 - [SyntaxLexer](https://monkshark.github.io/PAGE_IDE/#modules/editor/syntax_lexer_en.md) — Lexer interface
 - [SyntaxLexers](https://monkshark.github.io/PAGE_IDE/#modules/editor/syntax_lexers_en.md) — Extension → lexer dispatch

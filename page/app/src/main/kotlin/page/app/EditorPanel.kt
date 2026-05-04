@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -63,6 +64,7 @@ import page.editor.TextBuffer
 import page.editor.TextEdit
 import page.editor.Token
 import page.editor.TokenKind
+import page.editor.WordBoundary
 import java.nio.file.Path
 import page.ui.EditorFontFamily
 import page.ui.GlassDarkSyntax
@@ -257,6 +259,10 @@ fun EditorPanel(
                                 true
                             } else true
                         }
+                        if (event.isCtrlPressed && !event.isAltPressed) {
+                            val handled = handleWordShortcut(event, value, onValueChange)
+                            if (handled) return@onPreviewKeyEvent true
+                        }
                         when (event.key) {
                             Key.Tab -> {
                                 val edit = TextEdit(
@@ -325,6 +331,47 @@ fun EditorPanel(
             lineCount = buffer.lineCount,
             charCount = buffer.length,
         )
+    }
+}
+
+private fun handleWordShortcut(
+    event: KeyEvent,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+): Boolean {
+    val text = value.text
+    val anchor = value.selection.start
+    val caret = value.selection.end
+    return when (event.key) {
+        Key.DirectionLeft -> {
+            val target = WordBoundary.prevBoundary(text, caret)
+            val newSelection = if (event.isShiftPressed) TextRange(anchor, target)
+            else TextRange(target)
+            onValueChange(value.copy(selection = newSelection))
+            true
+        }
+        Key.DirectionRight -> {
+            val target = WordBoundary.nextBoundary(text, caret)
+            val newSelection = if (event.isShiftPressed) TextRange(anchor, target)
+            else TextRange(target)
+            onValueChange(value.copy(selection = newSelection))
+            true
+        }
+        Key.Backspace -> {
+            if (!value.selection.collapsed) return false
+            val edit = TextEdit(text, caret)
+            val r = WordBoundary.deleteWordBackward(edit) ?: return false
+            onValueChange(value.copy(text = r.text, selection = TextRange(r.caret)))
+            true
+        }
+        Key.Delete -> {
+            if (!value.selection.collapsed) return false
+            val edit = TextEdit(text, caret)
+            val r = WordBoundary.deleteWordForward(edit) ?: return false
+            onValueChange(value.copy(text = r.text, selection = TextRange(r.caret)))
+            true
+        }
+        else -> false
     }
 }
 
