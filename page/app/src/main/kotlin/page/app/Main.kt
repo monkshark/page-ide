@@ -50,6 +50,7 @@ import page.editor.FileDocument
 import page.editor.FileKind
 import page.editor.FileKinds
 import page.editor.SearchState
+import page.editor.SyntaxLexers
 import page.editor.TabBook
 import page.ui.GlassTheme
 import java.awt.Cursor
@@ -286,6 +287,7 @@ private fun Shell(
                         onSearchNext = onSearchNext,
                         onSearchPrev = onSearchPrev,
                         onSearchClose = onSearchClose,
+                        lexer = active?.path?.let { SyntaxLexers.forPath(it) },
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }

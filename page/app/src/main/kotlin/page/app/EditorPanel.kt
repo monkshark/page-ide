@@ -28,7 +28,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import page.editor.SearchState
+import page.editor.SyntaxLexer
 import page.editor.TextBuffer
+import page.editor.Token
+import page.editor.TokenKind
+import page.ui.GlassDarkSyntax
+import page.ui.SyntaxPalette
 
 @Composable
 fun EditorPanel(
@@ -40,6 +45,7 @@ fun EditorPanel(
     onSearchNext: () -> Unit,
     onSearchPrev: () -> Unit,
     onSearchClose: () -> Unit,
+    lexer: SyntaxLexer?,
     modifier: Modifier = Modifier,
 ) {
     val buffer = remember(value.text) { TextBuffer(value.text) }
@@ -48,17 +54,26 @@ fun EditorPanel(
 
     val matchBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     val activeBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+    val palette = GlassDarkSyntax
 
-    val visualTransformation = remember(search, matchBg, activeBg) {
-        if (search != null && search.matches.isNotEmpty()) {
-            HighlightTransformation(
-                matches = search.matches,
-                activeIndex = search.activeMatchIndex,
+    val tokens = remember(value.text, lexer) {
+        lexer?.tokenize(value.text).orEmpty()
+    }
+
+    val visualTransformation = remember(search, tokens, matchBg, activeBg, palette) {
+        val matches = search?.matches.orEmpty()
+        val activeIndex = search?.activeMatchIndex ?: -1
+        if (tokens.isEmpty() && matches.isEmpty()) {
+            VisualTransformation.None
+        } else {
+            CombinedHighlightTransformation(
+                tokens = tokens,
+                palette = palette,
+                matches = matches,
+                activeIndex = activeIndex,
                 matchBg = matchBg,
                 activeBg = activeBg,
             )
-        } else {
-            VisualTransformation.None
         }
     }
 
@@ -98,15 +113,23 @@ fun EditorPanel(
     }
 }
 
-private class HighlightTransformation(
+private class CombinedHighlightTransformation(
+    private val tokens: List<Token>,
+    private val palette: SyntaxPalette,
     private val matches: List<IntRange>,
     private val activeIndex: Int,
     private val matchBg: androidx.compose.ui.graphics.Color,
     private val activeBg: androidx.compose.ui.graphics.Color,
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        if (matches.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
         val builder = AnnotatedString.Builder(text)
+        for (token in tokens) {
+            val start = token.range.first.coerceIn(0, text.length)
+            val end = (token.range.last + 1).coerceIn(start, text.length)
+            if (start == end) continue
+            val color = colorFor(token.kind, palette) ?: continue
+            builder.addStyle(SpanStyle(color = color), start, end)
+        }
         matches.forEachIndexed { index, range ->
             val start = range.first.coerceIn(0, text.length)
             val end = (range.last + 1).coerceIn(start, text.length)
@@ -115,6 +138,16 @@ private class HighlightTransformation(
             builder.addStyle(SpanStyle(background = bg), start, end)
         }
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+    }
+
+    private fun colorFor(kind: TokenKind, palette: SyntaxPalette) = when (kind) {
+        TokenKind.KEYWORD -> palette.keyword
+        TokenKind.STRING -> palette.string
+        TokenKind.NUMBER -> palette.number
+        TokenKind.COMMENT -> palette.comment
+        TokenKind.ANNOTATION -> palette.annotation
+        TokenKind.TYPE -> palette.type
+        TokenKind.PUNCT -> null
     }
 }
 
