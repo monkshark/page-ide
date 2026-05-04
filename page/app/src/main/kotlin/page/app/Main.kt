@@ -64,6 +64,7 @@ fun main() = application {
     var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
     var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
     var search: SearchState? by remember { mutableStateOf(null) }
+    var pendingClose: PendingClose? by remember { mutableStateOf(null) }
 
     LaunchedEffect(book.activeIndex, book.tabs.size) {
         val active = book.active
@@ -116,8 +117,30 @@ fun main() = application {
     val toggleExpanded: (Path) -> Unit = { p ->
         expanded = if (p in expanded) expanded - setOf(p) else expanded + setOf(p)
     }
+    val closeTabAt: (Int) -> Unit = { idx ->
+        book = book.close(idx)
+    }
+    val isUnsavedText: (page.editor.OpenTab) -> Boolean = { tab ->
+        tab.dirty && FileKinds.classify(tab.path) == FileKind.TEXT
+    }
+    val requestCloseTab: (Int) -> Unit = { idx ->
+        val tab = book.tabs.getOrNull(idx)
+        if (tab != null && isUnsavedText(tab)) {
+            pendingClose = PendingClose.Tab(idx)
+        } else {
+            closeTabAt(idx)
+        }
+    }
     val closeActiveTab: () -> Unit = {
-        book = book.closeActive()
+        val idx = book.activeIndex
+        if (idx in book.tabs.indices) requestCloseTab(idx)
+    }
+    val requestExit: () -> Unit = {
+        if (book.tabs.any(isUnsavedText)) {
+            pendingClose = PendingClose.App
+        } else {
+            exitApplication()
+        }
     }
     val moveCaretToActiveMatch: (SearchState) -> Unit = { s ->
         val range = s.active
@@ -165,7 +188,7 @@ fun main() = application {
     }
 
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = requestExit,
         state = windowState,
         title = windowTitle(book.active?.path),
     ) {
@@ -204,7 +227,7 @@ fun main() = application {
                         }
                     },
                     onActivateTab = { index -> book = book.activate(index) },
-                    onCloseTab = { index -> book = book.close(index) },
+                    onCloseTab = requestCloseTab,
                     onMoveTab = { from, to -> book = book.move(from, to) },
                     rootDir = rootDir,
                     expanded = expanded,
@@ -223,6 +246,35 @@ fun main() = application {
                 )
             }
         }
+    }
+
+    val current = pendingClose
+    if (current != null) {
+        val dirtyTabs = book.tabs.withIndex().filter { (_, t) -> isUnsavedText(t) }
+        val targets = when (current) {
+            is PendingClose.Tab -> book.tabs.getOrNull(current.index)?.let { listOf(current.index to it) } ?: emptyList()
+            PendingClose.App -> dirtyTabs.map { it.index to it.value }
+        }
+        UnsavedChangesDialog(
+            fileNames = targets.map { (_, t) -> t.path.fileName?.toString() ?: t.path.toString() },
+            isAppExit = current is PendingClose.App,
+            onSave = {
+                targets.forEach { (_, t) -> FileDocument.save(t.path, t.text) }
+                pendingClose = null
+                when (current) {
+                    is PendingClose.Tab -> closeTabAt(current.index)
+                    PendingClose.App -> exitApplication()
+                }
+            },
+            onDiscard = {
+                pendingClose = null
+                when (current) {
+                    is PendingClose.Tab -> closeTabAt(current.index)
+                    PendingClose.App -> exitApplication()
+                }
+            },
+            onCancel = { pendingClose = null },
+        )
     }
 }
 
