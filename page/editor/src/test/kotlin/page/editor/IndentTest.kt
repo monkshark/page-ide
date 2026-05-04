@@ -27,10 +27,27 @@ class IndentTest {
     }
 
     @Test
-    fun `tab replaces single line selection with four spaces`() {
+    fun `tab on single-line selection indents line start and preserves selection`() {
         val r = Indent.handleTab(TextEdit("foo bar", 4, 7))
-        assertEquals("foo     ", r.text)
-        assertEquals(8, r.caret)
+        assertEquals("    foo bar", r.text)
+        assertEquals(8, r.selectionStart)
+        assertEquals(11, r.selectionEnd)
+    }
+
+    @Test
+    fun `tab on single-line selection at line start keeps selection content`() {
+        val r = Indent.handleTab(TextEdit("hello world", 0, 5))
+        assertEquals("    hello world", r.text)
+        assertEquals(4, r.selectionStart)
+        assertEquals(9, r.selectionEnd)
+    }
+
+    @Test
+    fun `tab on reverse single-line selection preserves direction`() {
+        val r = Indent.handleTab(TextEdit("foo bar", 7, 4))
+        assertEquals("    foo bar", r.text)
+        assertEquals(11, r.selectionStart)
+        assertEquals(8, r.selectionEnd)
     }
 
     @Test

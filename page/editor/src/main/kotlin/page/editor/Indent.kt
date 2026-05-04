@@ -11,14 +11,23 @@ object Indent {
         val selStart = minOf(edit.selectionStart, edit.selectionEnd)
         val selEnd = maxOf(edit.selectionStart, edit.selectionEnd)
         val text = edit.text
+        if (selStart == selEnd) {
+            val lineStart = lineStartOf(text, selStart)
+            val col = selStart - lineStart
+            val pad = TAB_UNIT - (col % TAB_UNIT)
+            val spaces = " ".repeat(pad)
+            val newText = text.substring(0, selStart) + spaces + text.substring(selEnd)
+            return TextEdit(newText, selStart + pad)
+        }
         val isMultiLine = text.substring(selStart, selEnd).contains('\n')
         if (isMultiLine) return indentLines(edit, +1)
         val lineStart = lineStartOf(text, selStart)
-        val col = selStart - lineStart
-        val pad = TAB_UNIT - (col % TAB_UNIT)
-        val spaces = " ".repeat(pad)
-        val newText = text.substring(0, selStart) + spaces + text.substring(selEnd)
-        return TextEdit(newText, selStart + pad)
+        val newText = text.substring(0, lineStart) + TAB_SPACES + text.substring(lineStart)
+        return TextEdit(
+            newText,
+            edit.selectionStart + TAB_SPACES.length,
+            edit.selectionEnd + TAB_SPACES.length,
+        )
     }
 
     fun handleShiftTab(edit: TextEdit): TextEdit = indentLines(edit, -1)
