@@ -51,6 +51,7 @@ import page.editor.TextBuffer
 import page.editor.TextEdit
 import page.editor.Token
 import page.editor.TokenKind
+import page.ui.EditorFontFamily
 import page.ui.GlassDarkSyntax
 import page.ui.SyntaxPalette
 
@@ -99,7 +100,7 @@ fun EditorPanel(
 
     val textStyle = TextStyle(
         color = MaterialTheme.colorScheme.onBackground,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = EditorFontFamily,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         lineHeightStyle = LineHeightStyle(
