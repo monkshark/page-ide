@@ -5,8 +5,11 @@ import java.nio.file.Path
 data class OpenTab(
     val path: Path,
     val text: String,
+    val savedText: String = text,
     val caret: Int = 0,
-)
+) {
+    val dirty: Boolean get() = text != savedText
+}
 
 data class TabBook(
     val tabs: List<OpenTab> = emptyList(),
@@ -19,7 +22,7 @@ data class TabBook(
         if (existing >= 0) {
             return copy(activeIndex = existing)
         }
-        val newTab = OpenTab(path = path, text = text, caret = 0)
+        val newTab = OpenTab(path = path, text = text, savedText = text, caret = 0)
         return copy(tabs = tabs + newTab, activeIndex = tabs.size)
     }
 
@@ -47,6 +50,16 @@ data class TabBook(
         if (current.text == text && current.caret == caret) return this
         val updated = tabs.toMutableList().also {
             it[activeIndex] = current.copy(text = text, caret = caret)
+        }
+        return copy(tabs = updated)
+    }
+
+    fun markActiveSaved(): TabBook {
+        if (activeIndex !in tabs.indices) return this
+        val current = tabs[activeIndex]
+        if (current.savedText == current.text) return this
+        val updated = tabs.toMutableList().also {
+            it[activeIndex] = current.copy(savedText = current.text)
         }
         return copy(tabs = updated)
     }

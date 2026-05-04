@@ -4,6 +4,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -222,5 +223,75 @@ class TabBookTest {
             .openOrFocus(p("b.txt"), "B")
         assertSame(book, book.move(0, 5))
         assertSame(book, book.move(-1, 1))
+    }
+
+    @Test
+    fun `freshly opened tab is not dirty`() {
+        val book = TabBook().openOrFocus(p("a.txt"), "A")
+        assertFalse(book.active!!.dirty)
+    }
+
+    @Test
+    fun `editing the active tab marks it dirty`() {
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+        assertTrue(book.active!!.dirty)
+        assertEquals("A", book.active!!.savedText)
+        assertEquals("A-edited", book.active!!.text)
+    }
+
+    @Test
+    fun `markActiveSaved clears dirty`() {
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+            .markActiveSaved()
+        assertFalse(book.active!!.dirty)
+        assertEquals("A-edited", book.active!!.savedText)
+    }
+
+    @Test
+    fun `editing back to saved text clears dirty`() {
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+            .updateActive("A", caret = 0)
+        assertFalse(book.active!!.dirty)
+    }
+
+    @Test
+    fun `dirty is per tab`() {
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+            .openOrFocus(p("b.txt"), "B")
+        assertFalse(book.active!!.dirty)
+        assertTrue(book.tabs[0].dirty)
+    }
+
+    @Test
+    fun `markActiveSaved on already clean tab returns same instance`() {
+        val book = TabBook().openOrFocus(p("a.txt"), "A")
+        assertSame(book, book.markActiveSaved())
+    }
+
+    @Test
+    fun `markActiveSaved on empty book is no-op`() {
+        val book = TabBook()
+        assertSame(book, book.markActiveSaved())
+    }
+
+    @Test
+    fun `refocusing an open path does not reset dirty`() {
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+            .openOrFocus(p("b.txt"), "B")
+            .openOrFocus(p("a.txt"), "ignored")
+        assertEquals(0, book.activeIndex)
+        assertTrue(book.active!!.dirty)
+        assertEquals("A-edited", book.active!!.text)
+        assertEquals("A", book.active!!.savedText)
     }
 }

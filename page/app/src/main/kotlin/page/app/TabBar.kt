@@ -219,7 +219,7 @@ private fun TabChip(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.width(8.dp))
-            CloseButton(onClick = onClose)
+            CloseButton(dirty = tab.dirty, onClick = onClose)
         }
         Box(
             modifier = Modifier
@@ -231,9 +231,10 @@ private fun TabChip(
 }
 
 @Composable
-private fun CloseButton(onClick: () -> Unit) {
+private fun CloseButton(dirty: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val isHovered by interaction.collectIsHoveredAsState()
+    val showDot = dirty && !isHovered
     Box(
         modifier = Modifier
             .width(16.dp)
@@ -251,11 +252,13 @@ private fun CloseButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "×",
+            text = if (showDot) "●" else "×",
             style = LocalTextStyle.current.copy(
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (showDot)
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
+                fontSize = if (showDot) 10.sp else 12.sp,
                 lineHeight = 12.sp,
                 lineHeightStyle = CenterTight,
             ),

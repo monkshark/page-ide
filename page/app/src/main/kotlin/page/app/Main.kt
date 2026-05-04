@@ -95,7 +95,9 @@ fun main() = application {
         if (active != null) {
             if (FileKinds.classify(active.path) == FileKind.TEXT) {
                 FileDocument.save(active.path, editorValue.text)
-                book = book.updateActive(editorValue.text, editorValue.selection.start)
+                book = book
+                    .updateActive(editorValue.text, editorValue.selection.start)
+                    .markActiveSaved()
             }
         } else {
             val target = FileDialogs.saveAs(parent)
