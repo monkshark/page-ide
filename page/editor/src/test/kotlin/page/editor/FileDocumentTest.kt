@@ -7,6 +7,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class FileDocumentTest {
 
@@ -48,5 +49,24 @@ class FileDocumentTest {
     fun `load missing file throws`(@TempDir dir: Path) {
         val path = dir.resolve("missing.txt")
         assertFailsWith<java.nio.file.NoSuchFileException> { FileDocument.load(path) }
+    }
+
+    @Test
+    fun `loadOrNull returns null for non-UTF-8 bytes`(@TempDir dir: Path) {
+        val path = dir.resolve("binary.bin")
+        Files.write(path, byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0xFD.toByte()))
+        assertNull(FileDocument.loadOrNull(path))
+    }
+
+    @Test
+    fun `loadOrNull returns null for missing file`(@TempDir dir: Path) {
+        assertNull(FileDocument.loadOrNull(dir.resolve("missing.txt")))
+    }
+
+    @Test
+    fun `loadOrNull returns content for valid UTF-8 file`(@TempDir dir: Path) {
+        val path = dir.resolve("ok.txt")
+        FileDocument.save(path, "hello")
+        assertEquals("hello", FileDocument.loadOrNull(path))
     }
 }

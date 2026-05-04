@@ -27,4 +27,14 @@ object FileDialogs {
             chooser.selectedFile.toPath()
         } else null
     }
+
+    fun openDirectory(parent: Frame): Path? {
+        val chooser = JFileChooser().apply {
+            dialogTitle = "Open Folder"
+            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        }
+        return if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
+            chooser.selectedFile.toPath()
+        } else null
+    }
 }

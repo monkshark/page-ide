@@ -1,7 +1,10 @@
 package page.app
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,13 +25,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -36,17 +46,23 @@ import androidx.compose.ui.window.rememberWindowState
 import page.core.PageIdentity
 import page.editor.FileDocument
 import page.ui.GlassTheme
+import java.awt.Cursor
 import java.nio.file.Path
 
 fun main() = application {
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
     var path: Path? by remember { mutableStateOf(null) }
     var value by remember { mutableStateOf(TextFieldValue("")) }
+    var rootDir: Path? by remember { mutableStateOf(null) }
+    var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
+    var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
 
     val openFile: (java.awt.Frame) -> Unit = { parent ->
         FileDialogs.open(parent)?.let { picked ->
-            value = TextFieldValue(FileDocument.load(picked))
-            path = picked
+            FileDocument.loadOrNull(picked)?.let { text ->
+                value = TextFieldValue(text)
+                path = picked
+            }
         }
     }
     val saveFile: (java.awt.Frame) -> Unit = { parent ->
@@ -55,6 +71,21 @@ fun main() = application {
             FileDocument.save(target, value.text)
             path = target
         }
+    }
+    val openFolder: (java.awt.Frame) -> Unit = { parent ->
+        FileDialogs.openDirectory(parent)?.let { picked ->
+            rootDir = picked
+            expanded = setOf(picked)
+        }
+    }
+    val loadFromTree: (Path) -> Unit = { picked ->
+        FileDocument.loadOrNull(picked)?.let { text ->
+            value = TextFieldValue(text)
+            path = picked
+        }
+    }
+    val toggleExpanded: (Path) -> Unit = { p ->
+        expanded = if (p in expanded) expanded - setOf(p) else expanded + setOf(p)
     }
 
     Window(
@@ -69,9 +100,10 @@ fun main() = application {
                     .fillMaxSize()
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown && event.isCtrlPressed) {
-                            when (event.key) {
-                                Key.O -> { openFile(frame); true }
-                                Key.S -> { saveFile(frame); true }
+                            when {
+                                event.key == Key.O && event.isShiftPressed -> { openFolder(frame); true }
+                                event.key == Key.O -> { openFile(frame); true }
+                                event.key == Key.S -> { saveFile(frame); true }
                                 else -> false
                             }
                         } else false
@@ -82,6 +114,14 @@ fun main() = application {
                     path = path,
                     value = value,
                     onValueChange = { value = it },
+                    rootDir = rootDir,
+                    expanded = expanded,
+                    sidebarWidth = sidebarWidth,
+                    onSidebarResize = { delta ->
+                        sidebarWidth = (sidebarWidth + delta).coerceIn(160.dp, 600.dp)
+                    },
+                    onToggle = toggleExpanded,
+                    onOpenFile = loadFromTree,
                 )
             }
         }
@@ -98,16 +138,29 @@ private fun Shell(
     path: Path?,
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
+    rootDir: Path?,
+    expanded: Set<Path>,
+    sidebarWidth: Dp,
+    onSidebarResize: (Dp) -> Unit,
+    onToggle: (Path) -> Unit,
+    onOpenFile: (Path) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TitleBar(path = path)
         Row(modifier = Modifier.fillMaxSize()) {
-            FileTreePanel(modifier = Modifier.width(240.dp).fillMaxHeight())
-            Divider()
+            FileTreePanel(
+                root = rootDir,
+                expanded = expanded,
+                selectedFile = path,
+                onToggle = onToggle,
+                onOpenFile = onOpenFile,
+                modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
+            )
+            ResizeHandle(onSidebarResize)
             EditorPanel(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
     }
@@ -145,32 +198,32 @@ private fun TitleBar(path: Path?) {
 }
 
 @Composable
-private fun FileTreePanel(modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Files",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "(empty)",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Divider() {
+private fun ResizeHandle(onDeltaDp: (Dp) -> Unit) {
+    val density = LocalDensity.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .width(1.dp)
-            .background(MaterialTheme.colorScheme.outline),
-    )
+            .width(6.dp)
+            .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR)))
+            .hoverable(interactionSource)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dx ->
+                    onDeltaDp(with(density) { dx.toDp() })
+                }
+            }
+            .background(
+                if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                else Color.Transparent,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .width(1.dp)
+                .background(MaterialTheme.colorScheme.outline),
+        )
+    }
 }
