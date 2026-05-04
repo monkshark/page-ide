@@ -2,6 +2,8 @@ package page.editor
 
 data class SearchState(
     val query: String = "",
+    val replace: String = "",
+    val replaceVisible: Boolean = false,
     val caseSensitive: Boolean = false,
     val matches: List<IntRange> = emptyList(),
     val activeMatchIndex: Int = -1,
@@ -15,6 +17,10 @@ data class SearchState(
         val newActive = if (found.isEmpty()) -1 else 0
         return copy(query = query, matches = found, activeMatchIndex = newActive)
     }
+
+    fun withReplace(value: String): SearchState = copy(replace = value)
+
+    fun withReplaceVisible(value: Boolean): SearchState = copy(replaceVisible = value)
 
     fun withCaseSensitive(text: String, value: Boolean): SearchState {
         if (caseSensitive == value) return this

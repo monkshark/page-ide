@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,6 +32,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -48,81 +50,139 @@ import page.editor.SearchState
 fun SearchBar(
     state: SearchState,
     onQueryChange: (String) -> Unit,
+    onReplaceChange: (String) -> Unit,
     onToggleCase: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
+    onReplace: () -> Unit,
+    onReplaceAll: () -> Unit,
     onClose: () -> Unit,
+    onWindowShortcut: (KeyEvent) -> Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    val queryFocus = remember { FocusRequester() }
+    val replaceFocus = remember { FocusRequester() }
+    LaunchedEffect(state.replaceVisible) {
+        if (state.replaceVisible) replaceFocus.requestFocus() else queryFocus.requestFocus()
     }
 
     Surface(
-        modifier = modifier.fillMaxWidth().height(36.dp),
+        modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .height(24.dp)
-                    .width(220.dp)
-                    .background(MaterialTheme.colorScheme.background)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                    )
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.CenterStart,
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                BasicTextField(
-                    value = state.query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onNext() }),
-                    textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onPreviewKeyEvent { e ->
-                            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                            when (e.key) {
-                                Key.Enter -> {
-                                    if (e.isShiftPressed) onPrev() else onNext(); true
+                InputBox {
+                    BasicTextField(
+                        value = state.query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onNext() }),
+                        textStyle = inputTextStyle(),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(queryFocus)
+                            .onPreviewKeyEvent { e ->
+                                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (e.key) {
+                                    Key.Enter -> {
+                                        if (e.isShiftPressed) onPrev() else onNext(); true
+                                    }
+                                    Key.Escape -> { onClose(); true }
+                                    else -> onWindowShortcut(e)
                                 }
-                                Key.Escape -> { onClose(); true }
-                                else -> false
-                            }
-                        },
+                            },
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                CounterLabel(state)
+                Spacer(Modifier.width(12.dp))
+                ToggleChip(
+                    label = "Aa",
+                    active = state.caseSensitive,
+                    onClick = onToggleCase,
                 )
+                Spacer(Modifier.width(8.dp))
+                IconChip(label = "<", onClick = onPrev, enabled = state.matches.isNotEmpty())
+                Spacer(Modifier.width(4.dp))
+                IconChip(label = ">", onClick = onNext, enabled = state.matches.isNotEmpty())
+                Spacer(Modifier.width(8.dp))
+                IconChip(label = "×", onClick = onClose, enabled = true)
             }
-            Spacer(Modifier.width(10.dp))
-            CounterLabel(state)
-            Spacer(Modifier.width(12.dp))
-            ToggleChip(
-                label = "Aa",
-                active = state.caseSensitive,
-                onClick = onToggleCase,
-            )
-            Spacer(Modifier.width(8.dp))
-            IconChip(label = "<", onClick = onPrev, enabled = state.matches.isNotEmpty())
-            Spacer(Modifier.width(4.dp))
-            IconChip(label = ">", onClick = onNext, enabled = state.matches.isNotEmpty())
-            Spacer(Modifier.width(8.dp))
-            IconChip(label = "×", onClick = onClose, enabled = true)
+            if (state.replaceVisible) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    InputBox {
+                        BasicTextField(
+                            value = state.replace,
+                            onValueChange = onReplaceChange,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { onReplace() }),
+                            textStyle = inputTextStyle(),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(replaceFocus)
+                                .onPreviewKeyEvent { e ->
+                                    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                    when (e.key) {
+                                        Key.Enter -> { onReplace(); true }
+                                        Key.Escape -> { onClose(); true }
+                                        else -> onWindowShortcut(e)
+                                    }
+                                },
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    TextChip(
+                        label = "바꾸기",
+                        onClick = onReplace,
+                        enabled = state.matches.isNotEmpty(),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextChip(
+                        label = "전부 바꾸기",
+                        onClick = onReplaceAll,
+                        enabled = state.matches.isNotEmpty(),
+                    )
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun InputBox(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height(24.dp)
+            .width(220.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun inputTextStyle() = TextStyle(
+    color = MaterialTheme.colorScheme.onBackground,
+    fontFamily = FontFamily.Monospace,
+    fontSize = 12.sp,
+)
 
 @Composable
 private fun CounterLabel(state: SearchState) {
@@ -194,6 +254,40 @@ private fun IconChip(label: String, onClick: () -> Unit, enabled: Boolean) {
                 color = fg,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun TextChip(label: String, onClick: () -> Unit, enabled: Boolean) {
+    val interaction = remember { MutableInteractionSource() }
+    val isHovered by interaction.collectIsHoveredAsState()
+    val bg = when {
+        !enabled -> Color.Transparent
+        isHovered -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
+    val fg = if (enabled) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    Box(
+        modifier = Modifier
+            .height(22.dp)
+            .background(bg)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = LocalTextStyle.current.copy(
+                color = fg,
+                fontSize = 11.sp,
             ),
         )
     }
