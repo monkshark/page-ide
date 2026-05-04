@@ -27,10 +27,15 @@ object Indent {
         val selStart = minOf(edit.selectionStart, edit.selectionEnd)
         val selEnd = maxOf(edit.selectionStart, edit.selectionEnd)
         val text = edit.text
+        if (selStart == selEnd) {
+            val newText = text.substring(0, selStart) + "\t" + text.substring(selEnd)
+            return TextEdit(newText, selStart + 1)
+        }
         val isMultiLine = text.substring(selStart, selEnd).contains('\n')
         if (isMultiLine) return indentLines(edit, +1, "\t")
-        val newText = text.substring(0, selStart) + "\t" + text.substring(selEnd)
-        return TextEdit(newText, selStart + 1)
+        val lineStart = lineStartOf(text, selStart)
+        val newText = text.substring(0, lineStart) + "\t" + text.substring(lineStart)
+        return TextEdit(newText, edit.selectionStart + 1, edit.selectionEnd + 1)
     }
 
     fun handleBackspace(edit: TextEdit): TextEdit? {
