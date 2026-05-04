@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -54,6 +55,7 @@ import kotlinx.coroutines.delay
 import page.editor.AutoClose
 import page.editor.BracketMatch
 import page.editor.Indent
+import page.editor.LineMove
 import page.editor.SearchState
 import page.editor.SyntaxLexer
 import page.editor.TextBuffer
@@ -226,6 +228,28 @@ fun EditorPanel(
                     }
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        if (event.isAltPressed && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+                            val edit = TextEdit(
+                                value.text,
+                                value.selection.start,
+                                value.selection.end,
+                            )
+                            val r = when {
+                                event.key == Key.DirectionUp && event.isShiftPressed -> LineMove.duplicateUp(edit)
+                                event.key == Key.DirectionDown && event.isShiftPressed -> LineMove.duplicateDown(edit)
+                                event.key == Key.DirectionUp -> LineMove.moveUp(edit)
+                                else -> LineMove.moveDown(edit)
+                            }
+                            return@onPreviewKeyEvent if (r != null) {
+                                onValueChange(
+                                    value.copy(
+                                        text = r.text,
+                                        selection = TextRange(r.selectionStart, r.selectionEnd),
+                                    )
+                                )
+                                true
+                            } else true
+                        }
                         when (event.key) {
                             Key.Tab -> {
                                 val edit = TextEdit(
