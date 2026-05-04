@@ -22,6 +22,16 @@ object AutoClose {
     fun apply(old: TextEdit, new: TextEdit): TextEdit {
         if (old.selectionStart != old.selectionEnd) return wrapSelection(old, new)
 
+        if (new.text.length == old.text.length - 1 && new.caret == old.caret - 1) {
+            val deleted = old.text.getOrNull(new.caret)
+            val expectedCloser = deleted?.let { pairs[it] }
+            val next = new.text.getOrNull(new.caret)
+            if (expectedCloser != null && next == expectedCloser) {
+                val stripped = new.text.substring(0, new.caret) + new.text.substring(new.caret + 1)
+                return TextEdit(stripped, new.caret)
+            }
+        }
+
         if (new.text.length != old.text.length + 1) return new
         if (new.caret != old.caret + 1) return new
         val cursor = new.caret

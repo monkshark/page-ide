@@ -187,4 +187,58 @@ class AutoCloseTest {
         assertEquals(5, result.selectionStart)
         assertEquals(5, result.selectionEnd)
     }
+
+    @Test
+    fun `removes closer when backspacing empty paren pair`() {
+        val old = TextEdit("()", 1)
+        val new = TextEdit(")", 0)
+        val result = AutoClose.apply(old, new)
+        assertEquals("", result.text)
+        assertEquals(0, result.caret)
+    }
+
+    @Test
+    fun `removes closer when backspacing empty bracket pair`() {
+        val old = TextEdit("foo[]", 4)
+        val new = TextEdit("foo]", 3)
+        val result = AutoClose.apply(old, new)
+        assertEquals("foo", result.text)
+        assertEquals(3, result.caret)
+    }
+
+    @Test
+    fun `removes closer when backspacing empty quote pair`() {
+        val old = TextEdit("\"\"", 1)
+        val new = TextEdit("\"", 0)
+        val result = AutoClose.apply(old, new)
+        assertEquals("", result.text)
+        assertEquals(0, result.caret)
+    }
+
+    @Test
+    fun `does not remove non-pair char on backspace`() {
+        val old = TextEdit("(x", 1)
+        val new = TextEdit("x", 0)
+        val result = AutoClose.apply(old, new)
+        assertEquals("x", result.text)
+        assertEquals(0, result.caret)
+    }
+
+    @Test
+    fun `does not remove closer when content sits between pair`() {
+        val old = TextEdit("(abc)", 1)
+        val new = TextEdit("abc)", 0)
+        val result = AutoClose.apply(old, new)
+        assertEquals("abc)", result.text)
+        assertEquals(0, result.caret)
+    }
+
+    @Test
+    fun `does not remove on forward delete of closer`() {
+        val old = TextEdit("()", 1)
+        val new = TextEdit("(", 1)
+        val result = AutoClose.apply(old, new)
+        assertEquals("(", result.text)
+        assertEquals(1, result.caret)
+    }
 }
