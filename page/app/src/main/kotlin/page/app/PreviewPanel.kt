@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
@@ -169,15 +170,21 @@ private fun ImageViewer(
             is PreviewSource.Raster -> Image(
                 bitmap = source.bitmap,
                 contentDescription = null,
-                modifier = Modifier.size(widthDp, heightDp),
+                modifier = Modifier.requiredSize(widthDp, heightDp),
             )
             is PreviewSource.Svg -> Box(
                 modifier = Modifier
-                    .size(widthDp, heightDp)
+                    .requiredSize(widthDp, heightDp)
                     .drawBehind {
+                        val intrinsicW = source.intrinsic.width.takeIf { it.isFinite() && it > 0f } ?: size.width
+                        val intrinsicH = source.intrinsic.height.takeIf { it.isFinite() && it > 0f } ?: size.height
                         drawIntoCanvas { canvas ->
-                            source.dom.setContainerSize(size.width, size.height)
-                            source.dom.render(canvas.nativeCanvas)
+                            val nativeCanvas = canvas.nativeCanvas
+                            source.dom.setContainerSize(intrinsicW, intrinsicH)
+                            val checkpoint = nativeCanvas.save()
+                            nativeCanvas.scale(size.width / intrinsicW, size.height / intrinsicH)
+                            source.dom.render(nativeCanvas)
+                            nativeCanvas.restoreToCount(checkpoint)
                         }
                     },
             )
