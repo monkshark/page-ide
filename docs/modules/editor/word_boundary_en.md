@@ -2,9 +2,9 @@
 
 > 한국어: [word_boundary.md](https://monkshark.github.io/PAGE_IDE/#modules/editor/word_boundary.md)
 
-> `page/editor/src/main/kotlin/page/editor/WordBoundary.kt` — Word-wise caret motion / deletion
+> `page/editor/src/main/kotlin/page/editor/WordBoundary.kt` — Word-wise caret motion / deletion / double·triple-click selection ranges
 
-Boundary math for `Ctrl+←/→` (move), `Ctrl+Shift+←/→` (select), `Ctrl+Backspace/Delete` (word delete). VS Code-style classes — word (alnum + `_`) / punctuation / horizontal space / newline.
+Boundary math for `Ctrl+←/→` (move), `Ctrl+Shift+←/→` (select), `Ctrl+Backspace/Delete` (word delete), and double / triple click (select word / line). VS Code-style classes — word (alnum + `_`) / punctuation / horizontal space / newline.
 
 ---
 
@@ -52,6 +52,24 @@ Only act on a single caret (`selectionStart == selectionEnd`). With a selection 
 
 ---
 
+## `wordRangeAt` / `lineRangeAt`
+
+```kotlin
+fun wordRangeAt(text: String, offset: Int): IntRange
+fun lineRangeAt(text: String, offset: Int): IntRange
+```
+
+Range of the word / line covering `offset`. Used by double-click (word select) and triple-click (line select).
+
+| Function | Behavior |
+|---|---|
+| `wordRangeAt` | The WORD run or PUNCT run covering `offset`. On whitespace / newline returns `IntRange.EMPTY` (caller leaves selection alone) |
+| `lineRangeAt` | Start to end of the line containing `offset` (excludes the trailing `\n`). Empty line returns an empty range |
+
+Ranges are `start until end` style; callers convert with `TextRange(r.first, r.last + 1)`.
+
+---
+
 ## `CharClass`
 
 ```kotlin
@@ -69,9 +87,10 @@ Internal classification. Horizontal space and newline are handled separately, so
 
 ## Usage
 
-| Location | Keys |
+| Location | Keys / Input |
 |---|---|
 | `page.app.EditorPanel` `handleWordShortcut` | `Ctrl+←/→`, `Ctrl+Shift+←/→`, `Ctrl+Backspace`, `Ctrl+Delete` |
+| `page.app.EditorPanel` mouse handler | Double click (`wordRangeAt`), triple click (`lineRangeAt`) |
 
 ---
 

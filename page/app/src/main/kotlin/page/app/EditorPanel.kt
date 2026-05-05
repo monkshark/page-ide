@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -143,6 +145,12 @@ fun EditorPanel(
     val scrollState = rememberScrollState()
     var savedScrollOnPress by remember { mutableStateOf(0) }
     var focusGainVersion by remember { mutableStateOf(0) }
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var clickCount by remember { mutableStateOf(0) }
+    var lastClickTime by remember { mutableStateOf(0L) }
+    var lastClickPos by remember { mutableStateOf(Offset.Zero) }
+    val latestValue by rememberUpdatedState(value)
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
 
     LaunchedEffect(focusGainVersion) {
         if (focusGainVersion > 0) {
@@ -227,9 +235,52 @@ fun EditorPanel(
                     }
                     onValueChange(adjusted)
                 },
+                onTextLayout = { textLayout = it },
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 8.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val change = event.changes.firstOrNull() ?: continue
+                                when (event.type) {
+                                    PointerEventType.Press -> {
+                                        val pos = change.position
+                                        val now = System.currentTimeMillis()
+                                        val close = (pos - lastClickPos).getDistance() < 8f
+                                        clickCount = when {
+                                            !close -> 1
+                                            clickCount == 1 && now - lastClickTime < 400 -> 2
+                                            clickCount == 2 -> 3
+                                            else -> 1
+                                        }
+                                        lastClickTime = now
+                                        lastClickPos = pos
+                                    }
+                                    PointerEventType.Release -> {
+                                        if (clickCount < 2) continue
+                                        val layout = textLayout ?: continue
+                                        val v = latestValue
+                                        val offset = layout.getOffsetForPosition(lastClickPos).coerceIn(0, v.text.length)
+                                        when (clickCount) {
+                                            2 -> {
+                                                val r = WordBoundary.wordRangeAt(v.text, offset)
+                                                if (!r.isEmpty()) {
+                                                    latestOnValueChange(v.copy(selection = TextRange(r.first, r.last + 1)))
+                                                }
+                                            }
+                                            3 -> {
+                                                val r = WordBoundary.lineRangeAt(v.text, offset)
+                                                latestOnValueChange(v.copy(selection = TextRange(r.first, r.last + 1)))
+                                            }
+                                        }
+                                    }
+                                    else -> Unit
+                                }
+                            }
+                        }
+                    }
                     .onFocusChanged { state ->
                         if (state.isFocused) {
                             focusGainVersion++

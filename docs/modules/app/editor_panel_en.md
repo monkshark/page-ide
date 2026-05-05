@@ -109,6 +109,28 @@ Each keystroke runs through three post-processors: `AutoClose` for matched brack
 
 ---
 
+## Mouse clicks (double / triple)
+
+```kotlin
+.pointerInput(Unit) {
+    awaitPointerEventScope {
+        ... only Press events on PointerEventPass.Final
+        clickCount = if (now - lastClickTime < 400 && close && clickCount < 3) clickCount + 1 else 1
+    }
+}
+```
+
+`onTextLayout` captures the `TextLayoutResult`; `getOffsetForPosition` converts the click coordinates to a text offset.
+
+| Click | Action |
+|---|---|
+| Double | `WordBoundary.wordRangeAt(text, offset)` — selects the same-class run (no-op on whitespace / newline) |
+| Triple | `WordBoundary.lineRangeAt(text, offset)` — line start to just before `\n` |
+
+`PointerEventPass.Final` runs after `BasicTextField`'s built-in pointer logic, so we override its result. The sequence only counts within 400 ms and 8 px; outside that the counter resets.
+
+---
+
 ## `CombinedHighlightTransformation`
 
 A single `VisualTransformation` paints three layers in order:

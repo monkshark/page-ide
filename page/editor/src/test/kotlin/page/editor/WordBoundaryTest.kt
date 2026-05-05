@@ -3,6 +3,7 @@ package page.editor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class WordBoundaryTest {
 
@@ -122,5 +123,68 @@ class WordBoundaryTest {
     @Test
     fun `deleteWordForward with selection returns null`() {
         assertNull(WordBoundary.deleteWordForward(TextEdit("hello", 1, 3)))
+    }
+
+    @Test
+    fun `wordRangeAt inside word selects whole word`() {
+        assertEquals(0 until 5, WordBoundary.wordRangeAt("hello world", 2))
+        assertEquals(6 until 11, WordBoundary.wordRangeAt("hello world", 8))
+    }
+
+    @Test
+    fun `wordRangeAt at word start selects whole word`() {
+        assertEquals(6 until 11, WordBoundary.wordRangeAt("hello world", 6))
+    }
+
+    @Test
+    fun `wordRangeAt at word end (offset == word end) selects last char's word`() {
+        assertEquals(0 until 5, WordBoundary.wordRangeAt("hello world", 4))
+    }
+
+    @Test
+    fun `wordRangeAt on space returns empty`() {
+        assertTrue(WordBoundary.wordRangeAt("hello world", 5).isEmpty())
+    }
+
+    @Test
+    fun `wordRangeAt on newline returns empty`() {
+        assertTrue(WordBoundary.wordRangeAt("a\nb", 1).isEmpty())
+    }
+
+    @Test
+    fun `wordRangeAt on punctuation run selects run`() {
+        assertEquals(3 until 5, WordBoundary.wordRangeAt("foo()", 3))
+        assertEquals(3 until 5, WordBoundary.wordRangeAt("foo()", 4))
+    }
+
+    @Test
+    fun `wordRangeAt with underscore stays one word`() {
+        assertEquals(0 until 7, WordBoundary.wordRangeAt("foo_bar end", 3))
+    }
+
+    @Test
+    fun `wordRangeAt with empty string returns empty`() {
+        assertTrue(WordBoundary.wordRangeAt("", 0).isEmpty())
+    }
+
+    @Test
+    fun `lineRangeAt selects whole line excluding newline`() {
+        assertEquals(0 until 5, WordBoundary.lineRangeAt("hello\nworld", 2))
+        assertEquals(6 until 11, WordBoundary.lineRangeAt("hello\nworld", 8))
+    }
+
+    @Test
+    fun `lineRangeAt at newline picks preceding line`() {
+        assertEquals(0 until 5, WordBoundary.lineRangeAt("hello\nworld", 5))
+    }
+
+    @Test
+    fun `lineRangeAt empty line returns empty range`() {
+        assertEquals(6 until 6, WordBoundary.lineRangeAt("hello\n\nworld", 6))
+    }
+
+    @Test
+    fun `lineRangeAt at end of text`() {
+        assertEquals(6 until 11, WordBoundary.lineRangeAt("hello\nworld", 11))
     }
 }

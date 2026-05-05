@@ -48,6 +48,41 @@ object WordBoundary {
         return TextEdit(newText, caret)
     }
 
+    fun wordRangeAt(text: String, offset: Int): IntRange {
+        if (text.isEmpty()) return IntRange.EMPTY
+        val len = text.length
+        val pos = when {
+            offset < 0 -> 0
+            offset >= len -> len - 1
+            else -> offset
+        }
+        val ch = text[pos]
+        if (ch == '\n' || isHSpace(ch)) return IntRange.EMPTY
+        val cls = classify(ch)
+        var start = pos
+        while (start > 0) {
+            val prev = text[start - 1]
+            if (prev == '\n' || isHSpace(prev) || classify(prev) != cls) break
+            start--
+        }
+        var end = pos + 1
+        while (end < len) {
+            val next = text[end]
+            if (next == '\n' || isHSpace(next) || classify(next) != cls) break
+            end++
+        }
+        return start until end
+    }
+
+    fun lineRangeAt(text: String, offset: Int): IntRange {
+        val pos = offset.coerceIn(0, text.length)
+        var start = pos
+        while (start > 0 && text[start - 1] != '\n') start--
+        var end = pos
+        while (end < text.length && text[end] != '\n') end++
+        return start until end
+    }
+
     private enum class CharClass { WORD, PUNCT }
 
     private fun isHSpace(c: Char): Boolean = c == ' ' || c == '\t'
