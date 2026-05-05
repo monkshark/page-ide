@@ -109,6 +109,28 @@ onValueChange(final)
 
 ---
 
+## 마우스 클릭 (더블 / 트리플)
+
+```kotlin
+.pointerInput(Unit) {
+    awaitPointerEventScope {
+        ... PointerEventPass.Final 의 Press 이벤트만 본다
+        clickCount = if (now - lastClickTime < 400 && close && clickCount < 3) clickCount + 1 else 1
+    }
+}
+```
+
+`onTextLayout` 으로 잡아둔 `TextLayoutResult.getOffsetForPosition` 으로 클릭 좌표를 텍스트 오프셋으로 변환
+
+| 클릭 | 동작 |
+|---|---|
+| 더블 | `WordBoundary.wordRangeAt(text, offset)` → 같은 클래스 런 선택 (공백/개행 위에서는 무시) |
+| 트리플 | `WordBoundary.lineRangeAt(text, offset)` → 줄 시작 ~ `\n` 직전 |
+
+`PointerEventPass.Final` 이라 `BasicTextField` 가 자체 포인터 처리를 끝낸 뒤 우리가 덮어 쓴다. 400ms / 8px 안에서만 시퀀스로 인정 → 그 외엔 카운터 리셋
+
+---
+
 ## `CombinedHighlightTransformation`
 
 `VisualTransformation` 한 번에 세 종류 색을 칠한다:

@@ -1,8 +1,8 @@
 # WordBoundary
 
-> `page/editor/src/main/kotlin/page/editor/WordBoundary.kt` — 워드 단위 캐럿 이동 / 삭제
+> `page/editor/src/main/kotlin/page/editor/WordBoundary.kt` — 워드 단위 캐럿 이동 / 삭제 / 더블·트리플 클릭 선택 범위
 
-`Ctrl+←/→` (이동), `Ctrl+Shift+←/→` (선택), `Ctrl+Backspace/Delete` (삭제) 의 경계 계산. VS Code 식 분류 — 단어 (영숫자 + `_`) / 구두점 / 가로 공백 / 개행
+`Ctrl+←/→` (이동), `Ctrl+Shift+←/→` (선택), `Ctrl+Backspace/Delete` (삭제), 더블/트리플 클릭 (단어/줄 선택) 의 경계 계산. VS Code 식 분류 — 단어 (영숫자 + `_`) / 구두점 / 가로 공백 / 개행
 
 > English: [word_boundary_en.md](https://monkshark.github.io/PAGE_IDE/#modules/editor/word_boundary_en.md)
 
@@ -52,6 +52,24 @@ fun deleteWordForward(edit: TextEdit): TextEdit?
 
 ---
 
+## `wordRangeAt` / `lineRangeAt`
+
+```kotlin
+fun wordRangeAt(text: String, offset: Int): IntRange
+fun lineRangeAt(text: String, offset: Int): IntRange
+```
+
+`offset` 위치를 포함하는 단어/줄 range. 더블 클릭 → 단어 선택, 트리플 클릭 → 줄 선택에 사용
+
+| 함수 | 동작 |
+|---|---|
+| `wordRangeAt` | WORD 런 또는 PUNCT 런 한 덩어리. 공백 / 개행 위에서는 `IntRange.EMPTY` (선택 변경 없음) |
+| `lineRangeAt` | 같은 줄의 시작 ~ 끝 (개행 직전까지). 빈 줄이면 빈 range |
+
+`IntRange` 는 `start until end` 스타일이라 호출자는 `TextRange(r.first, r.last + 1)` 로 변환
+
+---
+
 ## `CharClass`
 
 ```kotlin
@@ -69,9 +87,10 @@ private enum class CharClass { WORD, PUNCT }
 
 ## 사용처
 
-| 위치 | 키 |
+| 위치 | 키 / 입력 |
 |---|---|
 | `page.app.EditorPanel` `handleWordShortcut` | `Ctrl+←/→`, `Ctrl+Shift+←/→`, `Ctrl+Backspace`, `Ctrl+Delete` |
+| `page.app.EditorPanel` 마우스 핸들러 | 더블 클릭 (`wordRangeAt`), 트리플 클릭 (`lineRangeAt`) |
 
 ---
 
