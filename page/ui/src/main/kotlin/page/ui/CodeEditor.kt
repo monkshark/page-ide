@@ -22,13 +22,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -86,6 +89,10 @@ fun CodeEditor(
 
     LaunchedEffect(layout) { onTextLayout(layout) }
 
+    LaunchedEffect(focusRequester) {
+        runCatching { focusRequester.requestFocus() }
+    }
+
     LaunchedEffect(isFocused, value.selection) {
         caretVisible = true
         if (!isFocused) return@LaunchedEffect
@@ -107,9 +114,9 @@ fun CodeEditor(
     Box(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
+            .onFocusChanged { isFocused = it.isFocused }
             .focusRequester(focusRequester)
             .focusable(interactionSource = remember { MutableInteractionSource() })
-            .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (latestPreview(event)) return@onPreviewKeyEvent true
                 handleDefaultKey(event, latestValue, latestOnChange, latestLayout, clipboard)
@@ -179,11 +186,11 @@ fun CodeEditor(
             if (isFocused && caretVisible) {
                 val caretTrans = latestMapping.originalToTransformed(sel.end)
                 val caretRect = layout.getCursorRect(caretTrans)
-                drawLine(
+                val caretWidth = with(density) { 2.dp.toPx() }
+                drawRect(
                     brush = cursorBrush,
-                    start = Offset(caretRect.left, caretRect.top),
-                    end = Offset(caretRect.left, caretRect.bottom),
-                    strokeWidth = with(density) { 1.5.dp.toPx() },
+                    topLeft = Offset(caretRect.left, caretRect.top),
+                    size = Size(caretWidth, caretRect.bottom - caretRect.top),
                 )
             }
         }
@@ -314,12 +321,13 @@ private fun handleDefaultKey(
             true
         }
         else -> {
+            if (event.isAltPressed || event.isMetaPressed) return false
             val cp = event.utf16CodePoint
-            if (cp != 0 && cp >= 0x20 && cp != 0x7F) {
-                val ch = String(Character.toChars(cp))
-                onChange(insertReplacing(value, ch))
-                true
-            } else false
+            if (cp == 0 || cp == 0xFFFF || cp < 0x20 || cp == 0x7F) return false
+            if (cp == 0x20 && event.nativeKeyEvent.keyCode != java.awt.event.KeyEvent.VK_SPACE) return false
+            val ch = String(Character.toChars(cp))
+            onChange(insertReplacing(value, ch))
+            true
         }
     }
 }
