@@ -54,9 +54,12 @@ import page.editor.IndexedFile
 import page.editor.ProjectFileIndex
 import page.editor.Replace
 import page.editor.SearchState
+import page.editor.SplitOrientation
+import page.editor.SplitPaneState
 import page.editor.SyntaxLexers
 import page.editor.TabBook
 import page.ui.GlassTheme
+import page.ui.SplitPane
 import java.awt.Cursor
 import java.nio.file.Path
 
@@ -71,6 +74,18 @@ fun main() = application {
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
     var quickOpen by remember { mutableStateOf(false) }
     var quickOpenIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
+    var splitEnabled by remember { mutableStateOf(false) }
+    var splitOrientation by remember { mutableStateOf(SplitOrientation.HORIZONTAL) }
+    var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
+    var secondaryValue by remember { mutableStateOf(TextFieldValue("")) }
+    var secondarySeeded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(splitEnabled) {
+        if (splitEnabled && !secondarySeeded) {
+            secondaryValue = TextFieldValue(editorValue.text, TextRange(0))
+            secondarySeeded = true
+        }
+    }
 
     LaunchedEffect(book.activeIndex, book.tabs.size) {
         val active = book.active
@@ -286,6 +301,15 @@ fun main() = application {
                 event.key == Key.F -> { openSearch(); true }
                 event.key == Key.R -> { openReplace(); true }
                 event.key == Key.P -> { openQuickOpen(); true }
+                event.key == Key.Backslash && event.isShiftPressed -> {
+                    splitOrientation = if (splitOrientation == SplitOrientation.HORIZONTAL)
+                        SplitOrientation.VERTICAL else SplitOrientation.HORIZONTAL
+                    true
+                }
+                event.key == Key.Backslash -> {
+                    splitEnabled = !splitEnabled
+                    true
+                }
                 event.key == Key.Z && event.isShiftPressed -> {
                     if (search != null) false else { doRedo(); true }
                 }
@@ -352,6 +376,12 @@ fun main() = application {
                     onReplaceAll = onReplaceAll,
                     onSearchClose = closeSearch,
                     onWindowShortcut = handleShortcut,
+                    splitEnabled = splitEnabled,
+                    splitOrientation = splitOrientation,
+                    splitState = splitState,
+                    onSplitStateChange = { splitState = it },
+                    secondaryValue = secondaryValue,
+                    onSecondaryChange = { secondaryValue = it },
                 )
             }
         }
@@ -428,6 +458,12 @@ private fun Shell(
     onReplaceAll: () -> Unit,
     onSearchClose: () -> Unit,
     onWindowShortcut: (KeyEvent) -> Boolean,
+    splitEnabled: Boolean,
+    splitOrientation: SplitOrientation,
+    splitState: SplitPaneState,
+    onSplitStateChange: (SplitPaneState) -> Unit,
+    secondaryValue: TextFieldValue,
+    onSecondaryChange: (TextFieldValue) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TitleBar(path = activePath)
@@ -450,13 +486,9 @@ private fun Shell(
                 )
                 val active = book.active
                 val kind = active?.let { FileKinds.classify(it.path) }
-                when (kind) {
-                    FileKind.IMAGE, FileKind.SVG -> PreviewPanel(
-                        path = active.path,
-                        kind = kind,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                    )
-                    else -> EditorPanel(
+                val activeLexer = active?.path?.let { SyntaxLexers.forPath(it) }
+                val primaryEditor: @Composable (Modifier) -> Unit = { mod ->
+                    EditorPanel(
                         value = editorValue,
                         onValueChange = onEditorChange,
                         search = search,
@@ -469,10 +501,50 @@ private fun Shell(
                         onReplaceAll = onReplaceAll,
                         onSearchClose = onSearchClose,
                         onWindowShortcut = onWindowShortcut,
-                        lexer = active?.path?.let { SyntaxLexers.forPath(it) },
+                        lexer = activeLexer,
                         activePath = active?.path,
+                        modifier = mod,
+                    )
+                }
+                val secondaryEditor: @Composable (Modifier) -> Unit = { mod ->
+                    EditorPanel(
+                        value = secondaryValue,
+                        onValueChange = onSecondaryChange,
+                        search = null,
+                        onQueryChange = {},
+                        onReplaceChange = {},
+                        onToggleCase = {},
+                        onSearchNext = {},
+                        onSearchPrev = {},
+                        onReplace = {},
+                        onReplaceAll = {},
+                        onSearchClose = {},
+                        onWindowShortcut = onWindowShortcut,
+                        lexer = activeLexer,
+                        activePath = active?.path,
+                        modifier = mod,
+                    )
+                }
+                when (kind) {
+                    FileKind.IMAGE, FileKind.SVG -> PreviewPanel(
+                        path = active.path,
+                        kind = kind,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
+                    else -> {
+                        if (splitEnabled) {
+                            SplitPane(
+                                state = splitState,
+                                onStateChange = onSplitStateChange,
+                                orientation = splitOrientation,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                first = { primaryEditor(Modifier.fillMaxSize()) },
+                                second = { secondaryEditor(Modifier.fillMaxSize()) },
+                            )
+                        } else {
+                            primaryEditor(Modifier.fillMaxWidth().weight(1f))
+                        }
+                    }
                 }
             }
         }

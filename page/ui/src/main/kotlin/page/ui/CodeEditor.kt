@@ -104,6 +104,16 @@ fun CodeEditor(
             .onPreviewKeyEvent { event ->
                 handleKeyEvent(event, latestContent, latestOnChange, latestShortcut)
             }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (e.type == PointerEventType.Press) {
+                            focusRequester.requestFocus()
+                        }
+                    }
+                }
+            }
             .verticalScroll(vScroll)
             .horizontalScroll(hScroll)
             .padding(horizontal = 8.dp, vertical = 12.dp),
