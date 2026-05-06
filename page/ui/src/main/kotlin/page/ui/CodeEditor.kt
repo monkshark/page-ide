@@ -3,16 +3,12 @@ package page.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,8 +22,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -40,50 +37,56 @@ import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import page.editor.CursorMotion
-import page.editor.EditorContent
-import page.editor.Selection
 
 @Composable
 fun CodeEditor(
-    content: EditorContent,
-    onContentChange: (EditorContent) -> Unit,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
     textStyle: TextStyle = defaultEditorStyle(),
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    cursorBrush: Brush = SolidColor(MaterialTheme.colorScheme.primary),
     selectionColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-    caretColor: Color = MaterialTheme.colorScheme.primary,
-    onKeyShortcut: (KeyEvent) -> Boolean = { false },
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+    onTextLayout: (TextLayoutResult) -> Unit = {},
+    onPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
 ) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val focusRequester = remember { FocusRequester() }
+    val clipboard = LocalClipboardManager.current
     var isFocused by remember { mutableStateOf(false) }
     var caretVisible by remember { mutableStateOf(true) }
-    val vScroll = rememberScrollState()
-    val hScroll = rememberScrollState()
 
-    val latestContent by rememberUpdatedState(content)
-    val latestOnChange by rememberUpdatedState(onContentChange)
-    val latestShortcut by rememberUpdatedState(onKeyShortcut)
+    val transformed = remember(value.text, visualTransformation) {
+        visualTransformation.filter(AnnotatedString(value.text))
+    }
+    val displayText = transformed.text
+    val mapping = transformed.offsetMapping
 
-    val layout = remember(content.text, textStyle, density.density, density.fontScale) {
-        measurer.measure(
-            text = AnnotatedString(content.text),
-            style = textStyle,
-            softWrap = false,
-        )
+    val layout = remember(displayText, textStyle, density.density, density.fontScale) {
+        measurer.measure(text = displayText, style = textStyle, softWrap = false)
     }
 
-    LaunchedEffect(isFocused, content.selection.caret) {
+    LaunchedEffect(layout) { onTextLayout(layout) }
+
+    LaunchedEffect(isFocused, value.selection) {
         caretVisible = true
         if (!isFocused) return@LaunchedEffect
         while (true) {
@@ -95,6 +98,12 @@ fun CodeEditor(
     val widthDp = with(density) { layout.size.width.toDp() }
     val heightDp = with(density) { layout.size.height.toDp() }
 
+    val latestValue by rememberUpdatedState(value)
+    val latestOnChange by rememberUpdatedState(onValueChange)
+    val latestPreview by rememberUpdatedState(onPreviewKeyEvent)
+    val latestMapping by rememberUpdatedState(mapping)
+    val latestLayout by rememberUpdatedState(layout)
+
     Box(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
@@ -102,7 +111,8 @@ fun CodeEditor(
             .focusable(interactionSource = remember { MutableInteractionSource() })
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                handleKeyEvent(event, latestContent, latestOnChange, latestShortcut)
+                if (latestPreview(event)) return@onPreviewKeyEvent true
+                handleDefaultKey(event, latestValue, latestOnChange, latestLayout, clipboard)
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -114,40 +124,35 @@ fun CodeEditor(
                     }
                 }
             }
-            .verticalScroll(vScroll)
-            .horizontalScroll(hScroll)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+            .padding(contentPadding),
     ) {
         Canvas(
             modifier = Modifier
                 .requiredWidth(widthDp)
                 .requiredHeight(heightDp)
-                .pointerInput(Unit) {
-                    detectTapGestures(onPress = {
-                        focusRequester.requestFocus()
-                    })
-                }
-                .pointerInput(content.text) {
+                .pointerInput(value.text) {
                     awaitPointerEventScope {
-                        var dragging = false
                         var anchor = 0
+                        var dragging = false
                         while (true) {
                             val e = awaitPointerEvent(PointerEventPass.Main)
                             val change = e.changes.firstOrNull() ?: continue
                             when (e.type) {
                                 PointerEventType.Press -> {
-                                    val off = layout.getOffsetForPosition(change.position)
-                                    anchor = off
+                                    val transOff = latestLayout.getOffsetForPosition(change.position)
+                                    val origOff = latestMapping.transformedToOriginal(transOff)
+                                    anchor = origOff
                                     dragging = true
-                                    latestOnChange(latestContent.withSelection(Selection.at(off)))
+                                    latestOnChange(latestValue.copy(selection = TextRange(origOff)))
                                     focusRequester.requestFocus()
                                     change.consume()
                                 }
                                 PointerEventType.Move -> {
                                     if (dragging && change.pressed) {
-                                        val off = layout.getOffsetForPosition(change.position)
+                                        val transOff = latestLayout.getOffsetForPosition(change.position)
+                                        val origOff = latestMapping.transformedToOriginal(transOff)
                                         latestOnChange(
-                                            latestContent.withSelection(Selection(anchor, off)),
+                                            latestValue.copy(selection = TextRange(anchor, origOff)),
                                         )
                                         change.consume()
                                     }
@@ -161,18 +166,21 @@ fun CodeEditor(
                     }
                 },
         ) {
-            if (!latestContent.selection.isCollapsed) {
-                val path = layout.multiParagraph.getPathForRange(
-                    latestContent.selection.start,
-                    latestContent.selection.end,
-                )
-                drawPath(path = path, color = selectionColor)
+            val sel = latestValue.selection
+            if (!sel.collapsed) {
+                val transStart = latestMapping.originalToTransformed(sel.min)
+                val transEnd = latestMapping.originalToTransformed(sel.max)
+                if (transStart < transEnd) {
+                    val path = layout.multiParagraph.getPathForRange(transStart, transEnd)
+                    drawPath(path = path, color = selectionColor)
+                }
             }
             drawText(textLayoutResult = layout)
             if (isFocused && caretVisible) {
-                val caretRect = layout.getCursorRect(latestContent.selection.caret)
+                val caretTrans = latestMapping.originalToTransformed(sel.end)
+                val caretRect = layout.getCursorRect(caretTrans)
                 drawLine(
-                    color = caretColor,
+                    brush = cursorBrush,
                     start = Offset(caretRect.left, caretRect.top),
                     end = Offset(caretRect.left, caretRect.bottom),
                     strokeWidth = with(density) { 1.5.dp.toPx() },
@@ -194,65 +202,145 @@ private fun defaultEditorStyle(): TextStyle = TextStyle(
     ),
 )
 
-private fun handleKeyEvent(
+private fun handleDefaultKey(
     event: KeyEvent,
-    content: EditorContent,
-    onChange: (EditorContent) -> Unit,
-    onShortcut: (KeyEvent) -> Boolean,
+    value: TextFieldValue,
+    onChange: (TextFieldValue) -> Unit,
+    layout: TextLayoutResult,
+    clipboard: ClipboardManager,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
-    if (onShortcut(event)) return true
+    val text = value.text
+    val sel = value.selection
     val shift = event.isShiftPressed
     val ctrl = event.isCtrlPressed
-    val handled = when (event.key) {
+
+    if (ctrl) {
+        return when (event.key) {
+            Key.A -> {
+                onChange(value.copy(selection = TextRange(0, text.length)))
+                true
+            }
+            Key.C -> {
+                if (!sel.collapsed) {
+                    clipboard.setText(AnnotatedString(text.substring(sel.min, sel.max)))
+                }
+                true
+            }
+            Key.X -> {
+                if (!sel.collapsed) {
+                    clipboard.setText(AnnotatedString(text.substring(sel.min, sel.max)))
+                    val newText = text.removeRange(sel.min, sel.max)
+                    onChange(value.copy(text = newText, selection = TextRange(sel.min)))
+                }
+                true
+            }
+            Key.V -> {
+                val pasted = clipboard.getText()?.text.orEmpty()
+                onChange(insertReplacing(value, pasted))
+                true
+            }
+            else -> false
+        }
+    }
+
+    return when (event.key) {
         Key.DirectionLeft -> {
-            val next = if (ctrl) CursorMotion.moveWordLeft(content, shift)
-            else CursorMotion.moveLeft(content, shift)
-            onChange(next); true
+            val newCaret = if (!shift && !sel.collapsed) sel.min
+            else (sel.end - 1).coerceAtLeast(0)
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
         }
         Key.DirectionRight -> {
-            val next = if (ctrl) CursorMotion.moveWordRight(content, shift)
-            else CursorMotion.moveRight(content, shift)
-            onChange(next); true
+            val newCaret = if (!shift && !sel.collapsed) sel.max
+            else (sel.end + 1).coerceAtMost(text.length)
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
+        }
+        Key.DirectionUp -> {
+            val newCaret = verticalCaret(layout, sel.end, up = true) ?: return true
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
+        }
+        Key.DirectionDown -> {
+            val newCaret = verticalCaret(layout, sel.end, up = false) ?: return true
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
         }
         Key.MoveHome -> {
-            val next = if (ctrl) CursorMotion.moveDocStart(content, shift)
-            else CursorMotion.moveLineHome(content, shift)
-            onChange(next); true
+            val line = layout.getLineForOffset(sel.end)
+            val newCaret = layout.getLineStart(line)
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
         }
         Key.MoveEnd -> {
-            val next = if (ctrl) CursorMotion.moveDocEnd(content, shift)
-            else CursorMotion.moveLineEnd(content, shift)
-            onChange(next); true
+            val line = layout.getLineForOffset(sel.end)
+            val newCaret = layout.getLineEnd(line, visibleEnd = true)
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
+        }
+        Key.PageUp, Key.PageDown -> {
+            val up = event.key == Key.PageUp
+            val targetLine = (layout.getLineForOffset(sel.end) + if (up) -10 else 10)
+                .coerceIn(0, layout.lineCount - 1)
+            val x = layout.getCursorRect(sel.end).left
+            val y = layout.getLineTop(targetLine) + 1
+            val newCaret = layout.getOffsetForPosition(Offset(x, y))
+            onChange(value.copy(selection = newSelection(sel, newCaret, shift)))
+            true
         }
         Key.Backspace -> {
-            val next = if (ctrl) CursorMotion.deleteWordBackward(content)
-            else CursorMotion.deleteBackward(content)
-            onChange(next); true
+            if (!sel.collapsed) {
+                onChange(value.copy(text = text.removeRange(sel.min, sel.max), selection = TextRange(sel.min)))
+            } else if (sel.end > 0) {
+                onChange(value.copy(text = text.removeRange(sel.end - 1, sel.end), selection = TextRange(sel.end - 1)))
+            }
+            true
         }
         Key.Delete -> {
-            val next = if (ctrl) CursorMotion.deleteWordForward(content)
-            else CursorMotion.deleteForward(content)
-            onChange(next); true
+            if (!sel.collapsed) {
+                onChange(value.copy(text = text.removeRange(sel.min, sel.max), selection = TextRange(sel.min)))
+            } else if (sel.end < text.length) {
+                onChange(value.copy(text = text.removeRange(sel.end, sel.end + 1), selection = TextRange(sel.end)))
+            }
+            true
         }
         Key.Enter, Key.NumPadEnter -> {
-            onChange(CursorMotion.insert(content, "\n")); true
+            onChange(insertReplacing(value, "\n"))
+            true
         }
         Key.Tab -> {
-            onChange(CursorMotion.insert(content, "    ")); true
+            onChange(insertReplacing(value, "    "))
+            true
         }
         else -> {
-            if (ctrl && event.key == Key.A) {
-                onChange(CursorMotion.selectAll(content)); true
-            } else if (!ctrl) {
-                val cp = event.utf16CodePoint
-                if (cp != 0 && cp >= 0x20 && cp != 0x7F) {
-                    val ch = String(Character.toChars(cp))
-                    onChange(CursorMotion.insert(content, ch))
-                    true
-                } else false
+            val cp = event.utf16CodePoint
+            if (cp != 0 && cp >= 0x20 && cp != 0x7F) {
+                val ch = String(Character.toChars(cp))
+                onChange(insertReplacing(value, ch))
+                true
             } else false
         }
     }
-    return handled
 }
+
+private fun newSelection(current: TextRange, caret: Int, shift: Boolean): TextRange =
+    if (shift) TextRange(current.start, caret) else TextRange(caret)
+
+private fun insertReplacing(value: TextFieldValue, insertion: String): TextFieldValue {
+    val sel = value.selection
+    val newText = value.text.substring(0, sel.min) + insertion + value.text.substring(sel.max)
+    val caret = sel.min + insertion.length
+    return value.copy(text = newText, selection = TextRange(caret))
+}
+
+private fun verticalCaret(layout: TextLayoutResult, currentOffset: Int, up: Boolean): Int? {
+    val line = layout.getLineForOffset(currentOffset)
+    val targetLine = line + if (up) -1 else 1
+    if (targetLine < 0 || targetLine >= layout.lineCount) return null
+    val x = layout.getCursorRect(currentOffset).left
+    val y = layout.getLineTop(targetLine) + 1
+    return layout.getOffsetForPosition(Offset(x, y))
+}
+
+private fun OffsetMapping.safeOriginalToTransformed(offset: Int): Int = originalToTransformed(offset)
