@@ -26,3 +26,10 @@ compose.desktop {
         }
     }
 }
+
+tasks.register<JavaExec>("runCodeEditorDemo") {
+    group = "application"
+    description = "Launches the standalone CodeEditor demo window"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("page.app.CodeEditorDemoKt")
+}
