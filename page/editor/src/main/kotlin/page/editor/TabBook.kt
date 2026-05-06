@@ -27,6 +27,14 @@ data class TabBook(
         return copy(tabs = tabs + newTab, activeIndex = tabs.size)
     }
 
+    fun appendTab(tab: OpenTab): TabBook {
+        val existing = tabs.indexOfFirst { it.path == tab.path }
+        if (existing >= 0) {
+            return copy(activeIndex = existing)
+        }
+        return copy(tabs = tabs + tab, activeIndex = tabs.size)
+    }
+
     fun close(index: Int): TabBook {
         if (index !in tabs.indices) return this
         val newTabs = tabs.toMutableList().also { it.removeAt(index) }

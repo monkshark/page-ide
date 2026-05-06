@@ -3,7 +3,14 @@ package page.editor
 import java.nio.file.Path
 import java.util.Locale
 
-enum class FileKind { TEXT, IMAGE, SVG }
+enum class FileKind {
+    TEXT,
+    IMAGE,
+    SVG;
+
+    val isEditableAsText: Boolean
+        get() = this == TEXT || this == SVG
+}
 
 object FileKinds {
     private val IMAGE_EXTS = setOf("png", "jpg", "jpeg", "gif", "bmp", "webp")

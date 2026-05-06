@@ -34,6 +34,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,6 +53,7 @@ import page.editor.FileDocument
 import page.editor.FileKind
 import page.editor.FileKinds
 import page.editor.IndexedFile
+import page.editor.OpenTab
 import page.editor.ProjectFileIndex
 import page.editor.Replace
 import page.editor.SearchState
@@ -65,47 +68,77 @@ import java.nio.file.Path
 
 fun main() = application {
     val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
-    var book: TabBook by remember { mutableStateOf(TabBook()) }
-    var editorValue by remember { mutableStateOf(TextFieldValue("")) }
+    var primaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
+    var secondaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
+    var focusedPane: PaneSide by remember { mutableStateOf(PaneSide.PRIMARY) }
     var rootDir: Path? by remember { mutableStateOf(null) }
     var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
     var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
-    var search: SearchState? by remember { mutableStateOf(null) }
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
     var quickOpen by remember { mutableStateOf(false) }
     var quickOpenIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
     var splitEnabled by remember { mutableStateOf(false) }
     var splitOrientation by remember { mutableStateOf(SplitOrientation.HORIZONTAL) }
     var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
-    var secondaryValue by remember { mutableStateOf(TextFieldValue("")) }
-    var secondarySeeded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(splitEnabled) {
-        if (splitEnabled && !secondarySeeded) {
-            secondaryValue = TextFieldValue(editorValue.text, TextRange(0))
-            secondarySeeded = true
+    fun paneOf(side: PaneSide): EditorPaneState = when (side) {
+        PaneSide.PRIMARY -> primaryPane
+        PaneSide.SECONDARY -> secondaryPane
+    }
+
+    fun setPane(side: PaneSide, value: EditorPaneState) {
+        when (side) {
+            PaneSide.PRIMARY -> primaryPane = value
+            PaneSide.SECONDARY -> secondaryPane = value
         }
     }
 
-    LaunchedEffect(book.activeIndex, book.tabs.size) {
-        val active = book.active
-        editorValue = if (active != null) {
+    fun mutatePane(side: PaneSide, transform: (EditorPaneState) -> EditorPaneState) {
+        setPane(side, transform(paneOf(side)))
+    }
+
+    fun mutateFocused(transform: (EditorPaneState) -> EditorPaneState) {
+        mutatePane(focusedPane, transform)
+    }
+
+    fun focused(): EditorPaneState = paneOf(focusedPane)
+
+    LaunchedEffect(primaryPane.book.activeIndex, primaryPane.book.tabs.size) {
+        val active = primaryPane.book.active
+        val newValue = if (active != null) {
             val caret = active.caret.coerceIn(0, active.text.length)
             TextFieldValue(active.text, TextRange(caret))
-        } else {
-            TextFieldValue("")
-        }
-        search = search?.retarget(editorValue.text)
+        } else TextFieldValue("")
+        primaryPane = primaryPane.copy(
+            editorValue = newValue,
+            search = primaryPane.search?.retarget(newValue.text),
+        )
+    }
+
+    LaunchedEffect(secondaryPane.book.activeIndex, secondaryPane.book.tabs.size) {
+        val active = secondaryPane.book.active
+        val newValue = if (active != null) {
+            val caret = active.caret.coerceIn(0, active.text.length)
+            TextFieldValue(active.text, TextRange(caret))
+        } else TextFieldValue("")
+        secondaryPane = secondaryPane.copy(
+            editorValue = newValue,
+            search = secondaryPane.search?.retarget(newValue.text),
+        )
+    }
+
+    LaunchedEffect(splitEnabled) {
+        if (!splitEnabled) focusedPane = PaneSide.PRIMARY
     }
 
     val openInTab: (Path) -> Unit = { picked ->
-        when (FileKinds.classify(picked)) {
-            FileKind.TEXT -> FileDocument.loadOrNull(picked)?.let { text ->
-                book = book.openOrFocus(picked, text)
+        val kind = FileKinds.classify(picked)
+        if (kind.isEditableAsText) {
+            FileDocument.loadOrNull(picked)?.let { text ->
+                mutateFocused { it.copy(book = it.book.openOrFocus(picked, text)) }
             }
-            FileKind.IMAGE, FileKind.SVG -> {
-                book = book.openOrFocus(picked, "")
-            }
+        } else {
+            mutateFocused { it.copy(book = it.book.openOrFocus(picked, "")) }
         }
     }
 
@@ -113,19 +146,24 @@ fun main() = application {
         FileDialogs.open(parent)?.let { picked -> openInTab(picked) }
     }
     val saveFile: (java.awt.Frame) -> Unit = { parent ->
-        val active = book.active
+        val pane = focused()
+        val active = pane.book.active
         if (active != null) {
-            if (FileKinds.classify(active.path) == FileKind.TEXT) {
-                FileDocument.save(active.path, editorValue.text)
-                book = book
-                    .updateActive(editorValue.text, editorValue.selection.start)
-                    .markActiveSaved()
+            if (FileKinds.classify(active.path).isEditableAsText) {
+                FileDocument.save(active.path, pane.editorValue.text)
+                mutateFocused {
+                    it.copy(
+                        book = it.book
+                            .updateActive(it.editorValue.text, it.editorValue.selection.start)
+                            .markActiveSaved(),
+                    )
+                }
             }
         } else {
             val target = FileDialogs.saveAs(parent)
             if (target != null) {
-                FileDocument.save(target, editorValue.text)
-                book = book.openOrFocus(target, editorValue.text)
+                FileDocument.save(target, pane.editorValue.text)
+                mutateFocused { it.copy(book = it.book.openOrFocus(target, pane.editorValue.text)) }
             }
         }
     }
@@ -138,141 +176,200 @@ fun main() = application {
     val toggleExpanded: (Path) -> Unit = { p ->
         expanded = if (p in expanded) expanded - setOf(p) else expanded + setOf(p)
     }
-    val closeTabAt: (Int) -> Unit = { idx ->
-        book = book.close(idx)
+    val closeTabAt: (PaneSide, Int) -> Unit = { side, idx ->
+        mutatePane(side) { it.copy(book = it.book.close(idx)) }
     }
-    val isUnsavedText: (page.editor.OpenTab) -> Boolean = { tab ->
-        tab.dirty && FileKinds.classify(tab.path) == FileKind.TEXT
+    val isUnsavedText: (OpenTab) -> Boolean = { tab ->
+        tab.dirty && FileKinds.classify(tab.path).isEditableAsText
     }
-    val requestCloseTab: (Int) -> Unit = { idx ->
-        val tab = book.tabs.getOrNull(idx)
+    val requestCloseTab: (PaneSide, Int) -> Unit = { side, idx ->
+        val tab = paneOf(side).book.tabs.getOrNull(idx)
         if (tab != null && isUnsavedText(tab)) {
-            pendingClose = PendingClose.Tab(idx)
+            pendingClose = PendingClose.Tab(side, idx)
         } else {
-            closeTabAt(idx)
+            closeTabAt(side, idx)
         }
     }
     val closeActiveTab: () -> Unit = {
-        val idx = book.activeIndex
-        if (idx in book.tabs.indices) requestCloseTab(idx)
+        val side = focusedPane
+        val idx = paneOf(side).book.activeIndex
+        if (idx in paneOf(side).book.tabs.indices) requestCloseTab(side, idx)
+    }
+    val anyDirty: () -> Boolean = {
+        primaryPane.book.tabs.any(isUnsavedText) || secondaryPane.book.tabs.any(isUnsavedText)
     }
     val requestExit: () -> Unit = {
-        if (book.tabs.any(isUnsavedText)) {
-            pendingClose = PendingClose.App
-        } else {
-            exitApplication()
-        }
+        if (anyDirty()) pendingClose = PendingClose.App else exitApplication()
     }
-    val moveCaretToActiveMatch: (SearchState) -> Unit = { s ->
+    val moveCaretToActiveMatch: (PaneSide, SearchState) -> Unit = { side, s ->
         val range = s.active
         if (range != null) {
-            val start = range.first.coerceIn(0, editorValue.text.length)
-            val end = (range.last + 1).coerceIn(start, editorValue.text.length)
-            editorValue = editorValue.copy(selection = TextRange(start, end))
+            mutatePane(side) {
+                val text = it.editorValue.text
+                val start = range.first.coerceIn(0, text.length)
+                val end = (range.last + 1).coerceIn(start, text.length)
+                it.copy(editorValue = it.editorValue.copy(selection = TextRange(start, end)))
+            }
         }
     }
     val openSearch: () -> Unit = {
-        if (book.active != null && FileKinds.classify(book.active!!.path) == FileKind.TEXT) {
-            val current = search
-            search = current?.withReplaceVisible(false)
-                ?: SearchState().withQuery(editorValue.text, "")
+        val pane = focused()
+        val active = pane.book.active
+        if (active != null && FileKinds.classify(active.path).isEditableAsText) {
+            mutateFocused {
+                val current = it.search
+                it.copy(
+                    search = current?.withReplaceVisible(false)
+                        ?: SearchState().withQuery(it.editorValue.text, ""),
+                )
+            }
         }
     }
     val openReplace: () -> Unit = {
-        if (book.active != null && FileKinds.classify(book.active!!.path) == FileKind.TEXT) {
-            val current = search
-            search = current?.withReplaceVisible(true)
-                ?: SearchState().withQuery(editorValue.text, "").withReplaceVisible(true)
+        val pane = focused()
+        val active = pane.book.active
+        if (active != null && FileKinds.classify(active.path).isEditableAsText) {
+            mutateFocused {
+                val current = it.search
+                it.copy(
+                    search = current?.withReplaceVisible(true)
+                        ?: SearchState()
+                            .withQuery(it.editorValue.text, "")
+                            .withReplaceVisible(true),
+                )
+            }
         }
     }
-    val closeSearch: () -> Unit = { search = null }
-    val onQueryChange: (String) -> Unit = { q ->
-        val updated = (search ?: SearchState()).withQuery(editorValue.text, q)
-        search = updated
-        moveCaretToActiveMatch(updated)
+    val closeSearch: (PaneSide) -> Unit = { side ->
+        mutatePane(side) { it.copy(search = null) }
     }
-    val onToggleCase: () -> Unit = {
-        val s = search
+    val onQueryChange: (PaneSide, String) -> Unit = { side, q ->
+        val pane = paneOf(side)
+        val updated = (pane.search ?: SearchState()).withQuery(pane.editorValue.text, q)
+        mutatePane(side) { it.copy(search = updated) }
+        moveCaretToActiveMatch(side, updated)
+    }
+    val onToggleCase: (PaneSide) -> Unit = { side ->
+        val pane = paneOf(side)
+        val s = pane.search
         if (s != null) {
-            val updated = s.withCaseSensitive(editorValue.text, !s.caseSensitive)
-            search = updated
-            moveCaretToActiveMatch(updated)
+            val updated = s.withCaseSensitive(pane.editorValue.text, !s.caseSensitive)
+            mutatePane(side) { it.copy(search = updated) }
+            moveCaretToActiveMatch(side, updated)
         }
     }
-    val onSearchNext: () -> Unit = {
-        val s = search
+    val onSearchNext: (PaneSide) -> Unit = { side ->
+        val s = paneOf(side).search
         if (s != null) {
             val updated = s.next()
-            search = updated
-            moveCaretToActiveMatch(updated)
+            mutatePane(side) { it.copy(search = updated) }
+            moveCaretToActiveMatch(side, updated)
         }
     }
-    val onSearchPrev: () -> Unit = {
-        val s = search
+    val onSearchPrev: (PaneSide) -> Unit = { side ->
+        val s = paneOf(side).search
         if (s != null) {
             val updated = s.prev()
-            search = updated
-            moveCaretToActiveMatch(updated)
+            mutatePane(side) { it.copy(search = updated) }
+            moveCaretToActiveMatch(side, updated)
         }
     }
-    val onReplaceChange: (String) -> Unit = { value ->
-        search = search?.withReplace(value)
+    val onReplaceChange: (PaneSide, String) -> Unit = { side, value ->
+        mutatePane(side) { it.copy(search = it.search?.withReplace(value)) }
     }
-    val onReplace: () -> Unit = {
-        val s = search
+    val onReplace: (PaneSide) -> Unit = { side ->
+        val pane = paneOf(side)
+        val s = pane.search
         val range = s?.active
         if (s != null && range != null) {
-            book = book.pushHistoryOnActive(
-                EditSnapshot(editorValue.text, editorValue.selection.start)
-            )
-            val r = Replace.applyCurrent(editorValue.text, range, s.replace)
-            editorValue = TextFieldValue(r.text, TextRange(r.caret))
-            book = book.updateActive(r.text, r.caret)
+            val text = pane.editorValue.text
+            val caret = pane.editorValue.selection.start
+            val r = Replace.applyCurrent(text, range, s.replace)
             val retargeted = s.retarget(r.text)
             val nextIdx = retargeted.matches.indexOfFirst { it.first >= r.caret }
-            val updated = retargeted.copy(
+            val updatedSearch = retargeted.copy(
                 activeMatchIndex = if (nextIdx >= 0) nextIdx
-                else if (retargeted.matches.isNotEmpty()) 0 else -1
+                else if (retargeted.matches.isNotEmpty()) 0 else -1,
             )
-            search = updated
-            moveCaretToActiveMatch(updated)
+            mutatePane(side) {
+                it.copy(
+                    book = it.book
+                        .pushHistoryOnActive(EditSnapshot(text, caret))
+                        .updateActive(r.text, r.caret),
+                    editorValue = TextFieldValue(r.text, TextRange(r.caret)),
+                    search = updatedSearch,
+                )
+            }
+            moveCaretToActiveMatch(side, updatedSearch)
         }
     }
-    val onReplaceAll: () -> Unit = {
-        val s = search
+    val onReplaceAll: (PaneSide) -> Unit = { side ->
+        val pane = paneOf(side)
+        val s = pane.search
         if (s != null && s.matches.isNotEmpty()) {
-            book = book.pushHistoryOnActive(
-                EditSnapshot(editorValue.text, editorValue.selection.start)
-            )
-            val r = Replace.applyAll(editorValue.text, s.matches, s.replace)
-            editorValue = TextFieldValue(r.text, TextRange(r.caret))
-            book = book.updateActive(r.text, r.caret)
-            search = s.retarget(r.text)
+            val text = pane.editorValue.text
+            val caret = pane.editorValue.selection.start
+            val r = Replace.applyAll(text, s.matches, s.replace)
+            mutatePane(side) {
+                it.copy(
+                    book = it.book
+                        .pushHistoryOnActive(EditSnapshot(text, caret))
+                        .updateActive(r.text, r.caret),
+                    editorValue = TextFieldValue(r.text, TextRange(r.caret)),
+                    search = s.retarget(r.text),
+                )
+            }
         }
     }
 
     val doUndo: () -> Unit = {
-        val current = EditSnapshot(editorValue.text, editorValue.selection.start)
-        val result = book.undoOnActive(current)
+        val side = focusedPane
+        val pane = paneOf(side)
+        val current = EditSnapshot(pane.editorValue.text, pane.editorValue.selection.start)
+        val result = pane.book.undoOnActive(current)
         if (result != null) {
             val (newBook, restored) = result
-            book = newBook
             val caret = restored.caret.coerceIn(0, restored.text.length)
-            editorValue = TextFieldValue(restored.text, TextRange(caret))
-            search = search?.retarget(restored.text)
+            mutatePane(side) {
+                it.copy(
+                    book = newBook,
+                    editorValue = TextFieldValue(restored.text, TextRange(caret)),
+                    search = it.search?.retarget(restored.text),
+                )
+            }
         }
     }
     val doRedo: () -> Unit = {
-        val current = EditSnapshot(editorValue.text, editorValue.selection.start)
-        val result = book.redoOnActive(current)
+        val side = focusedPane
+        val pane = paneOf(side)
+        val current = EditSnapshot(pane.editorValue.text, pane.editorValue.selection.start)
+        val result = pane.book.redoOnActive(current)
         if (result != null) {
             val (newBook, restored) = result
-            book = newBook
             val caret = restored.caret.coerceIn(0, restored.text.length)
-            editorValue = TextFieldValue(restored.text, TextRange(caret))
-            search = search?.retarget(restored.text)
+            mutatePane(side) {
+                it.copy(
+                    book = newBook,
+                    editorValue = TextFieldValue(restored.text, TextRange(caret)),
+                    search = it.search?.retarget(restored.text),
+                )
+            }
         }
     }
+
+    val moveTabAcross: ((PaneSide, Int) -> Unit)? = if (splitEnabled) {
+        { source, index ->
+            val sourcePane = paneOf(source)
+            val tab = sourcePane.book.tabs.getOrNull(index)
+            if (tab != null) {
+                val target = if (source == PaneSide.PRIMARY)
+                    PaneSide.SECONDARY else PaneSide.PRIMARY
+                mutatePane(source) { it.copy(book = it.book.close(index)) }
+                mutatePane(target) { it.copy(book = it.book.appendTab(tab)) }
+                focusedPane = target
+            }
+        }
+    } else null
 
     val openQuickOpen: () -> Unit = {
         val root = rootDir
@@ -286,6 +383,7 @@ fun main() = application {
     val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
         if (event.type != KeyEventType.KeyDown) return@handler false
         val frame = frameRef.value
+        val focusedSearch = focused().search
         if (event.isCtrlPressed) {
             when {
                 event.key == Key.O && event.isShiftPressed -> {
@@ -311,24 +409,24 @@ fun main() = application {
                     true
                 }
                 event.key == Key.Z && event.isShiftPressed -> {
-                    if (search != null) false else { doRedo(); true }
+                    if (focusedSearch != null) false else { doRedo(); true }
                 }
                 event.key == Key.Z -> {
-                    if (search != null) false else { doUndo(); true }
+                    if (focusedSearch != null) false else { doUndo(); true }
                 }
                 event.key == Key.Y -> {
-                    if (search != null) false else { doRedo(); true }
+                    if (focusedSearch != null) false else { doRedo(); true }
                 }
                 else -> false
             }
-        } else if (event.key == Key.Escape && search != null) {
-            closeSearch(); true
+        } else if (event.key == Key.Escape && focusedSearch != null) {
+            closeSearch(focusedPane); true
         } else false
     }
     Window(
         onCloseRequest = requestExit,
         state = windowState,
-        title = windowTitle(book.active?.path),
+        title = windowTitle(focused().book.active?.path),
         onPreviewKeyEvent = handleShortcut,
         onKeyEvent = handleShortcut,
     ) {
@@ -339,25 +437,40 @@ fun main() = application {
                 color = MaterialTheme.colorScheme.background,
             ) {
                 Shell(
-                    book = book,
-                    activePath = book.active?.path,
-                    editorValue = editorValue,
-                    onEditorChange = { v ->
-                        val textChanged = v.text != editorValue.text
-                        if (textChanged) {
-                            book = book.pushHistoryOnActive(
-                                EditSnapshot(editorValue.text, editorValue.selection.start)
+                    primary = primaryPane,
+                    secondary = secondaryPane,
+                    focusedPane = focusedPane,
+                    onPaneFocus = { side -> focusedPane = side },
+                    onEditorChange = { side, v ->
+                        mutatePane(side) {
+                            val textChanged = v.text != it.editorValue.text
+                            val nextBook = if (textChanged) {
+                                val priorText = it.editorValue.text
+                                val priorCaret = it.editorValue.selection.start
+                                it.book
+                                    .pushHistoryOnActive(EditSnapshot(priorText, priorCaret))
+                                    .updateActive(v.text, v.selection.start)
+                            } else {
+                                it.book.updateActive(v.text, v.selection.start)
+                            }
+                            val nextSearch = if (textChanged) {
+                                it.search?.retarget(v.text)
+                            } else it.search
+                            it.copy(
+                                editorValue = v,
+                                book = nextBook,
+                                search = nextSearch,
                             )
                         }
-                        editorValue = v
-                        book = book.updateActive(v.text, v.selection.start)
-                        if (textChanged) {
-                            search = search?.retarget(v.text)
-                        }
                     },
-                    onActivateTab = { index -> book = book.activate(index) },
-                    onCloseTab = requestCloseTab,
-                    onMoveTab = { from, to -> book = book.move(from, to) },
+                    onActivateTab = { side, index ->
+                        mutatePane(side) { it.copy(book = it.book.activate(index)) }
+                    },
+                    onCloseTab = { side, index -> requestCloseTab(side, index) },
+                    onMoveTab = { side, from, to ->
+                        mutatePane(side) { it.copy(book = it.book.move(from, to)) }
+                    },
+                    onMoveTabAcross = moveTabAcross,
                     rootDir = rootDir,
                     expanded = expanded,
                     sidebarWidth = sidebarWidth,
@@ -366,7 +479,6 @@ fun main() = application {
                     },
                     onToggle = toggleExpanded,
                     onOpenFile = openInTab,
-                    search = search,
                     onQueryChange = onQueryChange,
                     onReplaceChange = onReplaceChange,
                     onToggleCase = onToggleCase,
@@ -380,8 +492,6 @@ fun main() = application {
                     splitOrientation = splitOrientation,
                     splitState = splitState,
                     onSplitStateChange = { splitState = it },
-                    secondaryValue = secondaryValue,
-                    onSecondaryChange = { secondaryValue = it },
                 )
             }
         }
@@ -400,26 +510,38 @@ fun main() = application {
 
     val current = pendingClose
     if (current != null) {
-        val dirtyTabs = book.tabs.withIndex().filter { (_, t) -> isUnsavedText(t) }
-        val targets = when (current) {
-            is PendingClose.Tab -> book.tabs.getOrNull(current.index)?.let { listOf(current.index to it) } ?: emptyList()
-            PendingClose.App -> dirtyTabs.map { it.index to it.value }
+        val targets: List<Triple<PaneSide, Int, OpenTab>> = when (current) {
+            is PendingClose.Tab -> {
+                val tab = paneOf(current.side).book.tabs.getOrNull(current.index)
+                if (tab != null) listOf(Triple(current.side, current.index, tab)) else emptyList()
+            }
+            PendingClose.App -> buildList {
+                primaryPane.book.tabs.forEachIndexed { idx, tab ->
+                    if (isUnsavedText(tab)) add(Triple(PaneSide.PRIMARY, idx, tab))
+                }
+                secondaryPane.book.tabs.forEachIndexed { idx, tab ->
+                    if (isUnsavedText(tab)) add(Triple(PaneSide.SECONDARY, idx, tab))
+                }
+            }
+        }
+        val targetNames = targets.map { (_, _, t) ->
+            t.path.fileName?.toString() ?: t.path.toString()
         }
         UnsavedChangesDialog(
-            fileNames = targets.map { (_, t) -> t.path.fileName?.toString() ?: t.path.toString() },
+            fileNames = targetNames,
             isAppExit = current is PendingClose.App,
             onSave = {
-                targets.forEach { (_, t) -> FileDocument.save(t.path, t.text) }
+                targets.forEach { (_, _, t) -> FileDocument.save(t.path, t.text) }
                 pendingClose = null
                 when (current) {
-                    is PendingClose.Tab -> closeTabAt(current.index)
+                    is PendingClose.Tab -> closeTabAt(current.side, current.index)
                     PendingClose.App -> exitApplication()
                 }
             },
             onDiscard = {
                 pendingClose = null
                 when (current) {
-                    is PendingClose.Tab -> closeTabAt(current.index)
+                    is PendingClose.Tab -> closeTabAt(current.side, current.index)
                     PendingClose.App -> exitApplication()
                 }
             },
@@ -435,63 +557,119 @@ private fun windowTitle(path: Path?): String {
 
 @Composable
 private fun Shell(
-    book: TabBook,
-    activePath: Path?,
-    editorValue: TextFieldValue,
-    onEditorChange: (TextFieldValue) -> Unit,
-    onActivateTab: (Int) -> Unit,
-    onCloseTab: (Int) -> Unit,
-    onMoveTab: (Int, Int) -> Unit,
+    primary: EditorPaneState,
+    secondary: EditorPaneState,
+    focusedPane: PaneSide,
+    onPaneFocus: (PaneSide) -> Unit,
+    onEditorChange: (PaneSide, TextFieldValue) -> Unit,
+    onActivateTab: (PaneSide, Int) -> Unit,
+    onCloseTab: (PaneSide, Int) -> Unit,
+    onMoveTab: (PaneSide, Int, Int) -> Unit,
+    onMoveTabAcross: ((PaneSide, Int) -> Unit)?,
     rootDir: Path?,
     expanded: Set<Path>,
     sidebarWidth: Dp,
     onSidebarResize: (Dp) -> Unit,
     onToggle: (Path) -> Unit,
     onOpenFile: (Path) -> Unit,
-    search: SearchState?,
-    onQueryChange: (String) -> Unit,
-    onReplaceChange: (String) -> Unit,
-    onToggleCase: () -> Unit,
-    onSearchNext: () -> Unit,
-    onSearchPrev: () -> Unit,
-    onReplace: () -> Unit,
-    onReplaceAll: () -> Unit,
-    onSearchClose: () -> Unit,
+    onQueryChange: (PaneSide, String) -> Unit,
+    onReplaceChange: (PaneSide, String) -> Unit,
+    onToggleCase: (PaneSide) -> Unit,
+    onSearchNext: (PaneSide) -> Unit,
+    onSearchPrev: (PaneSide) -> Unit,
+    onReplace: (PaneSide) -> Unit,
+    onReplaceAll: (PaneSide) -> Unit,
+    onSearchClose: (PaneSide) -> Unit,
     onWindowShortcut: (KeyEvent) -> Boolean,
     splitEnabled: Boolean,
     splitOrientation: SplitOrientation,
     splitState: SplitPaneState,
     onSplitStateChange: (SplitPaneState) -> Unit,
-    secondaryValue: TextFieldValue,
-    onSecondaryChange: (TextFieldValue) -> Unit,
 ) {
+    var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     Column(modifier = Modifier.fillMaxSize()) {
-        TitleBar(path = activePath)
+        TitleBar(path = paneFor(focusedPane, primary, secondary).book.active?.path)
         Row(modifier = Modifier.fillMaxSize()) {
             FileTreePanel(
                 root = rootDir,
                 expanded = expanded,
-                selectedFile = activePath,
+                selectedFile = paneFor(focusedPane, primary, secondary).book.active?.path,
                 onToggle = onToggle,
                 onOpenFile = onOpenFile,
                 modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
             )
             ResizeHandle(onSidebarResize)
-            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                TabBar(
-                    book = book,
-                    onActivate = onActivateTab,
-                    onClose = onCloseTab,
-                    onMove = onMoveTab,
-                )
-                val active = book.active
-                val kind = active?.let { FileKinds.classify(it.path) }
-                val activeLexer = active?.path?.let { SyntaxLexers.forPath(it) }
-                val primaryEditor: @Composable (Modifier) -> Unit = { mod ->
-                    EditorPanel(
-                        value = editorValue,
-                        onValueChange = onEditorChange,
-                        search = search,
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                if (splitEnabled) {
+                    SplitPane(
+                        state = splitState,
+                        onStateChange = onSplitStateChange,
+                        orientation = splitOrientation,
+                        modifier = Modifier.fillMaxSize(),
+                        firstZIndex = if (dragSourcePane == PaneSide.PRIMARY) 1f else 0f,
+                        secondZIndex = if (dragSourcePane == PaneSide.SECONDARY) 1f else 0f,
+                        first = {
+                            PaneRegion(
+                                pane = primary,
+                                side = PaneSide.PRIMARY,
+                                isFocused = focusedPane == PaneSide.PRIMARY,
+                                onPaneFocus = onPaneFocus,
+                                onEditorChange = onEditorChange,
+                                onActivateTab = onActivateTab,
+                                onCloseTab = onCloseTab,
+                                onMoveTab = onMoveTab,
+                                onMoveTabAcross = onMoveTabAcross,
+                                onQueryChange = onQueryChange,
+                                onReplaceChange = onReplaceChange,
+                                onToggleCase = onToggleCase,
+                                onSearchNext = onSearchNext,
+                                onSearchPrev = onSearchPrev,
+                                onReplace = onReplace,
+                                onReplaceAll = onReplaceAll,
+                                onSearchClose = onSearchClose,
+                                onWindowShortcut = onWindowShortcut,
+                                onTabDragStart = { dragSourcePane = PaneSide.PRIMARY },
+                                onTabDragEnd = { dragSourcePane = null },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                        second = {
+                            PaneRegion(
+                                pane = secondary,
+                                side = PaneSide.SECONDARY,
+                                isFocused = focusedPane == PaneSide.SECONDARY,
+                                onPaneFocus = onPaneFocus,
+                                onEditorChange = onEditorChange,
+                                onActivateTab = onActivateTab,
+                                onCloseTab = onCloseTab,
+                                onMoveTab = onMoveTab,
+                                onMoveTabAcross = onMoveTabAcross,
+                                onQueryChange = onQueryChange,
+                                onReplaceChange = onReplaceChange,
+                                onToggleCase = onToggleCase,
+                                onSearchNext = onSearchNext,
+                                onSearchPrev = onSearchPrev,
+                                onReplace = onReplace,
+                                onReplaceAll = onReplaceAll,
+                                onSearchClose = onSearchClose,
+                                onWindowShortcut = onWindowShortcut,
+                                onTabDragStart = { dragSourcePane = PaneSide.SECONDARY },
+                                onTabDragEnd = { dragSourcePane = null },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                    )
+                } else {
+                    PaneRegion(
+                        pane = primary,
+                        side = PaneSide.PRIMARY,
+                        isFocused = true,
+                        onPaneFocus = onPaneFocus,
+                        onEditorChange = onEditorChange,
+                        onActivateTab = onActivateTab,
+                        onCloseTab = onCloseTab,
+                        onMoveTab = onMoveTab,
+                        onMoveTabAcross = null,
                         onQueryChange = onQueryChange,
                         onReplaceChange = onReplaceChange,
                         onToggleCase = onToggleCase,
@@ -501,54 +679,126 @@ private fun Shell(
                         onReplaceAll = onReplaceAll,
                         onSearchClose = onSearchClose,
                         onWindowShortcut = onWindowShortcut,
-                        lexer = activeLexer,
-                        activePath = active?.path,
-                        modifier = mod,
+                        modifier = Modifier.fillMaxSize(),
                     )
-                }
-                val secondaryEditor: @Composable (Modifier) -> Unit = { mod ->
-                    EditorPanel(
-                        value = secondaryValue,
-                        onValueChange = onSecondaryChange,
-                        search = null,
-                        onQueryChange = {},
-                        onReplaceChange = {},
-                        onToggleCase = {},
-                        onSearchNext = {},
-                        onSearchPrev = {},
-                        onReplace = {},
-                        onReplaceAll = {},
-                        onSearchClose = {},
-                        onWindowShortcut = onWindowShortcut,
-                        lexer = activeLexer,
-                        activePath = active?.path,
-                        modifier = mod,
-                    )
-                }
-                when (kind) {
-                    FileKind.IMAGE, FileKind.SVG -> PreviewPanel(
-                        path = active.path,
-                        kind = kind,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                    )
-                    else -> {
-                        if (splitEnabled) {
-                            SplitPane(
-                                state = splitState,
-                                onStateChange = onSplitStateChange,
-                                orientation = splitOrientation,
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                first = { primaryEditor(Modifier.fillMaxSize()) },
-                                second = { secondaryEditor(Modifier.fillMaxSize()) },
-                            )
-                        } else {
-                            primaryEditor(Modifier.fillMaxWidth().weight(1f))
-                        }
-                    }
                 }
             }
         }
     }
+}
+
+private fun paneFor(side: PaneSide, primary: EditorPaneState, secondary: EditorPaneState) =
+    if (side == PaneSide.PRIMARY) primary else secondary
+
+@Composable
+private fun PaneRegion(
+    pane: EditorPaneState,
+    side: PaneSide,
+    isFocused: Boolean,
+    onPaneFocus: (PaneSide) -> Unit,
+    onEditorChange: (PaneSide, TextFieldValue) -> Unit,
+    onActivateTab: (PaneSide, Int) -> Unit,
+    onCloseTab: (PaneSide, Int) -> Unit,
+    onMoveTab: (PaneSide, Int, Int) -> Unit,
+    onMoveTabAcross: ((PaneSide, Int) -> Unit)?,
+    onQueryChange: (PaneSide, String) -> Unit,
+    onReplaceChange: (PaneSide, String) -> Unit,
+    onToggleCase: (PaneSide) -> Unit,
+    onSearchNext: (PaneSide) -> Unit,
+    onSearchPrev: (PaneSide) -> Unit,
+    onReplace: (PaneSide) -> Unit,
+    onReplaceAll: (PaneSide) -> Unit,
+    onSearchClose: (PaneSide) -> Unit,
+    onWindowShortcut: (KeyEvent) -> Boolean,
+    onTabDragStart: () -> Unit = {},
+    onTabDragEnd: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val active = pane.book.active
+    val kind = active?.let { FileKinds.classify(it.path) }
+    val activeLexer = active?.path?.let { SyntaxLexers.forPath(it) }
+    Column(
+        modifier = modifier
+            .pointerInput(side) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val e = awaitPointerEvent(PointerEventPass.Initial)
+                        if (e.type == PointerEventType.Press) onPaneFocus(side)
+                    }
+                }
+            },
+    ) {
+        TabBar(
+            book = pane.book,
+            onActivate = { idx ->
+                onPaneFocus(side)
+                onActivateTab(side, idx)
+            },
+            onClose = { idx -> onCloseTab(side, idx) },
+            onMove = { from, to -> onMoveTab(side, from, to) },
+            onMoveToOtherPane = onMoveTabAcross?.let { fn -> { idx -> fn(side, idx) } },
+            crossPaneSide = if (onMoveTabAcross == null) null else when (side) {
+                PaneSide.PRIMARY -> CrossPaneSide.RIGHT
+                PaneSide.SECONDARY -> CrossPaneSide.LEFT
+            },
+            onDragStart = onTabDragStart,
+            onDragEnd = onTabDragEnd,
+        )
+        FocusIndicator(visible = isFocused)
+        when (kind) {
+            FileKind.IMAGE -> PreviewPanel(
+                path = active.path,
+                kind = kind,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            FileKind.SVG -> SvgEditPanel(
+                path = active.path,
+                value = pane.editorValue,
+                onValueChange = { v -> onEditorChange(side, v) },
+                search = pane.search,
+                onQueryChange = { q -> onQueryChange(side, q) },
+                onReplaceChange = { v -> onReplaceChange(side, v) },
+                onToggleCase = { onToggleCase(side) },
+                onSearchNext = { onSearchNext(side) },
+                onSearchPrev = { onSearchPrev(side) },
+                onReplace = { onReplace(side) },
+                onReplaceAll = { onReplaceAll(side) },
+                onSearchClose = { onSearchClose(side) },
+                onWindowShortcut = onWindowShortcut,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            else -> EditorPanel(
+                value = pane.editorValue,
+                onValueChange = { v -> onEditorChange(side, v) },
+                search = pane.search,
+                onQueryChange = { q -> onQueryChange(side, q) },
+                onReplaceChange = { v -> onReplaceChange(side, v) },
+                onToggleCase = { onToggleCase(side) },
+                onSearchNext = { onSearchNext(side) },
+                onSearchPrev = { onSearchPrev(side) },
+                onReplace = { onReplace(side) },
+                onReplaceAll = { onReplaceAll(side) },
+                onSearchClose = { onSearchClose(side) },
+                onWindowShortcut = onWindowShortcut,
+                lexer = activeLexer,
+                activePath = active?.path,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun FocusIndicator(visible: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(2.dp)
+            .background(
+                if (visible) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                else Color.Transparent,
+            ),
+    )
 }
 
 @Composable

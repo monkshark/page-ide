@@ -82,7 +82,7 @@ private fun loadPreview(path: Path, kind: FileKind): PreviewSource? = runCatchin
     }
 }.getOrNull()
 
-private fun computeSvgIntrinsic(dom: SVGDOM): Size {
+internal fun computeSvgIntrinsic(dom: SVGDOM): Size {
     val root = dom.root ?: return Size.Unspecified
     val w = root.width
     val h = root.height

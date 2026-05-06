@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,6 +40,8 @@ fun SplitPane(
     modifier: Modifier = Modifier,
     dividerThickness: Dp = 4.dp,
     dividerColor: Color = MaterialTheme.colorScheme.outline,
+    firstZIndex: Float = 0f,
+    secondZIndex: Float = 0f,
     first: @Composable () -> Unit,
     second: @Composable () -> Unit,
 ) {
@@ -65,24 +68,24 @@ fun SplitPane(
 
         when (orientation) {
             SplitOrientation.HORIZONTAL -> Row(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.weight(firstWeight).fillMaxHeight()) { first() }
+                Box(modifier = Modifier.weight(firstWeight).fillMaxHeight().zIndex(firstZIndex)) { first() }
                 Divider(
                     orientation = orientation,
                     thickness = dividerThickness,
                     color = dividerColor,
                     onDrag = onDrag,
                 )
-                Box(modifier = Modifier.weight(secondWeight).fillMaxHeight()) { second() }
+                Box(modifier = Modifier.weight(secondWeight).fillMaxHeight().zIndex(secondZIndex)) { second() }
             }
             SplitOrientation.VERTICAL -> Column(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.weight(firstWeight).fillMaxWidth()) { first() }
+                Box(modifier = Modifier.weight(firstWeight).fillMaxWidth().zIndex(firstZIndex)) { first() }
                 Divider(
                     orientation = orientation,
                     thickness = dividerThickness,
                     color = dividerColor,
                     onDrag = onDrag,
                 )
-                Box(modifier = Modifier.weight(secondWeight).fillMaxWidth()) { second() }
+                Box(modifier = Modifier.weight(secondWeight).fillMaxWidth().zIndex(secondZIndex)) { second() }
             }
         }
     }

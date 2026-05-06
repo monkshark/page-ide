@@ -49,4 +49,11 @@ class FileKindTest {
     fun `no extension is text`() {
         assertEquals(FileKind.TEXT, FileKinds.classify(Paths.get("/tmp/Makefile")))
     }
+
+    @Test
+    fun `text and svg are editable as text, image is not`() {
+        assertEquals(true, FileKind.TEXT.isEditableAsText)
+        assertEquals(true, FileKind.SVG.isEditableAsText)
+        assertEquals(false, FileKind.IMAGE.isEditableAsText)
+    }
 }

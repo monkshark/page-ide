@@ -283,6 +283,45 @@ class TabBookTest {
     }
 
     @Test
+    fun `appendTab on empty book adds and activates`() {
+        val tab = OpenTab(path = p("a.txt"), text = "A")
+        val book = TabBook().appendTab(tab)
+        assertEquals(1, book.tabs.size)
+        assertEquals(0, book.activeIndex)
+        assertSame(tab, book.tabs[0])
+    }
+
+    @Test
+    fun `appendTab preserves dirty state and history`() {
+        val source = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .updateActive("A-edited", caret = 1)
+            .pushHistoryOnActive(EditSnapshot("A", 0))
+        val moved = source.tabs[0]
+        val target = TabBook()
+            .openOrFocus(p("b.txt"), "B")
+            .appendTab(moved)
+        assertEquals(2, target.tabs.size)
+        assertEquals(1, target.activeIndex)
+        assertTrue(target.active!!.dirty)
+        assertEquals("A-edited", target.active!!.text)
+        assertEquals("A", target.active!!.savedText)
+        assertSame(moved.history, target.active!!.history)
+    }
+
+    @Test
+    fun `appendTab focuses existing tab when path matches`() {
+        val incoming = OpenTab(path = p("a.txt"), text = "A-other")
+        val book = TabBook()
+            .openOrFocus(p("a.txt"), "A")
+            .openOrFocus(p("b.txt"), "B")
+            .appendTab(incoming)
+        assertEquals(2, book.tabs.size)
+        assertEquals(0, book.activeIndex)
+        assertEquals("A", book.tabs[0].text)
+    }
+
+    @Test
     fun `refocusing an open path does not reset dirty`() {
         val book = TabBook()
             .openOrFocus(p("a.txt"), "A")

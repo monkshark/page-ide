@@ -2,6 +2,7 @@ package page.app
 
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -182,6 +183,7 @@ fun EditorPanel(
         ),
     )
     val scrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
     var savedScrollOnPress by remember { mutableStateOf(0) }
     var focusGainVersion by remember { mutableStateOf(0) }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -288,6 +290,7 @@ fun EditorPanel(
                 onTextLayout = { textLayout = it },
                 modifier = Modifier
                     .weight(1f)
+                    .horizontalScroll(horizontalScrollState)
                     .padding(start = 8.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)
                     .pointerInput(Unit) {
                         awaitPointerEventScope {

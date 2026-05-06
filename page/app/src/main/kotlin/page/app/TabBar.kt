@@ -2,6 +2,7 @@ package page.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -22,7 +23,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,7 +39,9 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -59,16 +61,25 @@ private val CenterTight = LineHeightStyle(
     trim = LineHeightStyle.Trim.Both,
 )
 
+enum class CrossPaneSide { LEFT, RIGHT }
+
 @Composable
 fun TabBar(
     book: TabBook,
     onActivate: (Int) -> Unit,
     onClose: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
+    onMoveToOtherPane: ((Int) -> Unit)? = null,
+    crossPaneSide: CrossPaneSide? = null,
+    onDragStart: () -> Unit = {},
+    onDragEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetPx by remember { mutableStateOf(0f) }
+    var draggedNaturalLeft by remember { mutableStateOf(0) }
+    var draggedWidth by remember { mutableStateOf(0) }
+    var barWidthPx by remember { mutableStateOf(0) }
     val tabBounds = remember { mutableStateMapOf<Int, IntRange>() }
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -77,9 +88,12 @@ fun TabBar(
         tabBounds.keys.removeAll { it >= book.tabs.size }
     }
 
-    Surface(
-        modifier = modifier.fillMaxWidth().height(TabBarHeight),
-        color = MaterialTheme.colorScheme.surface,
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(TabBarHeight)
+            .background(MaterialTheme.colorScheme.surface)
+            .onSizeChanged { barWidthPx = it.width },
     ) {
         if (book.tabs.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth())
@@ -112,20 +126,26 @@ fun TabBar(
                                 tabBounds,
                                 book.tabs.size,
                             ) ?: return@awaitEachGesture
+                            val tappedBounds = tabBounds[tappedIndex] ?: return@awaitEachGesture
                             onActivate(tappedIndex)
                             draggingIndex = tappedIndex
+                            draggedNaturalLeft = tappedBounds.first
+                            draggedWidth = tappedBounds.last - tappedBounds.first
                             dragOffsetPx = 0f
                             var crossedSlop = false
                             var preDx = 0f
+                            var lastPointerX = down.position.x
 
                             drag(down.id) { change ->
                                 val dx = change.positionChange().x
                                 preDx += dx
                                 if (!crossedSlop && abs(preDx) > touchSlop) {
                                     crossedSlop = true
+                                    onDragStart()
                                 }
                                 if (crossedSlop) {
                                     dragOffsetPx += dx
+                                    lastPointerX = change.position.x
                                     var cur = draggingIndex ?: return@drag
                                     if (dragOffsetPx > 0f) {
                                         while (true) {
@@ -135,6 +155,7 @@ fun TabBar(
                                             swapBounds(tabBounds, cur, cur + 1)
                                             cur += 1
                                             draggingIndex = cur
+                                            draggedNaturalLeft += rightW.toInt()
                                             dragOffsetPx -= rightW
                                         }
                                     } else if (dragOffsetPx < 0f) {
@@ -145,14 +166,27 @@ fun TabBar(
                                             swapBounds(tabBounds, cur, cur - 1)
                                             cur -= 1
                                             draggingIndex = cur
+                                            draggedNaturalLeft -= leftW.toInt()
                                             dragOffsetPx += leftW
                                         }
                                     }
                                     change.consume()
                                 }
                             }
+                            val finalIndex = draggingIndex
+                            val finalPointerX = lastPointerX
+                            val wasDragging = crossedSlop
                             draggingIndex = null
                             dragOffsetPx = 0f
+                            if (wasDragging) onDragEnd()
+                            if (finalIndex != null && onMoveToOtherPane != null && crossPaneSide != null && barWidthPx > 0) {
+                                val overshoot = 30f
+                                val crossed = when (crossPaneSide) {
+                                    CrossPaneSide.RIGHT -> finalPointerX > barWidthPx + overshoot
+                                    CrossPaneSide.LEFT -> finalPointerX < -overshoot
+                                }
+                                if (crossed) onMoveToOtherPane(finalIndex)
+                            }
                         }
                     },
             ) {
@@ -161,14 +195,36 @@ fun TabBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     book.tabs.forEachIndexed { index, tab ->
+                        val isDragged = index == draggingIndex
                         TabChip(
                             tab = tab,
                             isActive = index == book.activeIndex,
-                            offsetPx = if (index == draggingIndex) dragOffsetPx.roundToInt() else 0,
+                            offsetPx = 0,
+                            elevated = false,
+                            alpha = if (isDragged) 0f else 1f,
                             onClose = { onClose(index) },
                             onBoundsChanged = { left, right ->
                                 tabBounds[index] = left..right
                             },
+                        )
+                    }
+                }
+                val di = draggingIndex
+                if (di != null && di in book.tabs.indices && draggedWidth > 0) {
+                    val viewportLeft = draggedNaturalLeft - scrollState.value + dragOffsetPx.roundToInt()
+                    Box(
+                        modifier = Modifier
+                            .height(TabBarHeight)
+                            .offset { IntOffset(viewportLeft, 0) },
+                    ) {
+                        TabChip(
+                            tab = book.tabs[di],
+                            isActive = di == book.activeIndex,
+                            offsetPx = 0,
+                            elevated = true,
+                            alpha = 1f,
+                            onClose = {},
+                            onBoundsChanged = { _, _ -> },
                         )
                     }
                 }
@@ -206,6 +262,8 @@ private fun TabChip(
     tab: OpenTab,
     isActive: Boolean,
     offsetPx: Int,
+    elevated: Boolean,
+    alpha: Float,
     onClose: () -> Unit,
     onBoundsChanged: (Int, Int) -> Unit,
 ) {
@@ -218,12 +276,14 @@ private fun TabChip(
     Row(
         modifier = Modifier
             .fillMaxHeight()
-            .offset { IntOffset(offsetPx, 0) }
+            .zIndex(if (elevated) 1f else 0f)
             .onGloballyPositioned { coords ->
                 val left = coords.positionInParent().x.toInt()
                 val right = left + coords.size.width
                 onBoundsChanged(left, right)
-            },
+            }
+            .offset { IntOffset(offsetPx, 0) }
+            .alpha(alpha),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
