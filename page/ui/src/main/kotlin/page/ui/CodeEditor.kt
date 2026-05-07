@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +45,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -56,6 +61,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -84,6 +90,8 @@ fun CodeEditor(
     val bringIntoView = remember { BringIntoViewRequester() }
     var isFocused by remember { mutableStateOf(false) }
     var caretVisible by remember { mutableStateOf(true) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
 
     val transformed = remember(value.text, visualTransformation) {
         visualTransformation.filter(AnnotatedString(value.text))
@@ -235,6 +243,30 @@ fun CodeEditor(
                                         continue
                                     }
                                     val origOff = latestMapping.transformedToOriginal(transOff)
+                                    if (e.buttons.isSecondaryPressed) {
+                                        val sel = latestValue.selection
+                                        if (sel.collapsed || origOff < sel.min || origOff > sel.max) {
+                                            latestOnChange(latestValue.copy(selection = TextRange(origOff)))
+                                        }
+                                        menuOffset = DpOffset(change.position.x.toDp(), change.position.y.toDp())
+                                        menuExpanded = true
+                                        focusRequester.requestFocus()
+                                        change.consume()
+                                        clickCount = 0
+                                        continue
+                                    }
+                                    if (e.keyboardModifiers.isShiftPressed) {
+                                        val anchorPos = latestValue.selection.start
+                                        anchor = anchorPos
+                                        dragging = true
+                                        latestOnChange(
+                                            latestValue.copy(selection = TextRange(anchorPos, origOff)),
+                                        )
+                                        focusRequester.requestFocus()
+                                        change.consume()
+                                        clickCount = 0
+                                        continue
+                                    }
                                     val now = System.currentTimeMillis()
                                     val close = (change.position - lastClickPos).getDistance() < 8f
                                     clickCount = when {
@@ -317,6 +349,55 @@ fun CodeEditor(
                     size = Size(caretWidth, caretRect.bottom - caretRect.top),
                 )
             }
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            offset = menuOffset,
+        ) {
+            val sel = value.selection
+            val hasSelection = !sel.collapsed
+            DropdownMenuItem(
+                text = { Text("잘라내기") },
+                enabled = hasSelection,
+                onClick = {
+                    if (!sel.collapsed) {
+                        clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
+                        val newText = value.text.removeRange(sel.min, sel.max)
+                        onValueChange(value.copy(text = newText, selection = TextRange(sel.min)))
+                    }
+                    menuExpanded = false
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("복사") },
+                enabled = hasSelection,
+                onClick = {
+                    if (!sel.collapsed) {
+                        clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
+                    }
+                    menuExpanded = false
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("붙여넣기") },
+                onClick = {
+                    val pasted = clipboard.getText()?.text.orEmpty()
+                    if (pasted.isNotEmpty()) {
+                        val newText = value.text.substring(0, sel.min) + pasted + value.text.substring(sel.max)
+                        val caret = sel.min + pasted.length
+                        onValueChange(value.copy(text = newText, selection = TextRange(caret)))
+                    }
+                    menuExpanded = false
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("전체 선택") },
+                onClick = {
+                    onValueChange(value.copy(selection = TextRange(0, value.text.length)))
+                    menuExpanded = false
+                },
+            )
         }
     }
 }
