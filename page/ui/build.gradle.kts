@@ -10,4 +10,9 @@ dependencies {
     api(compose.desktop.currentOs)
     api(compose.material3)
     api(compose.materialIconsExtended)
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
