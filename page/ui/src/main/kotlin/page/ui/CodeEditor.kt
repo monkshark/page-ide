@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +62,7 @@ import kotlinx.coroutines.delay
 import page.editor.EditHistory
 import page.editor.EditSnapshot
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CodeEditor(
     value: TextFieldValue,
@@ -77,6 +81,7 @@ fun CodeEditor(
     val measurer = rememberTextMeasurer()
     val focusRequester = remember { FocusRequester() }
     val clipboard = LocalClipboardManager.current
+    val bringIntoView = remember { BringIntoViewRequester() }
     var isFocused by remember { mutableStateOf(false) }
     var caretVisible by remember { mutableStateOf(true) }
 
@@ -160,6 +165,20 @@ fun CodeEditor(
         latestLayout.getCursorRect(caretTrans)
     }
 
+    LaunchedEffect(value.selection.end, layout) {
+        val caretTrans = mapping.originalToTransformed(value.selection.end)
+        if (caretTrans !in 0..displayText.length) return@LaunchedEffect
+        val rect = layout.getCursorRect(caretTrans)
+        val marginPx = with(density) { 24.dp.toPx() }
+        val expanded = androidx.compose.ui.geometry.Rect(
+            left = (rect.left - marginPx).coerceAtLeast(0f),
+            top = (rect.top - marginPx).coerceAtLeast(0f),
+            right = rect.right + marginPx,
+            bottom = rect.bottom + marginPx,
+        )
+        runCatching { bringIntoView.bringIntoView(expanded) }
+    }
+
     Box(
         modifier = modifier
             .background(MaterialTheme.colorScheme.background)
@@ -195,6 +214,7 @@ fun CodeEditor(
             modifier = Modifier
                 .requiredWidth(widthDp)
                 .requiredHeight(heightDp)
+                .bringIntoViewRequester(bringIntoView)
                 .pointerInput(value.text) {
                     awaitPointerEventScope {
                         var anchor = 0
