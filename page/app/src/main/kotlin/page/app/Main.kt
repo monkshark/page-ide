@@ -78,6 +78,8 @@ fun main() = application {
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
     var quickOpen by remember { mutableStateOf(false) }
     var quickOpenIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
+    var findInFiles by remember { mutableStateOf(false) }
+    var findInFilesIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
     var splitEnabled by remember { mutableStateOf(false) }
     var splitOrientation by remember { mutableStateOf(SplitOrientation.HORIZONTAL) }
     var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
@@ -148,6 +150,33 @@ fun main() = application {
             }
         } else {
             mutateFocused { it.copy(book = it.book.openOrFocus(picked, "")) }
+        }
+    }
+    val openInTabAt: (Path, Int) -> Unit = { picked, offset ->
+        if (FileKinds.classify(picked).isEditableAsText) {
+            val pane = focused()
+            val existing = pane.book.tabs.indexOfFirst { it.path == picked }
+            if (existing >= 0) {
+                val tab = pane.book.tabs[existing]
+                val caret = offset.coerceIn(0, tab.text.length)
+                mutateFocused {
+                    it.copy(
+                        book = it.book.activate(existing).updateActive(tab.text, caret),
+                        editorValue = TextFieldValue(tab.text, TextRange(caret)),
+                    )
+                }
+            } else {
+                FileDocument.loadOrNull(picked)?.let { text ->
+                    val caret = offset.coerceIn(0, text.length)
+                    mutateFocused {
+                        val opened = it.book.openOrFocus(picked, text)
+                        it.copy(
+                            book = opened.updateActive(text, caret),
+                            editorValue = TextFieldValue(text, TextRange(caret)),
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -398,6 +427,13 @@ fun main() = application {
             quickOpen = true
         }
     }
+    val openFindInFiles: () -> Unit = {
+        val root = rootDir
+        if (root != null) {
+            findInFilesIndex = ProjectFileIndex.walk(root)
+            findInFiles = true
+        }
+    }
 
     val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
     val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
@@ -416,6 +452,7 @@ fun main() = application {
                     if (frame != null) saveFile(frame); true
                 }
                 event.key == Key.W -> { closeActiveTab(); true }
+                event.key == Key.F && event.isShiftPressed -> { openFindInFiles(); true }
                 event.key == Key.F -> { openSearch(); true }
                 event.key == Key.R -> { openReplace(); true }
                 event.key == Key.P -> { openQuickOpen(); true }
@@ -538,6 +575,17 @@ fun main() = application {
                 openInTab(f.path)
             },
             onDismiss = { quickOpen = false },
+        )
+    }
+
+    if (findInFiles) {
+        FindInFilesDialog(
+            files = findInFilesIndex,
+            onPickAt = { path, offset ->
+                findInFiles = false
+                openInTabAt(path, offset)
+            },
+            onDismiss = { findInFiles = false },
         )
     }
 
