@@ -113,7 +113,12 @@ internal fun FindInFilesDialog(
     val queryFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(Unit) { queryFocus.requestFocus() }
+    LaunchedEffect(Unit) {
+        repeat(5) {
+            delay(16)
+            if (runCatching { queryFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
     LaunchedEffect(selected, hitRowIndices) {
         val rowIdx = hitRowIndices.getOrNull(selected)
         if (rowIdx != null) listState.animateScrollToItem(rowIdx)

@@ -496,6 +496,7 @@ fun main() = application {
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
             ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                 if (showWelcome) {
                     WelcomeScreen(
                         onOpenFolder = { frameRef.value?.let { openFolder(it) } },
@@ -563,6 +564,17 @@ fun main() = application {
                     splitState = splitState,
                     onSplitStateChange = { splitState = it },
                 )
+                if (findInFiles) {
+                    FindInFilesDialog(
+                        files = findInFilesIndex,
+                        onPickAt = { path, offset ->
+                            findInFiles = false
+                            openInTabAt(path, offset)
+                        },
+                        onDismiss = { findInFiles = false },
+                    )
+                }
+                }
             }
         }
     }
@@ -575,17 +587,6 @@ fun main() = application {
                 openInTab(f.path)
             },
             onDismiss = { quickOpen = false },
-        )
-    }
-
-    if (findInFiles) {
-        FindInFilesDialog(
-            files = findInFilesIndex,
-            onPickAt = { path, offset ->
-                findInFiles = false
-                openInTabAt(path, offset)
-            },
-            onDismiss = { findInFiles = false },
         )
     }
 
