@@ -56,6 +56,8 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import page.editor.EditHistory
+import page.editor.EditSnapshot
 
 @Composable
 fun CodeEditor(
@@ -111,6 +113,45 @@ fun CodeEditor(
     val latestMapping by rememberUpdatedState(mapping)
     val latestLayout by rememberUpdatedState(layout)
 
+    var history by remember { mutableStateOf(EditHistory()) }
+    val lastRecorded = remember { mutableStateOf<EditSnapshot?>(null) }
+    var skipRecord by remember { mutableStateOf(false) }
+
+    LaunchedEffect(value.text, value.selection.end) {
+        val current = EditSnapshot(value.text, value.selection.end)
+        val prev = lastRecorded.value
+        if (skipRecord) {
+            skipRecord = false
+        } else if (prev != null && prev.text != current.text) {
+            history = history.pushBeforeChange(prev)
+        }
+        lastRecorded.value = current
+    }
+
+    val performUndo: () -> Boolean = lambda@{
+        val current = EditSnapshot(latestValue.text, latestValue.selection.end)
+        val r = history.undo(current) ?: return@lambda false
+        history = r.first
+        skipRecord = true
+        lastRecorded.value = r.second
+        latestOnChange(
+            latestValue.copy(text = r.second.text, selection = TextRange(r.second.caret)),
+        )
+        true
+    }
+
+    val performRedo: () -> Boolean = lambda@{
+        val current = EditSnapshot(latestValue.text, latestValue.selection.end)
+        val r = history.redo(current) ?: return@lambda false
+        history = r.first
+        skipRecord = true
+        lastRecorded.value = r.second
+        latestOnChange(
+            latestValue.copy(text = r.second.text, selection = TextRange(r.second.caret)),
+        )
+        true
+    }
+
     val caretRectProvider: () -> androidx.compose.ui.geometry.Rect = {
         val sel = latestValue.selection
         val caretTrans = latestMapping.originalToTransformed(sel.end)
@@ -125,7 +166,15 @@ fun CodeEditor(
             .focusable(interactionSource = remember { MutableInteractionSource() })
             .onPreviewKeyEvent { event ->
                 if (latestPreview(event)) return@onPreviewKeyEvent true
-                handleDefaultKey(event, latestValue, latestOnChange, latestLayout, clipboard)
+                handleDefaultKey(
+                    event = event,
+                    value = latestValue,
+                    onChange = latestOnChange,
+                    layout = latestLayout,
+                    clipboard = clipboard,
+                    onUndo = performUndo,
+                    onRedo = performRedo,
+                )
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -148,6 +197,9 @@ fun CodeEditor(
                     awaitPointerEventScope {
                         var anchor = 0
                         var dragging = false
+                        var clickCount = 0
+                        var lastClickTime = 0L
+                        var lastClickPos = Offset.Zero
                         while (true) {
                             val e = awaitPointerEvent(PointerEventPass.Main)
                             val change = e.changes.firstOrNull() ?: continue
@@ -155,9 +207,31 @@ fun CodeEditor(
                                 PointerEventType.Press -> {
                                     val transOff = latestLayout.getOffsetForPosition(change.position)
                                     val origOff = latestMapping.transformedToOriginal(transOff)
-                                    anchor = origOff
-                                    dragging = true
-                                    latestOnChange(latestValue.copy(selection = TextRange(origOff)))
+                                    val now = System.currentTimeMillis()
+                                    val close = (change.position - lastClickPos).getDistance() < 8f
+                                    clickCount = when {
+                                        !close -> 1
+                                        clickCount == 1 && now - lastClickTime < 400 -> 2
+                                        clickCount == 2 && now - lastClickTime < 400 -> 3
+                                        else -> 1
+                                    }
+                                    lastClickTime = now
+                                    lastClickPos = change.position
+                                    when (clickCount) {
+                                        2 -> {
+                                            latestOnChange(CodeEditorActions.selectWordAt(latestValue, origOff))
+                                            dragging = false
+                                        }
+                                        3 -> {
+                                            latestOnChange(CodeEditorActions.selectLineAt(latestValue, origOff))
+                                            dragging = false
+                                        }
+                                        else -> {
+                                            anchor = origOff
+                                            dragging = true
+                                            latestOnChange(latestValue.copy(selection = TextRange(origOff)))
+                                        }
+                                    }
                                     focusRequester.requestFocus()
                                     change.consume()
                                 }
@@ -237,14 +311,45 @@ private fun handleDefaultKey(
     onChange: (TextFieldValue) -> Unit,
     layout: TextLayoutResult,
     clipboard: ClipboardManager,
+    onUndo: () -> Boolean,
+    onRedo: () -> Boolean,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
     val text = value.text
     val sel = value.selection
     val shift = event.isShiftPressed
     val ctrl = event.isCtrlPressed
+    val alt = event.isAltPressed
 
-    if (ctrl) {
+    if (ctrl && !alt && event.key == Key.Z) return if (shift) onRedo() else onUndo()
+    if (ctrl && !alt && event.key == Key.Y) return onRedo()
+
+    if (alt && !ctrl && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+        val down = event.key == Key.DirectionDown
+        val r = CodeEditorActions.applyLineMove(value, down = down, duplicate = shift)
+        if (r != null) onChange(r)
+        return true
+    }
+
+    if (ctrl && !alt && (event.key == Key.DirectionLeft || event.key == Key.DirectionRight)) {
+        val r = if (event.key == Key.DirectionLeft) {
+            CodeEditorActions.applyWordLeft(value, shift)
+        } else {
+            CodeEditorActions.applyWordRight(value, shift)
+        }
+        onChange(r)
+        return true
+    }
+    if (ctrl && !alt && event.key == Key.Backspace) {
+        CodeEditorActions.applyWordBackspace(value)?.let(onChange)
+        return true
+    }
+    if (ctrl && !alt && event.key == Key.Delete) {
+        CodeEditorActions.applyWordDelete(value)?.let(onChange)
+        return true
+    }
+
+    if (ctrl && !alt) {
         return when (event.key) {
             Key.A -> {
                 onChange(value.copy(selection = TextRange(0, text.length)))
@@ -319,35 +424,27 @@ private fun handleDefaultKey(
             true
         }
         Key.Backspace -> {
-            if (!sel.collapsed) {
-                onChange(value.copy(text = text.removeRange(sel.min, sel.max), selection = TextRange(sel.min)))
-            } else if (sel.end > 0) {
-                onChange(value.copy(text = text.removeRange(sel.end - 1, sel.end), selection = TextRange(sel.end - 1)))
-            }
+            CodeEditorActions.applyBackspace(value)?.let(onChange)
             true
         }
         Key.Delete -> {
-            if (!sel.collapsed) {
-                onChange(value.copy(text = text.removeRange(sel.min, sel.max), selection = TextRange(sel.min)))
-            } else if (sel.end < text.length) {
-                onChange(value.copy(text = text.removeRange(sel.end, sel.end + 1), selection = TextRange(sel.end)))
-            }
+            CodeEditorActions.applyDelete(value)?.let(onChange)
             true
         }
         Key.Enter, Key.NumPadEnter -> {
-            onChange(insertReplacing(value, "\n"))
+            onChange(CodeEditorActions.applyEnter(value))
             true
         }
         Key.Tab -> {
-            onChange(insertReplacing(value, "    "))
+            onChange(CodeEditorActions.applyTab(value, shift))
             true
         }
         else -> {
-            if (event.isAltPressed || event.isMetaPressed) return false
+            if (alt || event.isMetaPressed) return false
             val cp = event.utf16CodePoint
             if (cp == 0 || cp == 0xFFFF || cp < 0x20 || cp == 0x7F) return false
             val ch = String(Character.toChars(cp))
-            onChange(insertReplacing(value, ch))
+            onChange(CodeEditorActions.applyCharInsert(value, ch))
             true
         }
     }
