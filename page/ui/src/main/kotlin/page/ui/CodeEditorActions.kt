@@ -114,4 +114,24 @@ internal object CodeEditorActions {
         val r = WordBoundary.lineRangeAt(value.text, offset.coerceIn(0, value.text.length))
         return value.copy(selection = TextRange(r.first, r.last + 1))
     }
+
+    fun applyDragMove(value: TextFieldValue, dropOffset: Int, copy: Boolean): TextFieldValue? {
+        val sel = value.selection
+        if (sel.collapsed) return null
+        val drop = dropOffset.coerceIn(0, value.text.length)
+        if (drop in sel.min..sel.max) return null
+        val moved = value.text.substring(sel.min, sel.max)
+        val text = value.text
+        return if (copy) {
+            val newText = text.substring(0, drop) + moved + text.substring(drop)
+            value.copy(text = newText, selection = TextRange(drop, drop + moved.length))
+        } else if (drop < sel.min) {
+            val newText = text.substring(0, drop) + moved + text.substring(drop, sel.min) + text.substring(sel.max)
+            value.copy(text = newText, selection = TextRange(drop, drop + moved.length))
+        } else {
+            val newText = text.substring(0, sel.min) + text.substring(sel.max, drop) + moved + text.substring(drop)
+            val insertionStart = sel.min + (drop - sel.max)
+            value.copy(text = newText, selection = TextRange(insertionStart, insertionStart + moved.length))
+        }
+    }
 }

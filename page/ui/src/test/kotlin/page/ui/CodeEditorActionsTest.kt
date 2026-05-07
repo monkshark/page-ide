@@ -154,4 +154,52 @@ class CodeEditorActionsTest {
         assertEquals(2, r.selection.start)
         assertEquals(5, r.selection.end)
     }
+
+    @Test
+    fun `applyDragMove returns null for collapsed selection`() {
+        assertNull(CodeEditorActions.applyDragMove(v("hello", 2), dropOffset = 4, copy = false))
+    }
+
+    @Test
+    fun `applyDragMove returns null when drop is inside selection`() {
+        assertNull(CodeEditorActions.applyDragMove(v("hello", 1, 4), dropOffset = 2, copy = false))
+    }
+
+    @Test
+    fun `applyDragMove forward moves selection past tail and selects moved text`() {
+        val r = CodeEditorActions.applyDragMove(v("hello world", 0, 5), dropOffset = 11, copy = false)!!
+        assertEquals(" worldhello", r.text)
+        assertEquals(6, r.selection.start)
+        assertEquals(11, r.selection.end)
+    }
+
+    @Test
+    fun `applyDragMove backward moves selection before head and selects moved text`() {
+        val r = CodeEditorActions.applyDragMove(v("hello world", 6, 11), dropOffset = 0, copy = false)!!
+        assertEquals("worldhello ", r.text)
+        assertEquals(0, r.selection.start)
+        assertEquals(5, r.selection.end)
+    }
+
+    @Test
+    fun `applyDragMove copy keeps original and inserts at drop`() {
+        val r = CodeEditorActions.applyDragMove(v("ab cd", 0, 2), dropOffset = 5, copy = true)!!
+        assertEquals("ab cdab", r.text)
+        assertEquals(5, r.selection.start)
+        assertEquals(7, r.selection.end)
+    }
+
+    @Test
+    fun `applyDragMove copy backward leaves original intact`() {
+        val r = CodeEditorActions.applyDragMove(v("ab cd", 3, 5), dropOffset = 0, copy = true)!!
+        assertEquals("cdab cd", r.text)
+        assertEquals(0, r.selection.start)
+        assertEquals(2, r.selection.end)
+    }
+
+    @Test
+    fun `applyDragMove drop equal to selection min counts as inside`() {
+        assertNull(CodeEditorActions.applyDragMove(v("hello", 1, 4), dropOffset = 1, copy = false))
+        assertNull(CodeEditorActions.applyDragMove(v("hello", 1, 4), dropOffset = 4, copy = false))
+    }
 }

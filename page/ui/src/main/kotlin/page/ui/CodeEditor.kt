@@ -45,6 +45,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -132,6 +133,7 @@ fun CodeEditor(
     val latestLayout by rememberUpdatedState(layout)
     val latestViewportHeight by rememberUpdatedState(viewportHeightProvider)
     val preferredX = remember { mutableStateOf<Float?>(null) }
+    val dragMoveTarget = remember { mutableStateOf<Int?>(null) }
 
     val performUndo: () -> Boolean
     val performRedo: () -> Boolean
@@ -244,6 +246,9 @@ fun CodeEditor(
                         var clickCount = 0
                         var lastClickTime = 0L
                         var lastClickPos = Offset.Zero
+                        var moveSourceOffset = -1
+                        var movePressPos = Offset.Zero
+                        var moveActive = false
                         while (true) {
                             val e = awaitPointerEvent(PointerEventPass.Main)
                             val change = e.changes.firstOrNull() ?: continue
@@ -282,14 +287,30 @@ fun CodeEditor(
                                         clickCount = 0
                                         continue
                                     }
+                                    val curSel = latestValue.selection
                                     val now = System.currentTimeMillis()
                                     val close = (change.position - lastClickPos).getDistance() < 8f
-                                    clickCount = when {
+                                    val nextClickCount = when {
                                         !close -> 1
                                         clickCount == 1 && now - lastClickTime < 400 -> 2
                                         clickCount == 2 && now - lastClickTime < 400 -> 3
                                         else -> 1
                                     }
+                                    val insideSelection = !curSel.collapsed &&
+                                        origOff > curSel.min && origOff < curSel.max
+                                    if (nextClickCount == 1 && insideSelection) {
+                                        moveSourceOffset = origOff
+                                        movePressPos = change.position
+                                        moveActive = false
+                                        dragging = false
+                                        clickCount = nextClickCount
+                                        lastClickTime = now
+                                        lastClickPos = change.position
+                                        focusRequester.requestFocus()
+                                        change.consume()
+                                        continue
+                                    }
+                                    clickCount = nextClickCount
                                     lastClickTime = now
                                     lastClickPos = change.position
                                     when (clickCount) {
@@ -311,7 +332,18 @@ fun CodeEditor(
                                     change.consume()
                                 }
                                 PointerEventType.Move -> {
-                                    if (dragging && change.pressed) {
+                                    if (moveSourceOffset >= 0 && change.pressed) {
+                                        if (!moveActive) {
+                                            val moved = (change.position - movePressPos).getDistance()
+                                            if (moved >= 4f) moveActive = true
+                                        }
+                                        if (moveActive) {
+                                            val transOff = latestLayout.getOffsetForPosition(change.position)
+                                            val origOff = latestMapping.transformedToOriginal(transOff)
+                                            dragMoveTarget.value = origOff
+                                            change.consume()
+                                        }
+                                    } else if (dragging && change.pressed) {
                                         val transOff = latestLayout.getOffsetForPosition(change.position)
                                         val origOff = latestMapping.transformedToOriginal(transOff)
                                         latestOnChange(
@@ -321,6 +353,24 @@ fun CodeEditor(
                                     }
                                 }
                                 PointerEventType.Release -> {
+                                    if (moveSourceOffset >= 0) {
+                                        if (moveActive) {
+                                            val target = dragMoveTarget.value
+                                            if (target != null) {
+                                                val copy = e.keyboardModifiers.isCtrlPressed
+                                                CodeEditorActions
+                                                    .applyDragMove(latestValue, target, copy)
+                                                    ?.let(latestOnChange)
+                                            }
+                                        } else {
+                                            latestOnChange(
+                                                latestValue.copy(selection = TextRange(moveSourceOffset)),
+                                            )
+                                        }
+                                        moveSourceOffset = -1
+                                        moveActive = false
+                                        dragMoveTarget.value = null
+                                    }
                                     dragging = false
                                 }
                                 else -> Unit
@@ -362,6 +412,18 @@ fun CodeEditor(
                     brush = cursorBrush,
                     topLeft = Offset(caretRect.left, caretRect.top),
                     size = Size(caretWidth, caretRect.bottom - caretRect.top),
+                )
+            }
+            val ghostTarget = dragMoveTarget.value
+            if (ghostTarget != null) {
+                val ghostTrans = latestMapping.originalToTransformed(ghostTarget)
+                val ghostRect = layout.getCursorRect(ghostTrans)
+                val ghostWidth = with(density) { 2.dp.toPx() }
+                drawRect(
+                    brush = cursorBrush,
+                    topLeft = Offset(ghostRect.left, ghostRect.top),
+                    size = Size(ghostWidth, ghostRect.bottom - ghostRect.top),
+                    alpha = 0.55f,
                 )
             }
         }
