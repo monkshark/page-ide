@@ -182,6 +182,13 @@ fun main() = application {
             expanded = setOf(picked)
         }
     }
+    val newFile: (java.awt.Frame) -> Unit = { parent ->
+        val target = FileDialogs.saveAs(parent)
+        if (target != null) {
+            FileDocument.save(target, "")
+            openInTab(target)
+        }
+    }
     val toggleExpanded: (Path) -> Unit = { p ->
         expanded = if (p in expanded) expanded - setOf(p) else expanded + setOf(p)
     }
@@ -444,12 +451,20 @@ fun main() = application {
         onKeyEvent = handleShortcut,
     ) {
         LaunchedEffect(Unit) { frameRef.value = window }
+        val showWelcome = rootDir == null &&
+            primaryPane.book.tabs.isEmpty() &&
+            secondaryPane.book.tabs.isEmpty()
         GlassTheme {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
             ) {
-                Shell(
+                if (showWelcome) {
+                    WelcomeScreen(
+                        onOpenFolder = { frameRef.value?.let { openFolder(it) } },
+                        onNewFile = { frameRef.value?.let { newFile(it) } },
+                    )
+                } else Shell(
                     primary = primaryPane,
                     secondary = secondaryPane,
                     focusedPane = focusedPane,
