@@ -71,6 +71,7 @@ fun CodeEditor(
     contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
     onTextLayout: (TextLayoutResult) -> Unit = {},
     onPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
+    onPointerPress: ((transformedOffset: Int) -> Boolean)? = null,
 ) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -110,6 +111,7 @@ fun CodeEditor(
     val latestValue by rememberUpdatedState(value)
     val latestOnChange by rememberUpdatedState(onValueChange)
     val latestPreview by rememberUpdatedState(onPreviewKeyEvent)
+    val latestPointerPress by rememberUpdatedState(onPointerPress)
     val latestMapping by rememberUpdatedState(mapping)
     val latestLayout by rememberUpdatedState(layout)
 
@@ -206,6 +208,12 @@ fun CodeEditor(
                             when (e.type) {
                                 PointerEventType.Press -> {
                                     val transOff = latestLayout.getOffsetForPosition(change.position)
+                                    if (latestPointerPress?.invoke(transOff) == true) {
+                                        focusRequester.requestFocus()
+                                        change.consume()
+                                        clickCount = 0
+                                        continue
+                                    }
                                     val origOff = latestMapping.transformedToOriginal(transOff)
                                     val now = System.currentTimeMillis()
                                     val close = (change.position - lastClickPos).getDistance() < 8f

@@ -5,13 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,21 +33,16 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -56,11 +51,9 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import page.editor.AutoClose
 import page.editor.BracketMatch
 import page.editor.FoldRegions
 import page.editor.Indent
-import page.editor.LineMove
 import page.editor.MarkdownFence
 import page.editor.SearchState
 import page.editor.SyntaxLexer
@@ -68,8 +61,8 @@ import page.editor.TextBuffer
 import page.editor.TextEdit
 import page.editor.Token
 import page.editor.TokenKind
-import page.editor.WordBoundary
 import java.nio.file.Path
+import page.ui.CodeEditor
 import page.ui.EditorFontFamily
 import page.ui.GlassDarkSyntax
 import page.ui.SyntaxPalette
@@ -186,13 +179,7 @@ fun EditorPanel(
     val horizontalScrollState = rememberScrollState()
     var savedScrollOnPress by remember { mutableStateOf(0) }
     var focusGainVersion by remember { mutableStateOf(0) }
-    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var clickCount by remember { mutableStateOf(0) }
-    var lastClickTime by remember { mutableStateOf(0L) }
-    var lastClickPos by remember { mutableStateOf(Offset.Zero) }
     val latestValue by rememberUpdatedState(value)
-    val latestOnValueChange by rememberUpdatedState(onValueChange)
-    val latestFoldSegments by rememberUpdatedState(foldSegments)
     val latestActiveFolds by rememberUpdatedState(activeFolds)
     val latestToggleFold by rememberUpdatedState({ region: FoldRegions.Region ->
         foldedRegions = if (region in foldedRegions) foldedRegions - region
@@ -265,186 +252,55 @@ fun EditorPanel(
                 },
                 textStyle = textStyle,
             )
-            BasicTextField(
+            CodeEditor(
                 value = value,
-                onValueChange = { newValue ->
-                    val oldEdit = TextEdit(value.text, value.selection.start, value.selection.end)
-                    val newEdit = TextEdit(newValue.text, newValue.selection.start, newValue.selection.end)
-                    val afterAutoClose = AutoClose.apply(oldEdit, newEdit)
-                    val afterUnindent = Indent.maybeUnindentClosingBrace(oldEdit, afterAutoClose)
-                    val result = Indent.maybeApplyEnter(oldEdit, afterUnindent)
-                    val adjusted = if (
-                        result.text == newValue.text &&
-                        result.selectionStart == newValue.selection.start &&
-                        result.selectionEnd == newValue.selection.end
-                    ) {
-                        newValue
-                    } else {
-                        newValue.copy(
-                            text = result.text,
-                            selection = TextRange(result.selectionStart, result.selectionEnd),
-                        )
-                    }
-                    onValueChange(adjusted)
-                },
-                onTextLayout = { textLayout = it },
+                onValueChange = onValueChange,
                 modifier = Modifier
                     .weight(1f)
                     .horizontalScroll(horizontalScrollState)
-                    .padding(start = 8.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)
-                    .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
-                                val change = event.changes.firstOrNull() ?: continue
-                                when (event.type) {
-                                    PointerEventType.Press -> {
-                                        val pos = change.position
-                                        val layout = textLayout
-                                        if (layout != null && latestFoldSegments.isNotEmpty()) {
-                                            val transOff = layout.getOffsetForPosition(pos)
-                                            val region = FoldRegions.foldedRegionAt(
-                                                latestValue.text,
-                                                latestActiveFolds,
-                                                transOff,
-                                            )
-                                            if (region != null) {
-                                                latestToggleFold(region)
-                                                change.consume()
-                                                clickCount = 0
-                                                continue
-                                            }
-                                        }
-                                        val now = System.currentTimeMillis()
-                                        val close = (pos - lastClickPos).getDistance() < 8f
-                                        clickCount = when {
-                                            !close -> 1
-                                            clickCount == 1 && now - lastClickTime < 400 -> 2
-                                            clickCount == 2 -> 3
-                                            else -> 1
-                                        }
-                                        lastClickTime = now
-                                        lastClickPos = pos
-                                    }
-                                    PointerEventType.Release -> {
-                                        if (clickCount < 2) continue
-                                        val layout = textLayout ?: continue
-                                        val v = latestValue
-                                        val transOff = layout.getOffsetForPosition(lastClickPos)
-                                        val origOff = if (latestFoldSegments.isEmpty()) transOff
-                                        else FoldRegions.transformedToOriginal(latestFoldSegments, transOff)
-                                        val offset = origOff.coerceIn(0, v.text.length)
-                                        when (clickCount) {
-                                            2 -> {
-                                                val r = WordBoundary.wordRangeAt(v.text, offset)
-                                                if (!r.isEmpty()) {
-                                                    latestOnValueChange(v.copy(selection = TextRange(r.first, r.last + 1)))
-                                                }
-                                            }
-                                            3 -> {
-                                                val r = WordBoundary.lineRangeAt(v.text, offset)
-                                                latestOnValueChange(v.copy(selection = TextRange(r.first, r.last + 1)))
-                                            }
-                                        }
-                                    }
-                                    else -> Unit
-                                }
-                            }
-                        }
-                    }
                     .onFocusChanged { state ->
-                        if (state.isFocused) {
-                            focusGainVersion++
-                        }
-                    }
-                    .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        if (event.isAltPressed && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
-                            val edit = TextEdit(
-                                value.text,
-                                value.selection.start,
-                                value.selection.end,
-                            )
-                            val r = when {
-                                event.key == Key.DirectionUp && event.isShiftPressed -> LineMove.duplicateUp(edit)
-                                event.key == Key.DirectionDown && event.isShiftPressed -> LineMove.duplicateDown(edit)
-                                event.key == Key.DirectionUp -> LineMove.moveUp(edit)
-                                else -> LineMove.moveDown(edit)
-                            }
-                            return@onPreviewKeyEvent if (r != null) {
-                                onValueChange(
-                                    value.copy(
-                                        text = r.text,
-                                        selection = TextRange(r.selectionStart, r.selectionEnd),
-                                    )
-                                )
-                                true
-                            } else true
-                        }
-                        if (event.isCtrlPressed && !event.isAltPressed) {
-                            val handled = handleWordShortcut(event, value, onValueChange)
-                            if (handled) return@onPreviewKeyEvent true
-                        }
-                        when (event.key) {
-                            Key.Tab -> {
-                                val edit = TextEdit(
-                                    value.text,
-                                    value.selection.start,
-                                    value.selection.end,
-                                )
-                                val inFence = isMarkdown &&
-                                    MarkdownFence.isInsideFence(value.text, value.selection.start)
-                                val r = when {
-                                    event.isShiftPressed -> Indent.handleShiftTab(edit)
-                                    inFence -> Indent.handleLiteralTab(edit)
-                                    else -> Indent.handleTab(edit)
-                                }
-                                onValueChange(
-                                    value.copy(
-                                        text = r.text,
-                                        selection = TextRange(r.selectionStart, r.selectionEnd),
-                                    )
-                                )
-                                true
-                            }
-                            Key.Enter, Key.NumPadEnter -> {
-                                val edit = TextEdit(
-                                    value.text,
-                                    value.selection.start,
-                                    value.selection.end,
-                                )
-                                val r = Indent.handleEnter(edit)
-                                onValueChange(
-                                    value.copy(
-                                        text = r.text,
-                                        selection = TextRange(r.selectionStart, r.selectionEnd),
-                                    )
-                                )
-                                true
-                            }
-                            Key.Backspace -> {
-                                val edit = TextEdit(
-                                    value.text,
-                                    value.selection.start,
-                                    value.selection.end,
-                                )
-                                val r = Indent.handleBackspace(edit)
-                                if (r != null) {
-                                    onValueChange(
-                                        value.copy(
-                                            text = r.text,
-                                            selection = TextRange(r.caret),
-                                        )
-                                    )
-                                    true
-                                } else false
-                            }
-                            else -> false
-                        }
+                        if (state.isFocused) focusGainVersion++
                     },
                 textStyle = textStyle,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 visualTransformation = visualTransformation,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                contentPadding = PaddingValues(
+                    start = 8.dp, end = 20.dp, top = 16.dp, bottom = 16.dp,
+                ),
+                onPointerPress = { transOff ->
+                    if (latestActiveFolds.isEmpty()) false
+                    else {
+                        val region = FoldRegions.foldedRegionAt(
+                            latestValue.text,
+                            latestActiveFolds,
+                            transOff,
+                        )
+                        if (region != null) {
+                            latestToggleFold(region)
+                            true
+                        } else false
+                    }
+                },
+                onPreviewKeyEvent = { event ->
+                    if (event.type != KeyEventType.KeyDown) return@CodeEditor false
+                    if (
+                        event.key == Key.Tab && !event.isShiftPressed &&
+                        isMarkdown &&
+                        MarkdownFence.isInsideFence(value.text, value.selection.start)
+                    ) {
+                        val edit = TextEdit(
+                            value.text, value.selection.start, value.selection.end,
+                        )
+                        val r = Indent.handleLiteralTab(edit)
+                        onValueChange(
+                            value.copy(
+                                text = r.text,
+                                selection = TextRange(r.selectionStart, r.selectionEnd),
+                            ),
+                        )
+                        true
+                    } else false
+                },
             )
         }
         EditorStatusBar(
@@ -453,47 +309,6 @@ fun EditorPanel(
             lineCount = buffer.lineCount,
             charCount = buffer.length,
         )
-    }
-}
-
-private fun handleWordShortcut(
-    event: KeyEvent,
-    value: TextFieldValue,
-    onValueChange: (TextFieldValue) -> Unit,
-): Boolean {
-    val text = value.text
-    val anchor = value.selection.start
-    val caret = value.selection.end
-    return when (event.key) {
-        Key.DirectionLeft -> {
-            val target = WordBoundary.prevBoundary(text, caret)
-            val newSelection = if (event.isShiftPressed) TextRange(anchor, target)
-            else TextRange(target)
-            onValueChange(value.copy(selection = newSelection))
-            true
-        }
-        Key.DirectionRight -> {
-            val target = WordBoundary.nextBoundary(text, caret)
-            val newSelection = if (event.isShiftPressed) TextRange(anchor, target)
-            else TextRange(target)
-            onValueChange(value.copy(selection = newSelection))
-            true
-        }
-        Key.Backspace -> {
-            if (!value.selection.collapsed) return false
-            val edit = TextEdit(text, caret)
-            val r = WordBoundary.deleteWordBackward(edit) ?: return false
-            onValueChange(value.copy(text = r.text, selection = TextRange(r.caret)))
-            true
-        }
-        Key.Delete -> {
-            if (!value.selection.collapsed) return false
-            val edit = TextEdit(text, caret)
-            val r = WordBoundary.deleteWordForward(edit) ?: return false
-            onValueChange(value.copy(text = r.text, selection = TextRange(r.caret)))
-            true
-        }
-        else -> false
     }
 }
 
