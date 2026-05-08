@@ -1024,6 +1024,9 @@ private fun PaneRegion(
                     lspStatusText = lspStatusText,
                     lspStartedAtMs = lspStartedAtMs,
                     onProblemsToggle = onProblemsToggle,
+                    onRequestCompletion = active?.path?.let { p ->
+                        { line, ch -> lsp.completion(p, line, ch) }
+                    },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

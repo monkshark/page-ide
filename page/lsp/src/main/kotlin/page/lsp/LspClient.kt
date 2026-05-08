@@ -1,12 +1,15 @@
 package page.lsp
 
 import org.eclipse.lsp4j.ClientCapabilities
+import org.eclipse.lsp4j.CompletionCapabilities
+import org.eclipse.lsp4j.CompletionItemCapabilities
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.MessageActionItem
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.PublishDiagnosticsParams
 import org.eclipse.lsp4j.ShowMessageRequestParams
+import org.eclipse.lsp4j.TextDocumentClientCapabilities
 import org.eclipse.lsp4j.WorkspaceFolder
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.launch.LSPLauncher
@@ -106,7 +109,15 @@ class LspClient(
         val params = InitializeParams()
         params.processId = ProcessHandle.current().pid().toInt()
         params.clientInfo = org.eclipse.lsp4j.ClientInfo(clientName, clientVersion)
-        params.capabilities = ClientCapabilities()
+        params.capabilities = ClientCapabilities().apply {
+            textDocument = TextDocumentClientCapabilities().apply {
+                completion = CompletionCapabilities().apply {
+                    completionItem = CompletionItemCapabilities().apply {
+                        snippetSupport = false
+                    }
+                }
+            }
+        }
         if (workspaceRoot != null) {
             val uri = workspaceRoot.toUri().toString()
             params.workspaceFolders = listOf(WorkspaceFolder(uri, workspaceRoot.fileName?.toString() ?: clientName))

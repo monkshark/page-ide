@@ -1,12 +1,15 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
+import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.TextDocumentContentChangeEvent
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TextDocumentItem
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 class LspWorkspace(private val client: LspClient) {
@@ -49,4 +52,18 @@ class LspWorkspace(private val client: LspClient) {
     }
 
     fun openUris(): Set<String> = openDocs.keys.toSet()
+
+    fun completion(uri: String, line: Int, character: Int): CompletableFuture<CompletionList> {
+        if (!openDocs.containsKey(uri)) {
+            return CompletableFuture.completedFuture(CompletionList.EMPTY)
+        }
+        val params = CompletionParams(TextDocumentIdentifier(uri), Position(line, character))
+        return client.server().textDocumentService.completion(params).thenApply { either ->
+            when {
+                either == null -> CompletionList.EMPTY
+                either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty())
+                else -> CompletionList.fromLsp(either.right)
+            }
+        }
+    }
 }

@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
@@ -67,9 +69,15 @@ import page.editor.TextEdit
 import page.editor.Token
 import page.editor.TokenKind
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import kotlinx.coroutines.launch
+import page.lsp.CompletionItem as LspCompletionItem
+import page.lsp.CompletionItemKind as LspCompletionItemKind
+import page.lsp.CompletionList
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
 import page.ui.CodeEditor
+import page.ui.CompletionDisplay
 import page.ui.EditorDecoration
 import page.ui.EditorFontFamily
 import page.ui.GlassDarkSyntax
@@ -95,6 +103,7 @@ fun EditorPanel(
     lspStatusText: String? = null,
     lspStartedAtMs: Long = 0L,
     onProblemsToggle: (() -> Unit)? = null,
+    onRequestCompletion: ((line: Int, character: Int) -> CompletableFuture<CompletionList>)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -248,6 +257,99 @@ fun EditorPanel(
         else foldedRegions + region
     })
 
+    val completionScope = rememberCoroutineScope()
+    var completionItems by remember(activePath) { mutableStateOf<List<LspCompletionItem>>(emptyList()) }
+    var completionSelectedIndex by remember(activePath) { mutableStateOf(0) }
+    var completionTriggerOffset by remember(activePath) { mutableStateOf(-1) }
+    var completionRequestToken by remember(activePath) { mutableStateOf(0) }
+    var lastSeenText by remember(activePath) { mutableStateOf(value.text) }
+
+    val closeCompletion: () -> Unit = {
+        completionItems = emptyList()
+        completionSelectedIndex = 0
+        completionTriggerOffset = -1
+    }
+
+    val triggerCompletion: (Int, Int) -> Unit = lambda@{ triggerOffset, requestOffset ->
+        val cb = onRequestCompletion ?: return@lambda
+        if (activePath == null) return@lambda
+        val req = requestOffset.coerceIn(0, value.text.length)
+        val pos = TextBuffer(value.text).lineColOf(req)
+        completionTriggerOffset = triggerOffset.coerceIn(0, value.text.length)
+        completionSelectedIndex = 0
+        completionRequestToken += 1
+        val token = completionRequestToken
+        cb(pos.line, pos.col).whenComplete { list, throwable ->
+            if (throwable != null || list == null) return@whenComplete
+            completionScope.launch {
+                if (token == completionRequestToken) {
+                    completionItems = list.items
+                    completionSelectedIndex = 0
+                }
+            }
+        }
+    }
+
+    val applySelected: () -> Unit = lambda@{
+        val item = completionItems.getOrNull(completionSelectedIndex)
+        if (item == null) {
+            closeCompletion()
+            return@lambda
+        }
+        val text = value.text
+        val caret = value.selection.end.coerceIn(0, text.length)
+        val edit = item.edit
+        val replaceStart: Int
+        val replaceEnd: Int
+        if (edit != null) {
+            val s = lineColToOffset(text, edit.startLine, edit.startCharacter)
+            val e = lineColToOffset(text, edit.endLine, edit.endCharacter)
+            if (s < 0 || e < 0 || s > e) {
+                replaceStart = completionTriggerOffset.coerceIn(0, caret)
+                replaceEnd = caret
+            } else {
+                replaceStart = s
+                replaceEnd = maxOf(e, caret)
+            }
+        } else {
+            replaceStart = completionTriggerOffset.coerceIn(0, caret)
+            replaceEnd = caret
+        }
+        val insert = item.insertText
+        val newText = text.substring(0, replaceStart) + insert + text.substring(replaceEnd)
+        val newCaret = replaceStart + insert.length
+        onValueChange(value.copy(text = newText, selection = TextRange(newCaret)))
+        closeCompletion()
+    }
+
+    LaunchedEffect(value.text, value.selection.end) {
+        val newText = value.text
+        val newCaret = value.selection.end
+        val oldText = lastSeenText
+        lastSeenText = newText
+        if (newText.length == oldText.length + 1 && newCaret > 0) {
+            val inserted = newText[newCaret - 1]
+            if (inserted == '.' || inserted == ':') {
+                triggerCompletion(newCaret, newCaret)
+            }
+        }
+        if (completionTriggerOffset >= 0 && completionItems.isNotEmpty()) {
+            if (newCaret < completionTriggerOffset || value.selection.start != value.selection.end) {
+                closeCompletion()
+            }
+        }
+    }
+
+    val completionDisplay = remember(completionItems) {
+        completionItems.map { item ->
+            CompletionDisplay(
+                label = item.label,
+                kindHint = kindHint(item.kind),
+                detail = item.detail,
+            )
+        }
+    }
+
     LaunchedEffect(focusGainVersion) {
         if (focusGainVersion > 0) {
             val target = savedScrollOnPress
@@ -345,6 +447,38 @@ fun EditorPanel(
                 },
                 onPreviewKeyEvent = { event ->
                     if (event.type != KeyEventType.KeyDown) return@CodeEditor false
+                    if (completionItems.isNotEmpty()) {
+                        when (event.key) {
+                            Key.DirectionUp -> {
+                                val n = completionItems.size
+                                completionSelectedIndex =
+                                    if (completionSelectedIndex - 1 < 0) n - 1
+                                    else completionSelectedIndex - 1
+                                return@CodeEditor true
+                            }
+                            Key.DirectionDown -> {
+                                completionSelectedIndex =
+                                    (completionSelectedIndex + 1) % completionItems.size
+                                return@CodeEditor true
+                            }
+                            Key.Tab, Key.Enter, Key.NumPadEnter -> {
+                                applySelected()
+                                return@CodeEditor true
+                            }
+                            Key.Escape -> {
+                                closeCompletion()
+                                return@CodeEditor true
+                            }
+                            else -> Unit
+                        }
+                    }
+                    if (event.isCtrlPressed && event.key == Key.Spacebar) {
+                        val text = value.text
+                        val caret = value.selection.end.coerceIn(0, text.length)
+                        val wordStart = wordStartAt(text, caret)
+                        triggerCompletion(wordStart, caret)
+                        return@CodeEditor true
+                    }
                     if (
                         event.key == Key.Tab && !event.isShiftPressed &&
                         isMarkdown &&
@@ -381,6 +515,8 @@ fun EditorPanel(
                     }
                     "[$severity] ${d.message}"
                 },
+                completionItems = completionDisplay,
+                completionSelectedIndex = completionSelectedIndex,
             )
         }
         EditorStatusBar(
@@ -402,6 +538,36 @@ private fun severityRank(s: DiagnosticSeverity): Int = when (s) {
     DiagnosticSeverity.WARNING -> 1
     DiagnosticSeverity.INFO -> 2
     DiagnosticSeverity.HINT -> 3
+}
+
+private fun kindHint(kind: LspCompletionItemKind): String = when (kind) {
+    LspCompletionItemKind.METHOD -> "M"
+    LspCompletionItemKind.FUNCTION -> "ƒ"
+    LspCompletionItemKind.CONSTRUCTOR -> "C"
+    LspCompletionItemKind.FIELD -> "f"
+    LspCompletionItemKind.VARIABLE -> "v"
+    LspCompletionItemKind.CLASS -> "C"
+    LspCompletionItemKind.INTERFACE -> "I"
+    LspCompletionItemKind.MODULE -> "m"
+    LspCompletionItemKind.PROPERTY -> "p"
+    LspCompletionItemKind.UNIT -> "u"
+    LspCompletionItemKind.VALUE -> "V"
+    LspCompletionItemKind.ENUM, LspCompletionItemKind.ENUM_MEMBER -> "E"
+    LspCompletionItemKind.KEYWORD -> "K"
+    LspCompletionItemKind.SNIPPET -> "▤"
+    LspCompletionItemKind.CONSTANT -> "c"
+    LspCompletionItemKind.STRUCT -> "S"
+    LspCompletionItemKind.TYPE_PARAMETER -> "T"
+    else -> "•"
+}
+
+private fun wordStartAt(text: String, caret: Int): Int {
+    var i = caret.coerceIn(0, text.length)
+    while (i > 0) {
+        val ch = text[i - 1]
+        if (ch.isLetterOrDigit() || ch == '_') i-- else break
+    }
+    return i
 }
 
 private fun lineColToOffset(text: String, line: Int, col: Int): Int {

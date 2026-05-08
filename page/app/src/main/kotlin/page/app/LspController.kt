@@ -16,12 +16,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.PublishDiagnosticsParams
+import page.lsp.CompletionList
 import page.lsp.Diagnostic
 import page.lsp.KotlinLsp
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 class LspController(
@@ -173,6 +175,15 @@ class LspController(
     fun diagnosticsFor(path: Path): List<Diagnostic> {
         val uri = path.toUri().toString()
         return diagnosticsByUri[uri].orEmpty()
+    }
+
+    fun completion(path: Path, line: Int, character: Int): CompletableFuture<CompletionList> {
+        if (status.value != Status.READY) {
+            return CompletableFuture.completedFuture(CompletionList.EMPTY)
+        }
+        val ws = workspace ?: return CompletableFuture.completedFuture(CompletionList.EMPTY)
+        val uri = path.toUri().toString()
+        return ws.completion(uri, line, character)
     }
 
     fun shutdown() {
