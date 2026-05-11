@@ -113,7 +113,7 @@ class LspClient(
             textDocument = TextDocumentClientCapabilities().apply {
                 completion = CompletionCapabilities().apply {
                     completionItem = CompletionItemCapabilities().apply {
-                        snippetSupport = false
+                        snippetSupport = true
                     }
                 }
             }

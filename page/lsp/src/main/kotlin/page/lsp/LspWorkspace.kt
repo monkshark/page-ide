@@ -1,16 +1,26 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CompletionContext
 import org.eclipse.lsp4j.CompletionParams
+import org.eclipse.lsp4j.CompletionTriggerKind
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.SymbolKind
 import org.eclipse.lsp4j.TextDocumentContentChangeEvent
 import org.eclipse.lsp4j.TextDocumentIdentifier
 import org.eclipse.lsp4j.TextDocumentItem
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier
+import org.eclipse.lsp4j.WorkspaceSymbolParams
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+
+data class WorkspaceSymbolEntry(
+    val name: String,
+    val containerName: String?,
+    val kind: SymbolKind?,
+)
 
 class LspWorkspace(private val client: LspClient) {
 
@@ -53,16 +63,43 @@ class LspWorkspace(private val client: LspClient) {
 
     fun openUris(): Set<String> = openDocs.keys.toSet()
 
-    fun completion(uri: String, line: Int, character: Int): CompletableFuture<CompletionList> {
+    fun completion(
+        uri: String,
+        line: Int,
+        character: Int,
+        triggerCharacter: String? = null,
+        prefix: String? = null,
+    ): CompletableFuture<CompletionList> {
         if (!openDocs.containsKey(uri)) {
             return CompletableFuture.completedFuture(CompletionList.EMPTY)
         }
         val params = CompletionParams(TextDocumentIdentifier(uri), Position(line, character))
+        params.context = if (triggerCharacter != null) {
+            CompletionContext(CompletionTriggerKind.TriggerCharacter, triggerCharacter)
+        } else {
+            CompletionContext(CompletionTriggerKind.Invoked)
+        }
         return client.server().textDocumentService.completion(params).thenApply { either ->
             when {
                 either == null -> CompletionList.EMPTY
-                either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty())
-                else -> CompletionList.fromLsp(either.right)
+                either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty(), triggerCharacter, prefix)
+                else -> CompletionList.fromLsp(either.right, triggerCharacter, prefix)
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    fun workspaceSymbols(query: String): CompletableFuture<List<WorkspaceSymbolEntry>> {
+        val params = WorkspaceSymbolParams(query)
+        return client.server().workspaceService.symbol(params).thenApply { either ->
+            when {
+                either == null -> emptyList()
+                either.isLeft -> either.left.orEmpty().map {
+                    WorkspaceSymbolEntry(it.name ?: "", it.containerName, it.kind)
+                }
+                else -> either.right.orEmpty().map {
+                    WorkspaceSymbolEntry(it.name ?: "", it.containerName, it.kind)
+                }
             }
         }
     }
