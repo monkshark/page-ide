@@ -21,6 +21,21 @@ object FileTree {
         return result
     }
 
+    fun singleChildChain(dir: Path): Set<Path> {
+        if (!isDirectorySafe(dir)) return emptySet()
+        val out = mutableSetOf<Path>()
+        var cur = dir
+        while (true) {
+            val children = listChildrenSorted(cur) ?: break
+            if (children.size != 1) break
+            val only = children[0]
+            if (!isDirectorySafe(only)) break
+            if (!out.add(only)) break
+            cur = only
+        }
+        return out
+    }
+
     private fun appendChildren(
         dir: Path,
         depth: Int,

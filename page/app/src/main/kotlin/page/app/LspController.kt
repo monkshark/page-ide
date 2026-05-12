@@ -21,7 +21,9 @@ import page.lsp.CompletionEnhancer
 import page.lsp.CompletionItem
 import page.lsp.CompletionItemKind
 import page.lsp.CompletionList
+import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
+import page.lsp.HoverInfo
 import page.lsp.KLS_GRADLE_DEPS_KIND
 import page.lsp.KLS_GRADLE_SCRIPT_DEPS_KIND
 import page.lsp.KLS_LINTING_KIND
@@ -492,6 +494,51 @@ class LspController(
             start--
         }
         return ln.substring(start, col)
+    }
+
+    fun hover(path: Path, line: Int, character: Int): CompletableFuture<HoverInfo?> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(null)
+        val ws = workspace ?: return CompletableFuture.completedFuture(null)
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(null)
+        val tStart = System.nanoTime()
+        return ws.hover(uri, line, character)
+            .whenComplete { info, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    println("[lsp] hover ✗ $uri @($line,$character): ${err.message} [${ms}ms]")
+                } else if (info == null) {
+                    println("[lsp] hover — $uri @($line,$character) [${ms}ms] (null/blank)")
+                } else {
+                    val md = info.markdown
+                    val preview = md.replace("\n", "⏎").take(200)
+                    val tail = if (md.length > 200) "…(+${md.length - 200})" else ""
+                    val rng = info.range?.let { "[(${it.startLine},${it.startCharacter})..(${it.endLine},${it.endCharacter})]" } ?: "[no-range]"
+                    println("[lsp] hover ✓ $uri @($line,$character) [${ms}ms] range=$rng len=${md.length} md='$preview$tail'")
+                }
+            }
+    }
+
+    fun definition(path: Path, line: Int, character: Int): CompletableFuture<List<DefinitionTarget>> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+        return ws.definition(uri, line, character)
+            .whenComplete { targets, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    println("[lsp] definition ✗ $uri @($line,$character): ${err.message} [${ms}ms]")
+                } else {
+                    val list = targets.orEmpty()
+                    println("[lsp] definition ✓ $uri @($line,$character) — ${list.size} target(s) [${ms}ms]")
+                    list.take(5).forEachIndexed { i, t ->
+                        println("  [$i] ${t.uri} @(${t.startLine},${t.startCharacter})..(${t.endLine},${t.endCharacter})")
+                    }
+                    if (list.size > 5) println("  … (+${list.size - 5} more)")
+                }
+            }
     }
 
     fun shutdown() {

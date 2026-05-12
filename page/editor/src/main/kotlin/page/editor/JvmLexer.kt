@@ -20,10 +20,17 @@ internal abstract class JvmLexer(
                 }
                 c == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     val start = i
+                    val isDocComment = i + 3 < n &&
+                        text[i + 2] == '*' &&
+                        !(text[i + 3] == '/')
                     i += 2
                     while (i + 1 < n && !(text[i] == '*' && text[i + 1] == '/')) i++
+                    val bodyEnd = i
                     i = (i + 2).coerceAtMost(n)
                     out += Token(TokenKind.COMMENT, start until i)
+                    if (isDocComment) {
+                        emitDocCommentTags(text, bodyStart = start + 3, bodyEnd = bodyEnd, out = out)
+                    }
                 }
                 supportTripleQuoted && c == '"' && i + 2 < n && text[i + 1] == '"' && text[i + 2] == '"' -> {
                     val start = i
@@ -104,6 +111,37 @@ internal abstract class JvmLexer(
         }
         while (i < n && text[i] in "fFdDLlu") i++
         return i
+    }
+
+    private fun emitDocCommentTags(text: String, bodyStart: Int, bodyEnd: Int, out: MutableList<Token>) {
+        var i = bodyStart
+        while (i < bodyEnd) {
+            val c = text[i]
+            if (c == '@' && i + 1 < bodyEnd && isIdentStart(text[i + 1]) &&
+                isAtDocTagPosition(text, i, bodyStart)
+            ) {
+                val tagStart = i
+                i++
+                while (i < bodyEnd && isIdentPart(text[i])) i++
+                out += Token(TokenKind.ANNOTATION, tagStart until i)
+            } else {
+                i++
+            }
+        }
+    }
+
+    private fun isAtDocTagPosition(text: String, at: Int, bodyStart: Int): Boolean {
+        var i = at - 1
+        while (i >= bodyStart) {
+            val c = text[i]
+            if (c == '\n') return true
+            if (c == ' ' || c == '\t' || c == '*') {
+                i--
+                continue
+            }
+            return false
+        }
+        return true
     }
 
     private fun isDigit(c: Char) = c in '0'..'9'

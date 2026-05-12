@@ -4,15 +4,21 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -63,10 +69,14 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
@@ -100,6 +110,7 @@ fun CodeEditor(
     onPointerPress: ((transformedOffset: Int) -> Boolean)? = null,
     onHover: ((originalOffset: Int?) -> Unit)? = null,
     hoverText: String? = null,
+    hoverDiagnostic: HoverDiagnostic? = null,
     completionItems: List<CompletionDisplay> = emptyList(),
     completionSelectedIndex: Int = 0,
     completionAnchorOffset: Int? = null,
@@ -156,8 +167,8 @@ fun CodeEditor(
     val dragMoveTarget = remember { mutableStateOf<Int?>(null) }
     var hoverPosition by remember { mutableStateOf<Offset?>(null) }
     var latchedHoverPosition by remember { mutableStateOf<Offset?>(null) }
-    LaunchedEffect(hoverText) {
-        if (hoverText.isNullOrBlank()) {
+    LaunchedEffect(hoverText, hoverDiagnostic) {
+        if (hoverText.isNullOrBlank() && hoverDiagnostic == null) {
             latchedHoverPosition = null
         } else {
             latchedHoverPosition = hoverPosition
@@ -578,31 +589,17 @@ fun CodeEditor(
             )
         }
         val hoverTextSnapshot = hoverText
+        val hoverDiagnosticSnapshot = hoverDiagnostic
         val hoverPositionSnapshot = latchedHoverPosition
-        if (!hoverTextSnapshot.isNullOrBlank() && hoverPositionSnapshot != null) {
-            androidx.compose.ui.window.Popup(
-                offset = androidx.compose.ui.unit.IntOffset(
-                    x = hoverPositionSnapshot.x.toInt() + 12,
-                    y = hoverPositionSnapshot.y.toInt() + 18,
-                ),
-                focusable = false,
-            ) {
-                androidx.compose.material3.Surface(
-                    modifier = Modifier.widthIn(max = 480.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = 6.dp,
-                    tonalElevation = 4.dp,
-                ) {
-                    Box(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                        Text(
-                            text = hoverTextSnapshot,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
-            }
+        if (
+            (!hoverTextSnapshot.isNullOrBlank() || hoverDiagnosticSnapshot != null) &&
+            hoverPositionSnapshot != null
+        ) {
+            HoverPopup(
+                text = hoverTextSnapshot,
+                diagnostic = hoverDiagnosticSnapshot,
+                position = hoverPositionSnapshot,
+            )
         }
         if (completionItems.isNotEmpty()) {
             val anchorOffset = completionAnchorOffset
@@ -726,6 +723,331 @@ private fun CompletionPopup(
             }
         }
     }
+}
+
+@Composable
+private fun HoverPopup(text: String?, diagnostic: HoverDiagnostic?, position: Offset) {
+    val segments = remember(text) {
+        if (text.isNullOrBlank()) emptyList() else parseHoverMarkdown(text)
+    }
+    Popup(
+        offset = IntOffset(position.x.toInt() + 12, position.y.toInt() + 18),
+        focusable = false,
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 560.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 8.dp,
+            tonalElevation = 6.dp,
+            shape = RoundedCornerShape(6.dp),
+        ) {
+            Column {
+                if (diagnostic != null) {
+                    DiagnosticHeader(diagnostic)
+                }
+                segments.forEach { seg ->
+                    when (seg.kind) {
+                        HoverSegmentKind.CODE -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = seg.text,
+                                    style = TextStyle(
+                                        fontFamily = EditorFontFamily,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                        HoverSegmentKind.TEXT -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = seg.text,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                        HoverSegmentKind.RULE -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                                    .height(1.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                    ),
+                            )
+                        }
+                        HoverSegmentKind.TAGS -> {
+                            KdocTagList(seg.tags)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticHeader(d: HoverDiagnostic) {
+    val color = when (d.severity) {
+        HoverDiagnosticSeverity.ERROR -> Color(0xFFE5484D)
+        HoverDiagnosticSeverity.WARNING -> Color(0xFFE5C03A)
+        HoverDiagnosticSeverity.INFO, HoverDiagnosticSeverity.HINT ->
+            MaterialTheme.colorScheme.primary
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape),
+        )
+        Text(
+            text = d.message,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun KdocTagList(tags: List<KdocTag>) {
+    val sectionColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+    val nameColor = MaterialTheme.colorScheme.onSurface
+    val descColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
+    val sections = remember(tags) { groupKdocTags(tags) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        sections.forEach { section ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = section.label,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = sectionColor,
+                )
+                section.entries.forEach { e ->
+                    val line = buildAnnotatedString {
+                        append("    ")
+                        if (e.name != null) {
+                            withStyle(
+                                SpanStyle(
+                                    color = nameColor,
+                                    fontFamily = EditorFontFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                            ) {
+                                append(e.name)
+                            }
+                            if (e.description.isNotEmpty()) {
+                                withStyle(SpanStyle(color = descColor)) {
+                                    append(" – ")
+                                    append(e.description)
+                                }
+                            }
+                        } else {
+                            withStyle(SpanStyle(color = descColor)) {
+                                append(e.description)
+                            }
+                        }
+                    }
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class KdocSection(val label: String, val entries: List<KdocTag>)
+
+private val KDOC_SECTION_OF = mapOf(
+    "param" to "Params",
+    "property" to "Properties",
+    "return" to "Returns",
+    "throws" to "Throws",
+    "exception" to "Throws",
+    "see" to "See Also",
+    "since" to "Since",
+    "author" to "Author",
+    "sample" to "Samples",
+    "receiver" to "Receiver",
+    "constructor" to "Constructor",
+    "suppress" to "Suppress",
+)
+
+private val KDOC_SECTION_ORDER = listOf(
+    "Params", "Properties", "Receiver", "Returns", "Throws",
+    "Constructor", "Samples", "See Also", "Since", "Author", "Suppress",
+)
+
+private fun groupKdocTags(tags: List<KdocTag>): List<KdocSection> {
+    val byCanonical = LinkedHashMap<String, MutableList<KdocTag>>()
+    for (t in tags) {
+        val key = t.tag.lowercase()
+        val canonical = KDOC_SECTION_OF[key] ?: key.replaceFirstChar { it.uppercase() }
+        byCanonical.getOrPut(canonical) { mutableListOf() } += t
+    }
+    val sections = mutableListOf<KdocSection>()
+    for (label in KDOC_SECTION_ORDER) {
+        byCanonical.remove(label)?.let { sections += KdocSection("$label:", it) }
+    }
+    for ((label, ts) in byCanonical) {
+        sections += KdocSection("$label:", ts)
+    }
+    return sections
+}
+
+data class HoverDiagnostic(
+    val severity: HoverDiagnosticSeverity,
+    val message: String,
+)
+
+enum class HoverDiagnosticSeverity { ERROR, WARNING, INFO, HINT }
+
+private data class HoverSegment(
+    val kind: HoverSegmentKind,
+    val lang: String?,
+    val text: String,
+    val tags: List<KdocTag> = emptyList(),
+)
+
+private data class KdocTag(val tag: String, val name: String?, val description: String)
+
+private enum class HoverSegmentKind { TEXT, CODE, RULE, TAGS }
+
+private val KDOC_TAG_LINE = Regex("""^\s*@(\w+)(?:\s+(.*))?$""")
+private val KDOC_TAGS_WITH_NAME = setOf("param", "property", "throws", "exception")
+
+private fun parseHoverMarkdown(md: String): List<HoverSegment> {
+    val lines = md.split('\n')
+    val out = mutableListOf<HoverSegment>()
+    val textBuf = StringBuilder()
+    fun flushText() {
+        val cleaned = cleanKdocArtifacts(textBuf.toString())
+        textBuf.setLength(0)
+        if (cleaned.isEmpty()) return
+        val ls = cleaned.split('\n')
+        var tagStart = ls.size
+        for (idx in ls.indices.reversed()) {
+            val l = ls[idx]
+            if (l.isBlank()) continue
+            if (KDOC_TAG_LINE.matches(l)) {
+                tagStart = idx
+            } else {
+                break
+            }
+        }
+        val body = ls.subList(0, tagStart).joinToString("\n").trim()
+        if (body.isNotEmpty()) out += HoverSegment(HoverSegmentKind.TEXT, null, body)
+        if (tagStart < ls.size) {
+            val tags = ls.subList(tagStart, ls.size).mapNotNull { parseKdocTag(it) }
+            if (tags.isNotEmpty()) out += HoverSegment(HoverSegmentKind.TAGS, null, "", tags)
+        }
+    }
+    var i = 0
+    while (i < lines.size) {
+        val line = lines[i]
+        val trimmed = line.trim()
+        if (trimmed.startsWith("```")) {
+            flushText()
+            val lang = trimmed.removePrefix("```").trim().ifEmpty { null }
+            i++
+            val codeBuf = StringBuilder()
+            while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
+                if (codeBuf.isNotEmpty()) codeBuf.append('\n')
+                codeBuf.append(lines[i])
+                i++
+            }
+            if (i < lines.size) i++
+            val codeText = codeBuf.toString().trimEnd()
+            if (codeText.isNotEmpty()) out += HoverSegment(HoverSegmentKind.CODE, lang, codeText)
+        } else if (isHorizontalRule(trimmed)) {
+            flushText()
+            out += HoverSegment(HoverSegmentKind.RULE, null, "")
+            i++
+        } else {
+            if (textBuf.isNotEmpty()) textBuf.append('\n')
+            textBuf.append(line)
+            i++
+        }
+    }
+    flushText()
+    if (out.isEmpty()) out += HoverSegment(HoverSegmentKind.TEXT, null, md.trim())
+    return out
+}
+
+private fun parseKdocTag(line: String): KdocTag? {
+    val m = KDOC_TAG_LINE.matchEntire(line) ?: return null
+    val tag = m.groupValues[1]
+    val rest = m.groupValues.getOrNull(2)?.trim().orEmpty()
+    return if (tag in KDOC_TAGS_WITH_NAME && rest.isNotEmpty()) {
+        val parts = rest.split(Regex("""\s+"""), limit = 2)
+        KdocTag(tag, parts[0], parts.getOrNull(1)?.trim().orEmpty())
+    } else {
+        KdocTag(tag, null, rest)
+    }
+}
+
+private fun cleanKdocArtifacts(raw: String): String {
+    var t = raw.trim()
+    if (t.startsWith("/**")) t = t.removePrefix("/**").trimStart()
+    if (t.endsWith("*/")) t = t.removeSuffix("*/").trimEnd()
+    val cleaned = t.split('\n').joinToString("\n") { line ->
+        val l = line.trimStart()
+        when {
+            l.startsWith("* ") -> line.replaceFirst(Regex("^\\s*\\* "), "")
+            l == "*" -> ""
+            else -> line
+        }
+    }
+    return cleaned.trim()
+}
+
+private fun isHorizontalRule(line: String): Boolean {
+    if (line.length < 3) return false
+    val ch = line[0]
+    if (ch != '-' && ch != '*' && ch != '_') return false
+    return line.all { it == ch }
 }
 
 @Composable

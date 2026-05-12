@@ -82,4 +82,59 @@ class FileTreeTest {
         assertEquals(file, nodes[0].path)
         assertEquals(false, nodes[0].isDirectory)
     }
+
+    @Test
+    fun `singleChildChain returns empty for empty dir`(@TempDir dir: Path) {
+        assertEquals(emptySet(), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain returns empty when sole child is a file`(@TempDir dir: Path) {
+        Files.createFile(dir.resolve("only.txt"))
+        assertEquals(emptySet(), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain returns empty when multiple children`(@TempDir dir: Path) {
+        Files.createDirectory(dir.resolve("a"))
+        Files.createDirectory(dir.resolve("b"))
+        assertEquals(emptySet(), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain returns sole directory child`(@TempDir dir: Path) {
+        val a = Files.createDirectory(dir.resolve("a"))
+        assertEquals(setOf(a), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain cascades through single-folder chain`(@TempDir dir: Path) {
+        val a = Files.createDirectory(dir.resolve("a"))
+        val b = Files.createDirectory(a.resolve("b"))
+        val c = Files.createDirectory(b.resolve("c"))
+        Files.createFile(c.resolve("leaf.txt"))
+        assertEquals(setOf(a, b, c), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain stops at branching directory`(@TempDir dir: Path) {
+        val a = Files.createDirectory(dir.resolve("a"))
+        val b = Files.createDirectory(a.resolve("b"))
+        Files.createDirectory(b.resolve("c1"))
+        Files.createDirectory(b.resolve("c2"))
+        assertEquals(setOf(a, b), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain stops when chain hits a file leaf`(@TempDir dir: Path) {
+        val a = Files.createDirectory(dir.resolve("a"))
+        Files.createFile(a.resolve("leaf.txt"))
+        assertEquals(setOf(a), FileTree.singleChildChain(dir))
+    }
+
+    @Test
+    fun `singleChildChain returns empty for non-directory input`(@TempDir dir: Path) {
+        val file = Files.createFile(dir.resolve("f.txt"))
+        assertEquals(emptySet(), FileTree.singleChildChain(file))
+    }
 }
