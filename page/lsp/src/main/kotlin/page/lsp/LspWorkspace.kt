@@ -3,9 +3,11 @@ package page.lsp
 import org.eclipse.lsp4j.CompletionContext
 import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.CompletionTriggerKind
+import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
+import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.SymbolKind
 import org.eclipse.lsp4j.TextDocumentContentChangeEvent
@@ -86,6 +88,18 @@ class LspWorkspace(private val client: LspClient) {
                 else -> CompletionList.fromLsp(either.right, triggerCharacter, prefix)
             }
         }
+    }
+
+    fun hover(uri: String, line: Int, character: Int): CompletableFuture<HoverInfo?> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(null)
+        val params = HoverParams(TextDocumentIdentifier(uri), Position(line, character))
+        return client.server().textDocumentService.hover(params).thenApply { HoverInfo.fromLsp(it) }
+    }
+
+    fun definition(uri: String, line: Int, character: Int): CompletableFuture<List<DefinitionTarget>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val params = DefinitionParams(TextDocumentIdentifier(uri), Position(line, character))
+        return client.server().textDocumentService.definition(params).thenApply { DefinitionTarget.fromLsp(it) }
     }
 
     @Suppress("DEPRECATION")

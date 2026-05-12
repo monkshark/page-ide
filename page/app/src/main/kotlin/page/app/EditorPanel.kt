@@ -75,8 +75,13 @@ import page.lsp.CompletionItem as LspCompletionItem
 import page.lsp.CompletionItemKind as LspCompletionItemKind
 import page.lsp.CompletionList
 import page.lsp.SnippetExpander
+import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
+import page.lsp.HoverInfo
+import page.lsp.enrichForPropertyDecl
+import page.lsp.enrichWithKDocFromDefinition
+import page.lsp.needsKdocEnrichment
 import page.ui.CodeEditor
 import page.ui.CompletionDisplay
 import page.ui.EditorDecoration
@@ -105,6 +110,9 @@ fun EditorPanel(
     lspActivities: List<LspController.Activity> = emptyList(),
     onProblemsToggle: (() -> Unit)? = null,
     onRequestCompletion: ((line: Int, character: Int, triggerCharacter: String?) -> CompletableFuture<CompletionList>)? = null,
+    onRequestHover: ((line: Int, character: Int) -> CompletableFuture<HoverInfo?>)? = null,
+    onRequestDefinition: ((line: Int, character: Int) -> CompletableFuture<List<DefinitionTarget>>)? = null,
+    onGoToDefinition: ((DefinitionTarget) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -162,6 +170,9 @@ fun EditorPanel(
     }
     var pendingHoverDiagnostic by remember(diagnostics) { mutableStateOf<Diagnostic?>(null) }
     var hoverDiagnostic by remember(diagnostics) { mutableStateOf<Diagnostic?>(null) }
+    var hoverOffset by remember(activePath) { mutableStateOf<Int?>(null) }
+    var lspHoverInfo by remember(activePath) { mutableStateOf<HoverInfo?>(null) }
+    var lspHoverRequestToken by remember(activePath) { mutableStateOf(0) }
     LaunchedEffect(pendingHoverDiagnostic) {
         val target = pendingHoverDiagnostic
         if (target == null) {
@@ -169,6 +180,35 @@ fun EditorPanel(
         } else if (target !== hoverDiagnostic) {
             delay(250)
             hoverDiagnostic = target
+        }
+    }
+    LaunchedEffect(hoverOffset, value.text) {
+        val off = hoverOffset
+        lspHoverInfo = null
+        lspHoverRequestToken += 1
+        val token = lspHoverRequestToken
+        if (off == null) return@LaunchedEffect
+        val cb = onRequestHover ?: return@LaunchedEffect
+        val text = value.text
+        val safeOff = off.coerceIn(0, text.length)
+        val pos = TextBuffer(text).lineColOf(safeOff)
+        delay(350)
+        if (token != lspHoverRequestToken) return@LaunchedEffect
+        cb(pos.line, pos.col).whenComplete { info, _ ->
+            if (token != lspHoverRequestToken || info == null) return@whenComplete
+            val lineText = TextBuffer(text).lineAt(pos.line)
+            val enriched = info.enrichForPropertyDecl(lineText, pos.col)
+            lspHoverInfo = enriched
+            if (enriched.needsKdocEnrichment()) {
+                val defCb = onRequestDefinition ?: return@whenComplete
+                defCb(pos.line, pos.col).whenComplete { targets, _ ->
+                    if (token != lspHoverRequestToken) return@whenComplete
+                    val target = targets?.firstOrNull() ?: return@whenComplete
+                    val defText = readDefinitionFileText(target.uri) ?: return@whenComplete
+                    val final = enriched.enrichWithKDocFromDefinition(defText, target.startLine)
+                    if (token == lspHoverRequestToken) lspHoverInfo = final
+                }
+            }
         }
     }
 
@@ -652,6 +692,20 @@ fun EditorPanel(
                         triggerCompletion(wordStart, caret, null)
                         return@CodeEditor true
                     }
+                    if (event.key == Key.F12 && !event.isCtrlPressed && !event.isShiftPressed) {
+                        val cb = onRequestDefinition
+                        val nav = onGoToDefinition
+                        if (cb != null && nav != null) {
+                            val text = value.text
+                            val caret = value.selection.end.coerceIn(0, text.length)
+                            val pos = TextBuffer(text).lineColOf(caret)
+                            cb(pos.line, pos.col).whenComplete { targets, _ ->
+                                val first = targets?.firstOrNull()
+                                if (first != null) nav(first)
+                            }
+                            return@CodeEditor true
+                        }
+                    }
                     if (
                         event.key == Key.Tab && !event.isShiftPressed &&
                         value.selection.collapsed
@@ -689,15 +743,19 @@ fun EditorPanel(
                     else diagnosticRanges.firstOrNull { (s, e, _) ->
                         origOff in s until e
                     }?.third
+                    hoverOffset = origOff
                 },
-                hoverText = hoverDiagnostic?.let { d ->
-                    val severity = when (d.severity) {
-                        DiagnosticSeverity.ERROR -> "ERROR"
-                        DiagnosticSeverity.WARNING -> "WARNING"
-                        DiagnosticSeverity.INFO -> "INFO"
-                        DiagnosticSeverity.HINT -> "HINT"
-                    }
-                    "[$severity] ${d.message}"
+                hoverText = lspHoverInfo?.markdown?.takeIf { it.isNotBlank() },
+                hoverDiagnostic = hoverDiagnostic?.let { d ->
+                    page.ui.HoverDiagnostic(
+                        severity = when (d.severity) {
+                            DiagnosticSeverity.ERROR -> page.ui.HoverDiagnosticSeverity.ERROR
+                            DiagnosticSeverity.WARNING -> page.ui.HoverDiagnosticSeverity.WARNING
+                            DiagnosticSeverity.INFO -> page.ui.HoverDiagnosticSeverity.INFO
+                            DiagnosticSeverity.HINT -> page.ui.HoverDiagnosticSeverity.HINT
+                        },
+                        message = d.message,
+                    )
                 },
                 completionItems = completionDisplay,
                 completionSelectedIndex = completionSelectedIndex,
@@ -761,6 +819,19 @@ private fun wordStartAt(text: String, caret: Int): Int {
         if (ch.isLetterOrDigit() || ch == '_') i-- else break
     }
     return i
+}
+
+private fun readDefinitionFileText(uri: String): String? {
+    return try {
+        val parsed = java.net.URI(uri)
+        if (parsed.scheme != "file") return null
+        val path = java.nio.file.Paths.get(parsed)
+        if (!java.nio.file.Files.isRegularFile(path)) return null
+        if (java.nio.file.Files.size(path) > 4L * 1024 * 1024) return null
+        java.nio.file.Files.readString(path)
+    } catch (_: Throwable) {
+        null
+    }
 }
 
 private fun lineColToOffset(text: String, line: Int, col: Int): Int {

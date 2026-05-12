@@ -1,11 +1,20 @@
 package page.lsp
 
+import org.eclipse.lsp4j.Hover
+import org.eclipse.lsp4j.Location
+import org.eclipse.lsp4j.LocationLink
+import org.eclipse.lsp4j.MarkupContent
+import org.eclipse.lsp4j.MarkupKind
+import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.jsonrpc.messages.Either
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -80,6 +89,56 @@ class LspWorkspaceTest {
     @Test
     fun `didClose on unopened doc is no-op`() {
         workspace.didClose("file:///nope.kt")
+    }
+
+    @Test
+    fun `hover on unopened doc returns null without server call`() {
+        val result = workspace.hover("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
+        assertNull(result)
+        assertTrue(harness.fakeServer.hoverCalls.isEmpty())
+    }
+
+    @Test
+    fun `hover forwards params and parses response`() {
+        val uri = "file:///H.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.hoverResponse = Hover().apply {
+            contents = Either.forRight(MarkupContent(MarkupKind.MARKDOWN, "hello"))
+            range = Range(Position(0, 0), Position(0, 1))
+        }
+
+        val info = workspace.hover(uri, 0, 0).get(2, TimeUnit.SECONDS)
+        assertNotNull(info)
+        assertEquals("hello", info!!.markdown)
+
+        waitUntil { harness.fakeServer.hoverCalls.isNotEmpty() }
+        val sent = harness.fakeServer.hoverCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(0, sent.position.line)
+        assertEquals(0, sent.position.character)
+    }
+
+    @Test
+    fun `definition on unopened doc returns empty`() {
+        val result = workspace.definition("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(result.isEmpty())
+        assertTrue(harness.fakeServer.definitionCalls.isEmpty())
+    }
+
+    @Test
+    fun `definition returns mapped targets`() {
+        val uri = "file:///D.kt"
+        workspace.didOpen(uri, "kotlin", "y")
+        val loc = Location("file:///Target.kt", Range(Position(5, 2), Position(5, 8)))
+        harness.fakeServer.definitionResponse =
+            Either.forLeft<MutableList<out Location>, MutableList<out LocationLink>>(mutableListOf(loc))
+
+        val targets = workspace.definition(uri, 3, 4).get(2, TimeUnit.SECONDS)
+        assertEquals(1, targets.size)
+        assertEquals("file:///Target.kt", targets[0].uri)
+        assertEquals(5, targets[0].startLine)
+        assertEquals(2, targets[0].startCharacter)
+        assertEquals(8, targets[0].endCharacter)
     }
 
     private fun waitUntil(timeoutMs: Long = 2000, predicate: () -> Boolean) {

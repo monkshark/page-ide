@@ -104,6 +104,65 @@ class KotlinLexerTest {
     }
 
     @Test
+    fun `kdoc tag emitted as annotation overlay inside comment`() {
+        val src = "/** @param a foo */fun f(a: Int) {}"
+        val toks = tokens(src)
+        val comments = toks.filter { it.kind == TokenKind.COMMENT }
+        val annotations = toks.filter { it.kind == TokenKind.ANNOTATION }
+        assertEquals(1, comments.size)
+        assertEquals("/** @param a foo */", src.substring(comments[0].range.first, comments[0].range.last + 1))
+        assertEquals(1, annotations.size)
+        assertEquals("@param", src.substring(annotations[0].range.first, annotations[0].range.last + 1))
+        assertTrue(annotations[0].range.first in comments[0].range)
+    }
+
+    @Test
+    fun `kdoc multiple tags`() {
+        val src = """
+            /**
+             * Sum two ints.
+             *
+             * @param a first
+             * @param b second
+             * @return the sum
+             */
+            fun add(a: Int, b: Int) = a + b
+        """.trimIndent()
+        val annotations = tokens(src).filter { it.kind == TokenKind.ANNOTATION }
+        val texts = annotations.map { src.substring(it.range.first, it.range.last + 1) }
+        assertEquals(listOf("@param", "@param", "@return"), texts)
+    }
+
+    @Test
+    fun `non-kdoc block comment does not emit tags`() {
+        val src = "/* @param not a tag */fun f() {}"
+        val toks = tokens(src)
+        assertTrue(toks.none { it.kind == TokenKind.ANNOTATION }, "got ${toks.filter { it.kind == TokenKind.ANNOTATION }}")
+    }
+
+    @Test
+    fun `kdoc tag mid-text is not highlighted`() {
+        val src = "/** see foo@bar.com for help */fun f() {}"
+        val toks = tokens(src)
+        assertTrue(toks.none { it.kind == TokenKind.ANNOTATION }, "got ${toks.filter { it.kind == TokenKind.ANNOTATION }}")
+    }
+
+    @Test
+    fun `kdoc tag at very start of single-line is highlighted`() {
+        val src = "/**@return x*/fun f(): Int = 0"
+        val annotations = tokens(src).filter { it.kind == TokenKind.ANNOTATION }
+        assertEquals(1, annotations.size)
+        assertEquals("@return", src.substring(annotations[0].range.first, annotations[0].range.last + 1))
+    }
+
+    @Test
+    fun `empty kdoc emits no tags`() {
+        val src = "/**/fun f() {}"
+        val toks = tokens(src)
+        assertTrue(toks.none { it.kind == TokenKind.ANNOTATION })
+    }
+
+    @Test
     fun `empty input produces empty tokens`() {
         assertEquals(emptyList(), tokens(""))
     }

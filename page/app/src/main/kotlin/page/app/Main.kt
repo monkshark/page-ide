@@ -249,7 +249,7 @@ fun main() = application {
     val openFolder: (java.awt.Frame) -> Unit = { parent ->
         FileDialogs.openDirectory(parent)?.let { picked ->
             rootDir = picked
-            expanded = setOf(picked)
+            expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
         }
     }
     val newFile: (java.awt.Frame) -> Unit = { parent ->
@@ -260,7 +260,11 @@ fun main() = application {
         }
     }
     val toggleExpanded: (Path) -> Unit = { p ->
-        expanded = if (p in expanded) expanded - setOf(p) else expanded + setOf(p)
+        expanded = if (p in expanded) {
+            expanded - setOf(p)
+        } else {
+            expanded + setOf(p) + page.editor.FileTree.singleChildChain(p)
+        }
     }
     val closeTabAt: (PaneSide, Int) -> Unit = { side, idx ->
         val tab = paneOf(side).book.tabs.getOrNull(idx)
@@ -843,6 +847,7 @@ private fun Shell(
                                 onTabDragStart = { dragSourcePane = PaneSide.PRIMARY },
                                 onTabDragEnd = { dragSourcePane = null },
                                 onProblemsToggle = onProblemsToggle,
+                                onJumpToProblem = onJumpToProblem,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -870,6 +875,7 @@ private fun Shell(
                                 onTabDragStart = { dragSourcePane = PaneSide.SECONDARY },
                                 onTabDragEnd = { dragSourcePane = null },
                                 onProblemsToggle = onProblemsToggle,
+                                onJumpToProblem = onJumpToProblem,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -896,6 +902,7 @@ private fun Shell(
                         onSearchClose = onSearchClose,
                         onWindowShortcut = onWindowShortcut,
                         onProblemsToggle = onProblemsToggle,
+                        onJumpToProblem = onJumpToProblem,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -940,6 +947,7 @@ private fun PaneRegion(
     onTabDragStart: () -> Unit = {},
     onTabDragEnd: () -> Unit = {},
     onProblemsToggle: () -> Unit = {},
+    onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
@@ -1022,6 +1030,18 @@ private fun PaneRegion(
                     onProblemsToggle = onProblemsToggle,
                     onRequestCompletion = active?.path?.let { p ->
                         { line, ch, trig -> lsp.completion(p, pane.editorValue.text, line, ch, trig) }
+                    },
+                    onRequestHover = active?.path?.let { p ->
+                        { line, ch -> lsp.hover(p, line, ch) }
+                    },
+                    onRequestDefinition = active?.path?.let { p ->
+                        { line, ch -> lsp.definition(p, line, ch) }
+                    },
+                    onGoToDefinition = { target ->
+                        val path = runCatching {
+                            java.nio.file.Paths.get(java.net.URI(target.uri))
+                        }.getOrNull()
+                        if (path != null) onJumpToProblem(path, target.startLine, target.startCharacter)
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )

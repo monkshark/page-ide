@@ -1,16 +1,22 @@
 package page.lsp
 
+import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.DidChangeConfigurationParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DidSaveTextDocumentParams
+import org.eclipse.lsp4j.Hover
+import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.InitializedParams
+import org.eclipse.lsp4j.Location
+import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.TextDocumentSyncKind
+import org.eclipse.lsp4j.jsonrpc.messages.Either
 import org.eclipse.lsp4j.services.LanguageServer
 import org.eclipse.lsp4j.services.TextDocumentService
 import org.eclipse.lsp4j.services.WorkspaceService
@@ -24,6 +30,10 @@ class FakeLanguageServer : LanguageServer {
     val didOpenCalls = ConcurrentLinkedQueue<DidOpenTextDocumentParams>()
     val didChangeCalls = ConcurrentLinkedQueue<DidChangeTextDocumentParams>()
     val didCloseCalls = ConcurrentLinkedQueue<DidCloseTextDocumentParams>()
+    val hoverCalls = ConcurrentLinkedQueue<HoverParams>()
+    val definitionCalls = ConcurrentLinkedQueue<DefinitionParams>()
+    @Volatile var hoverResponse: Hover? = null
+    @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
 
@@ -32,6 +42,16 @@ class FakeLanguageServer : LanguageServer {
         override fun didChange(params: DidChangeTextDocumentParams) { didChangeCalls += params }
         override fun didClose(params: DidCloseTextDocumentParams) { didCloseCalls += params }
         override fun didSave(params: DidSaveTextDocumentParams) {}
+        override fun hover(params: HoverParams): CompletableFuture<Hover> {
+            hoverCalls += params
+            return CompletableFuture.completedFuture(hoverResponse)
+        }
+        override fun definition(
+            params: DefinitionParams,
+        ): CompletableFuture<Either<MutableList<out Location>, MutableList<out LocationLink>>> {
+            definitionCalls += params
+            return CompletableFuture.completedFuture(definitionResponse)
+        }
     }
 
     private val workspaceService = object : WorkspaceService {
