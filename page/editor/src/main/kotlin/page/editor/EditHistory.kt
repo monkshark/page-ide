@@ -1,6 +1,6 @@
 package page.editor
 
-data class EditSnapshot(val text: String, val caret: Int)
+data class EditSnapshot(val text: String, val caret: Int, val groupId: Long? = null)
 
 data class EditHistory(
     val past: List<EditSnapshot> = emptyList(),
@@ -15,12 +15,14 @@ data class EditHistory(
 
     fun undo(current: EditSnapshot): Pair<EditHistory, EditSnapshot>? {
         val last = past.lastOrNull() ?: return null
-        return EditHistory(past.dropLast(1), future + current) to last
+        val tagged = if (last.groupId != null) current.copy(groupId = last.groupId) else current
+        return EditHistory(past.dropLast(1), future + tagged) to last
     }
 
     fun redo(current: EditSnapshot): Pair<EditHistory, EditSnapshot>? {
         val last = future.lastOrNull() ?: return null
-        return EditHistory(past + current, future.dropLast(1)) to last
+        val tagged = if (last.groupId != null) current.copy(groupId = last.groupId) else current
+        return EditHistory(past + tagged, future.dropLast(1)) to last
     }
 
     companion object {

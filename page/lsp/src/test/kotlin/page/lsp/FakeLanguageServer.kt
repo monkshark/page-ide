@@ -14,11 +14,18 @@ import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.InitializedParams
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
+import org.eclipse.lsp4j.PrepareRenameDefaultBehavior
+import org.eclipse.lsp4j.PrepareRenameParams
+import org.eclipse.lsp4j.PrepareRenameResult
+import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.RenameParams
 import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpParams
 import org.eclipse.lsp4j.TextDocumentSyncKind
+import org.eclipse.lsp4j.WorkspaceEdit
 import org.eclipse.lsp4j.jsonrpc.messages.Either
+import org.eclipse.lsp4j.jsonrpc.messages.Either3
 import org.eclipse.lsp4j.services.LanguageServer
 import org.eclipse.lsp4j.services.TextDocumentService
 import org.eclipse.lsp4j.services.WorkspaceService
@@ -35,9 +42,13 @@ class FakeLanguageServer : LanguageServer {
     val hoverCalls = ConcurrentLinkedQueue<HoverParams>()
     val definitionCalls = ConcurrentLinkedQueue<DefinitionParams>()
     val signatureHelpCalls = ConcurrentLinkedQueue<SignatureHelpParams>()
+    val prepareRenameCalls = ConcurrentLinkedQueue<PrepareRenameParams>()
+    val renameCalls = ConcurrentLinkedQueue<RenameParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
     @Volatile var signatureHelpResponse: SignatureHelp? = null
+    @Volatile var prepareRenameResponse: Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>? = null
+    @Volatile var renameResponse: WorkspaceEdit? = null
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
 
@@ -59,6 +70,16 @@ class FakeLanguageServer : LanguageServer {
         override fun signatureHelp(params: SignatureHelpParams): CompletableFuture<SignatureHelp> {
             signatureHelpCalls += params
             return CompletableFuture.completedFuture(signatureHelpResponse)
+        }
+        override fun prepareRename(
+            params: PrepareRenameParams,
+        ): CompletableFuture<Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>> {
+            prepareRenameCalls += params
+            return CompletableFuture.completedFuture(prepareRenameResponse)
+        }
+        override fun rename(params: RenameParams): CompletableFuture<WorkspaceEdit> {
+            renameCalls += params
+            return CompletableFuture.completedFuture(renameResponse)
         }
     }
 

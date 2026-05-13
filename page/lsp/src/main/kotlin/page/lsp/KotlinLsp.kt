@@ -68,7 +68,11 @@ object KotlinLsp {
         return Resolution.NotFound(attempted.toList())
     }
 
-    fun spawn(executable: Path, workspaceRoot: Path? = null): LspClient {
+    fun spawn(
+        executable: Path,
+        workspaceRoot: Path? = null,
+        onStderrLine: ((String) -> Unit)? = null,
+    ): LspClient {
         val builder = ProcessBuilder(executable.toAbsolutePath().toString())
         if (workspaceRoot != null && Files.isDirectory(workspaceRoot)) {
             builder.directory(workspaceRoot.toFile())
@@ -84,7 +88,8 @@ object KotlinLsp {
         prependGradleToPath(builder)
         builder.redirectErrorStream(false)
         val process = builder.start()
-        val transport = ProcessTransport(process)
+        val transport = if (onStderrLine != null) ProcessTransport(process, onStderrLine)
+        else ProcessTransport(process)
         return LspClient(transport, workspaceRoot)
     }
 

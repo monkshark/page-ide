@@ -33,6 +33,8 @@ import page.lsp.KotlinLsp
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
+import page.lsp.RenamePrepare
+import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureHelpInfo
 import page.lsp.WorkspaceSymbolEntry
 import page.lsp.parseKlsActivity
@@ -85,6 +87,8 @@ class LspController(
 
     private val lastCompletionByLine = ConcurrentHashMap<Pair<String, Int>, LastCompletion>()
 
+    @Volatile private var prepareRenameSupported: Boolean = false
+
     fun ensureStarted() {
         if (startAttempted) return
         startAttempted = true
@@ -102,10 +106,11 @@ class LspController(
         startActivity(STARTUP_KIND, "시작 중…")
         println("[lsp] STARTING — ${resolution.origin}: ${resolution.executable}")
         try {
-            val c = KotlinLsp.spawn(resolution.executable, workspaceRoot)
+            val c = KotlinLsp.spawn(resolution.executable, workspaceRoot, onStderrLine = ::onLspStderr)
             c.onDiagnostics(::onDiagnostics)
             c.onLogMessage { mp ->
-                println("[lsp:log/${mp.type}] ${mp.message}")
+                val rendered = if (mp.type == org.eclipse.lsp4j.MessageType.Error) condenseStackTrace(mp.message ?: "") else mp.message
+                println("[lsp:log/${mp.type}] $rendered")
                 applyActivityEvent(parseKlsActivity(mp.message))
             }
             c.onShowMessage { mp -> println("[lsp:show/${mp.type}] ${mp.message}") }
@@ -120,7 +125,10 @@ class LspController(
                     status.value = Status.READY
                     statusDetail.value = "kotlin-language-server ready (capabilities=${result.capabilities != null})"
                     println("[lsp] READY — capabilities=${result.capabilities != null}")
+                    prepareRenameSupported = detectPrepareRenameSupport(result.capabilities)
+                    println("[lsp] prepareRename support = $prepareRenameSupported")
                     flushPendingOpens()
+                    openWorkspaceKotlinFiles()
                 }
             }
             client = c
@@ -572,6 +580,268 @@ class LspController(
             }
     }
 
+    fun prepareRename(path: Path, line: Int, character: Int): CompletableFuture<RenamePrepare?> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(null)
+        if (!prepareRenameSupported) return CompletableFuture.completedFuture(null)
+        val ws = workspace ?: return CompletableFuture.completedFuture(null)
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(null)
+        val tStart = System.nanoTime()
+        return ws.prepareRename(uri, line, character)
+            .whenComplete { p, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    if (isUnsupportedOperation(err)) {
+                        prepareRenameSupported = false
+                        println("[lsp] prepareRename unsupported by server — disabling future calls [${ms}ms]")
+                    } else {
+                        println("[lsp] prepareRename ✗ $uri @($line,$character): ${err.message} [${ms}ms]")
+                    }
+                } else if (p == null) {
+                    println("[lsp] prepareRename — $uri @($line,$character) refused [${ms}ms]")
+                } else if (p.isDefaultBehavior) {
+                    println("[lsp] prepareRename ✓ $uri @($line,$character) [${ms}ms] default-behavior")
+                } else {
+                    println("[lsp] prepareRename ✓ $uri @($line,$character) [${ms}ms] range=(${p.startLine},${p.startCharacter})..(${p.endLine},${p.endCharacter}) placeholder='${p.placeholder}'")
+                }
+            }
+    }
+
+    private fun detectPrepareRenameSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean {
+        val rp = caps?.renameProvider ?: return false
+        return when {
+            rp.isLeft -> false
+            rp.isRight -> rp.right?.prepareProvider == true
+            else -> false
+        }
+    }
+
+    private fun isUnsupportedOperation(err: Throwable): Boolean {
+        var cur: Throwable? = err
+        while (cur != null) {
+            if (cur is UnsupportedOperationException) return true
+            val msg = cur.message ?: ""
+            if (msg.contains("UnsupportedOperationException")) return true
+            cur = cur.cause
+        }
+        return false
+    }
+
+    fun rename(path: Path, text: String, line: Int, character: Int, newName: String): CompletableFuture<RenameWorkspaceEdit> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(RenameWorkspaceEdit.EMPTY)
+        val ws = workspace ?: return CompletableFuture.completedFuture(RenameWorkspaceEdit.EMPTY)
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(RenameWorkspaceEdit.EMPTY)
+        pendingChanges.remove(uri)?.cancel()
+        runCatching { ws.didChange(uri, text) }
+        val (lineText, marker) = lineContextAt(text, line, character)
+        println("[lsp] rename → $uri @($line,$character) → '$newName' (text.len=${text.length})")
+        println("  line: '$lineText'")
+        println("        $marker")
+        val tStart = System.nanoTime()
+        return ws.definition(uri, line, character).thenCompose { defs ->
+            val target = defs.firstOrNull()
+            val resolvedTarget = if (target != null && !ws.isOpen(target.uri)) {
+                if (openTargetFromDisk(ws, target.uri)) target else null
+            } else target
+            val (rUri, rLine, rChar) = if (resolvedTarget != null && ws.isOpen(resolvedTarget.uri)) {
+                val targetText = ws.textOf(resolvedTarget.uri)
+                val adjustedChar = if (targetText != null) {
+                    nearestIdentifierStart(targetText, resolvedTarget.startLine, resolvedTarget.startCharacter)
+                } else resolvedTarget.startCharacter
+                println("  via definition → ${resolvedTarget.uri} @(${resolvedTarget.startLine},${resolvedTarget.startCharacter})${if (adjustedChar != resolvedTarget.startCharacter) " → adjusted col $adjustedChar" else ""}")
+                Triple(resolvedTarget.uri, resolvedTarget.startLine, adjustedChar)
+            } else {
+                if (target != null) {
+                    println("  definition returned ${target.uri}, fallback to caret position (auto-open failed or non-file uri)")
+                }
+                Triple(uri, line, character)
+            }
+            runCatching { ws.reopen(rUri, ws.textOf(rUri) ?: text) }
+            ws.rename(rUri, rLine, rChar, newName)
+        }.whenComplete { edit, err ->
+            val ms = (System.nanoTime() - tStart) / 1_000_000
+            if (err != null) {
+                println("[lsp] rename ✗ $uri @($line,$character) → '$newName': ${err.message} [${ms}ms]")
+            } else {
+                println("[lsp] rename ✓ $uri @($line,$character) → '$newName' — ${edit.changes.size} file(s), ${edit.totalEditCount} edit(s) [${ms}ms]")
+                edit.changes.take(5).forEach { c ->
+                    println("  ${c.uri} (${c.edits.size} edit(s))")
+                    c.edits.take(3).forEach { e ->
+                        println("    @(${e.startLine},${e.startCharacter})-(${e.endLine},${e.endCharacter}) → '${e.newText}'")
+                    }
+                }
+            }
+        }.exceptionallyCompose { err ->
+            CompletableFuture.failedFuture(RenameException(renameErrorMessage(err)))
+        }
+    }
+
+    private class RenameException(message: String) : RuntimeException(message)
+
+    private fun renameErrorMessage(err: Throwable): String {
+        val raw = err.message ?: err.toString()
+        return when {
+            raw.contains("UnsupportedOperationException") -> "LSP 서버가 rename 을 지원하지 않습니다"
+            raw.contains("Internal error", ignoreCase = true) ||
+                raw.contains("KotlinFrontEndException") ||
+                raw.contains("NoTopLevelDescriptorProvider") -> "LSP 서버 내부 오류 — 이 위치에서는 rename 을 처리할 수 없습니다"
+            else -> raw.lineSequence().firstOrNull()?.take(160) ?: "rename 실패"
+        }
+    }
+
+    private val stderrSuppressed = java.util.concurrent.atomic.AtomicInteger(0)
+
+    private fun onLspStderr(line: String) {
+        val trimmed = line.trimEnd()
+        val ltrim = trimmed.trimStart()
+        val isFrame = ltrim.startsWith("at ") || (ltrim.startsWith("...") && ltrim.endsWith(" more"))
+        if (isFrame) {
+            stderrSuppressed.incrementAndGet()
+            return
+        }
+        val suppressed = stderrSuppressed.getAndSet(0)
+        if (suppressed > 0) {
+            System.err.println("[lsp]     (suppressed $suppressed stack frame(s))")
+        }
+        System.err.println("[lsp] $trimmed")
+    }
+
+    private fun condenseStackTrace(message: String): String {
+        if (message.isEmpty()) return message
+        val out = StringBuilder()
+        var stackCount = 0
+        for (raw in message.lineSequence()) {
+            val line = raw.trimEnd()
+            val ltrim = line.trimStart()
+            val isFrame = ltrim.startsWith("at ") || (ltrim.startsWith("...") && ltrim.endsWith(" more"))
+            if (isFrame) {
+                stackCount++
+                continue
+            }
+            if (stackCount > 0) {
+                out.append("    (suppressed ").append(stackCount).append(" stack frame(s))\n")
+                stackCount = 0
+            }
+            out.append(line).append('\n')
+        }
+        if (stackCount > 0) {
+            out.append("    (suppressed ").append(stackCount).append(" stack frame(s))\n")
+        }
+        return out.toString().trimEnd()
+    }
+
+    private fun openTargetFromDisk(ws: LspWorkspace, targetUri: String): Boolean {
+        if (ws.isOpen(targetUri)) return true
+        if (!targetUri.startsWith("file:")) {
+            println("  cannot auto-open non-file uri $targetUri")
+            return false
+        }
+        return try {
+            val targetPath = java.nio.file.Paths.get(java.net.URI(targetUri))
+            if (!java.nio.file.Files.isRegularFile(targetPath)) {
+                println("  cannot auto-open $targetUri — not a regular file")
+                return false
+            }
+            val text = java.nio.file.Files.readString(targetPath)
+            ws.didOpen(targetUri, "kotlin", text)
+            println("  auto-opened $targetUri (${text.length} chars) for rename")
+            true
+        } catch (t: Throwable) {
+            println("  auto-open failed for $targetUri: ${t.message}")
+            false
+        }
+    }
+
+    private fun nearestIdentifierStart(text: String, line: Int, character: Int): Int {
+        var idx = 0
+        var l = 0
+        while (idx < text.length && l < line) {
+            if (text[idx] == '\n') l++
+            idx++
+        }
+        if (l != line) return character
+        var end = idx
+        while (end < text.length && text[end] != '\n') end++
+        val lineText = text.substring(idx, end)
+        val isIdent = { c: Char -> c.isLetterOrDigit() || c == '_' }
+        val pos = character.coerceIn(0, lineText.length)
+        if (pos < lineText.length && isIdent(lineText[pos])) {
+            var start = pos
+            while (start > 0 && isIdent(lineText[start - 1])) start--
+            return start
+        }
+        var p = pos - 1
+        while (p >= 0 && !isIdent(lineText[p])) p--
+        if (p < 0) {
+            var q = pos
+            while (q < lineText.length && !isIdent(lineText[q])) q++
+            if (q >= lineText.length) return character
+            return q
+        }
+        var start = p
+        while (start > 0 && isIdent(lineText[start - 1])) start--
+        return start
+    }
+
+    private fun lineContextAt(text: String, line: Int, character: Int): Pair<String, String> {
+        var idx = 0
+        var l = 0
+        while (idx < text.length && l < line) {
+            if (text[idx] == '\n') l++
+            idx++
+        }
+        if (l != line) return "" to ""
+        var end = idx
+        while (end < text.length && text[end] != '\n') end++
+        val lineText = text.substring(idx, end).take(120)
+        val marker = " ".repeat(character.coerceAtLeast(0).coerceAtMost(lineText.length)) + "^"
+        return lineText to marker
+    }
+
+    private fun openWorkspaceKotlinFiles() {
+        val root = workspaceRoot ?: return
+        scope.launch(Dispatchers.IO) {
+            val ws = workspace ?: return@launch
+            var opened = 0
+            try {
+                java.nio.file.Files.walk(root).use { stream ->
+                    stream
+                        .filter { java.nio.file.Files.isRegularFile(it) }
+                        .filter { it.fileName.toString().endsWith(".kt") }
+                        .filter { p ->
+                            val rel = root.relativize(p)
+                            rel.iterator().asSequence().none { it.toString() in WORKSPACE_AUTO_OPEN_EXCLUDES }
+                        }
+                        .forEach { p ->
+                            try {
+                                if (java.nio.file.Files.size(p) > MAX_AUTO_OPEN_BYTES) return@forEach
+                                val uri = p.toUri().toString()
+                                if (ws.isOpen(uri)) return@forEach
+                                val text = java.nio.file.Files.readString(p)
+                                ws.didOpen(uri, "kotlin", text)
+                                opened++
+                            } catch (t: Throwable) {
+                                println("[lsp] workspace auto-open failed for $p: ${t.message}")
+                            }
+                        }
+                }
+                println("[lsp] workspace auto-open done — $opened .kt file(s) under $root")
+            } catch (t: Throwable) {
+                println("[lsp] workspace walk failed: ${t.message}")
+            }
+        }
+    }
+
+    fun applyExternalChange(uri: String, newText: String) {
+        val ws = workspace ?: return
+        pendingChanges.remove(uri)?.cancel()
+        invalidateCompletionCache(uri)
+        if (ws.isOpen(uri)) {
+            runCatching { ws.didChange(uri, newText) }
+        }
+    }
+
     fun shutdown() {
         pendingChanges.values.forEach { it.cancel() }
         pendingChanges.clear()
@@ -581,6 +851,11 @@ class LspController(
 
     companion object {
         private const val COMPLETION_CACHE_MAX = 64
+        private const val MAX_AUTO_OPEN_BYTES = 512L * 1024
+        private val WORKSPACE_AUTO_OPEN_EXCLUDES = setOf(
+            ".git", ".hg", ".svn", ".idea", ".idea_modules", ".vs", ".vscode",
+            ".gradle", "build", "out", "bin", "target", "node_modules",
+        )
         const val STARTUP_KIND = "startup"
         const val GRADLE_DEPS_KIND = KLS_GRADLE_DEPS_KIND
         const val GRADLE_SCRIPT_DEPS_KIND = KLS_GRADLE_SCRIPT_DEPS_KIND

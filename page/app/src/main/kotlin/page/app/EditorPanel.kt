@@ -80,6 +80,8 @@ import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
 import page.lsp.HoverInfo
+import page.lsp.RenamePrepare
+import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureActiveParam
 import page.lsp.SignatureHelpInfo
 import page.lsp.enrichForPropertyDecl
@@ -118,6 +120,9 @@ fun EditorPanel(
     onRequestDefinition: ((line: Int, character: Int) -> CompletableFuture<List<DefinitionTarget>>)? = null,
     onRequestSignatureHelp: ((line: Int, character: Int, triggerCharacter: String?, isRetrigger: Boolean) -> CompletableFuture<SignatureHelpInfo?>)? = null,
     onGoToDefinition: ((DefinitionTarget) -> Unit)? = null,
+    onRequestPrepareRename: ((line: Int, character: Int) -> CompletableFuture<RenamePrepare?>)? = null,
+    onRequestRename: ((line: Int, character: Int, newName: String) -> CompletableFuture<RenameWorkspaceEdit>)? = null,
+    onApplyRename: ((RenameWorkspaceEdit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -321,6 +326,10 @@ fun EditorPanel(
     var lspSignatureInfo by remember(activePath) { mutableStateOf<SignatureHelpInfo?>(null) }
     var lspSignatureActiveParam by remember(activePath) { mutableStateOf(0) }
     var lspSignatureRequestToken by remember(activePath) { mutableStateOf(0) }
+
+    var renameRequest by remember(activePath) { mutableStateOf<RenameRequestState?>(null) }
+    var renameInProgress by remember(activePath) { mutableStateOf(false) }
+    var renameError by remember(activePath) { mutableStateOf<String?>(null) }
 
     val completionPrefix = run {
         val trig = completionTriggerOffset
@@ -776,6 +785,36 @@ fun EditorPanel(
                         closeSignatureHelp()
                         return@CodeEditor true
                     }
+                    val isRenameKey =
+                        (event.key == Key.F2 && !event.isCtrlPressed && !event.isShiftPressed) ||
+                            (event.key == Key.F6 && event.isShiftPressed && !event.isCtrlPressed)
+                    if (isRenameKey && onRequestRename != null) {
+                        val text = value.text
+                        val caret = value.selection.end.coerceIn(0, text.length)
+                        if (isInStringOrComment(tokens, text, caret)) return@CodeEditor true
+                        val pos = TextBuffer(text).lineColOf(caret)
+                        val word = wordRangeAt(text, caret)
+                        val placeholder = if (word != null) text.substring(word.first, word.second) else ""
+                        if (!isRenamableIdentifier(placeholder)) return@CodeEditor true
+                        renameError = null
+                        val prepare = onRequestPrepareRename
+                        if (prepare != null) {
+                            prepare(pos.line, pos.col).whenComplete { p, _ ->
+                                renameRequest = when {
+                                    p == null -> RenameRequestState(pos.line, pos.col, placeholder)
+                                    p.isDefaultBehavior -> RenameRequestState(pos.line, pos.col, placeholder)
+                                    else -> RenameRequestState(
+                                        line = pos.line,
+                                        character = pos.col,
+                                        placeholder = p.placeholder ?: placeholder,
+                                    )
+                                }
+                            }
+                        } else {
+                            renameRequest = RenameRequestState(pos.line, pos.col, placeholder)
+                        }
+                        return@CodeEditor true
+                    }
                     if (event.key == Key.F12 && !event.isCtrlPressed && !event.isShiftPressed) {
                         val cb = onRequestDefinition
                         val nav = onGoToDefinition
@@ -891,6 +930,38 @@ fun EditorPanel(
             onProblemsToggle = onProblemsToggle,
         )
     }
+
+    val activeRename = renameRequest
+    if (activeRename != null && onRequestRename != null) {
+        RenameDialog(
+            request = activeRename,
+            inProgress = renameInProgress,
+            error = renameError,
+            onDismiss = {
+                if (!renameInProgress) {
+                    renameRequest = null
+                    renameError = null
+                }
+            },
+            onSubmit = { newName ->
+                renameInProgress = true
+                renameError = null
+                onRequestRename(activeRename.line, activeRename.character, newName)
+                    .whenComplete { edit, err ->
+                        renameInProgress = false
+                        when {
+                            err != null -> renameError = err.message ?: err.toString()
+                            edit.isEmpty -> renameError = "변경 사항 없음"
+                            else -> {
+                                onApplyRename?.invoke(edit)
+                                renameRequest = null
+                                renameError = null
+                            }
+                        }
+                    }
+            },
+        )
+    }
 }
 
 private val CLOSING_PUNCT: Set<Char> = setOf(')', ']', '}', '"', '\'', '`')
@@ -929,6 +1000,37 @@ private fun sanitizeLabel(s: String?): String? {
     return collapsed.ifEmpty { null }
 }
 
+private val KOTLIN_HARD_KEYWORDS = setOf(
+    "as", "break", "class", "continue", "do", "else", "false", "for", "fun",
+    "if", "in", "interface", "is", "null", "object", "package", "return",
+    "super", "this", "throw", "true", "try", "typealias", "typeof", "val", "var",
+    "when", "while",
+)
+
+private fun isRenamableIdentifier(s: String): Boolean {
+    if (s.isEmpty()) return false
+    val first = s[0]
+    if (!first.isLetter() && first != '_') return false
+    if (s.any { !it.isLetterOrDigit() && it != '_' }) return false
+    return s !in KOTLIN_HARD_KEYWORDS
+}
+
+private fun wordRangeAt(text: String, caret: Int): Pair<Int, Int>? {
+    val c = caret.coerceIn(0, text.length)
+    var start = c
+    while (start > 0) {
+        val ch = text[start - 1]
+        if (ch.isLetterOrDigit() || ch == '_') start-- else break
+    }
+    var end = c
+    while (end < text.length) {
+        val ch = text[end]
+        if (ch.isLetterOrDigit() || ch == '_') end++ else break
+    }
+    if (start == end) return null
+    return start to end
+}
+
 private fun wordStartAt(text: String, caret: Int): Int {
     var i = caret.coerceIn(0, text.length)
     while (i > 0) {
@@ -936,6 +1038,14 @@ private fun wordStartAt(text: String, caret: Int): Int {
         if (ch.isLetterOrDigit() || ch == '_') i-- else break
     }
     return i
+}
+
+private fun isInStringOrComment(tokens: List<Token>, text: String, caret: Int): Boolean {
+    if (tokens.isNotEmpty()) {
+        val hit = tokens.firstOrNull { caret >= it.start && caret < it.endExclusive }
+        if (hit != null) return hit.kind == TokenKind.STRING || hit.kind == TokenKind.COMMENT
+    }
+    return isInsideStringLiteral(text, caret)
 }
 
 private fun isInsideStringLiteral(text: String, caret: Int): Boolean {

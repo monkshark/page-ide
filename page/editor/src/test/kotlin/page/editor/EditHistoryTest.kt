@@ -72,6 +72,25 @@ class EditHistoryTest {
     }
 
     @Test
+    fun `undo of group-tagged snapshot preserves groupId on future`() {
+        val priorWithGroup = EditSnapshot("a", 1, groupId = 42L)
+        val h = EditHistory().pushBeforeChange(priorWithGroup)
+        val (newHist, restored) = h.undo(snap("ab"))!!
+        assertEquals(42L, restored.groupId)
+        assertEquals(42L, newHist.future.last().groupId)
+    }
+
+    @Test
+    fun `redo of group-tagged snapshot preserves groupId on past`() {
+        val priorWithGroup = EditSnapshot("a", 1, groupId = 7L)
+        val h = EditHistory().pushBeforeChange(priorWithGroup)
+        val (afterUndo, _) = h.undo(snap("ab"))!!
+        val (afterRedo, restored) = afterUndo.redo(snap("a", 1))!!
+        assertEquals(7L, restored.groupId)
+        assertEquals(7L, afterRedo.past.last().groupId)
+    }
+
+    @Test
     fun `undo across multiple snapshots steps back one at a time`() {
         var h = EditHistory()
         h = h.pushBeforeChange(snap(""))

@@ -49,6 +49,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import page.core.PageIdentity
+import page.editor.EditHistory
 import page.editor.EditSnapshot
 import page.editor.FileDocument
 import page.editor.UndoGroupTracker
@@ -63,6 +64,8 @@ import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.editor.SyntaxLexers
 import page.editor.TabBook
+import page.lsp.RenameApply
+import page.lsp.RenameWorkspaceEdit
 import page.ui.GlassTheme
 import page.ui.SplitPane
 import java.awt.Cursor
@@ -218,6 +221,67 @@ fun main() = application {
             }
             val offset = (i + character.coerceAtLeast(0)).coerceAtMost(text.length)
             openInTabAt(picked, offset)
+        }
+    }
+
+    val applyRename: (RenameWorkspaceEdit) -> Unit = { edit ->
+        val groupId = System.nanoTime()
+        for (change in edit.changes) {
+            val path = runCatching {
+                java.nio.file.Paths.get(java.net.URI(change.uri))
+            }.getOrNull() ?: continue
+            var handled = false
+            for (side in listOf(PaneSide.PRIMARY, PaneSide.SECONDARY)) {
+                val p = paneOf(side)
+                val idx = p.book.tabs.indexOfFirst { it.path == path }
+                if (idx < 0) continue
+                handled = true
+                val tab = p.book.tabs[idx]
+                val newText = RenameApply.applyToText(tab.text, change.edits)
+                if (newText == tab.text) continue
+                val isActive = idx == p.book.activeIndex
+                val priorCaret = if (isActive) p.editorValue.selection.start else tab.caret
+                val priorSnapshot = EditSnapshot(tab.text, priorCaret, groupId)
+                val newCaretInTab = priorCaret.coerceAtMost(newText.length)
+                val updatedTabs = p.book.tabs.toMutableList().also {
+                    it[idx] = tab.copy(
+                        text = newText,
+                        caret = newCaretInTab,
+                        history = tab.history.pushBeforeChange(priorSnapshot),
+                    )
+                }
+                val newEditorValue = if (isActive) {
+                    TextFieldValue(newText, TextRange(newCaretInTab))
+                } else p.editorValue
+                setPane(
+                    side,
+                    p.copy(
+                        book = p.book.copy(tabs = updatedTabs),
+                        editorValue = newEditorValue,
+                    ),
+                )
+                lsp.applyExternalChange(change.uri, newText)
+            }
+            if (!handled) {
+                val onDisk = FileDocument.loadOrNull(path) ?: continue
+                val newText = RenameApply.applyToText(onDisk, change.edits)
+                if (newText == onDisk) continue
+                val priorSnapshot = EditSnapshot(onDisk, 0, groupId)
+                val newTab = OpenTab(
+                    path = path,
+                    text = newText,
+                    savedText = onDisk,
+                    caret = 0,
+                    history = EditHistory().pushBeforeChange(priorSnapshot),
+                )
+                mutatePane(PaneSide.PRIMARY) {
+                    val savedActive = it.book.activeIndex
+                    val appended = it.book.appendTab(newTab)
+                    val restored = if (savedActive in appended.tabs.indices) appended.copy(activeIndex = savedActive) else appended
+                    it.copy(book = restored)
+                }
+                lsp.applyExternalChange(change.uri, newText)
+            }
         }
     }
 
@@ -429,12 +493,26 @@ fun main() = application {
             val (newBook, restored) = result
             val caret = restored.caret.coerceIn(0, restored.text.length)
             undoTracker(side).markBreak()
+            val groupId = restored.groupId
+            val activeBook = if (groupId != null) newBook.undoGroupOnNonActive(groupId) else newBook
             mutatePane(side) {
                 it.copy(
-                    book = newBook,
+                    book = activeBook,
                     editorValue = TextFieldValue(restored.text, TextRange(caret)),
                     search = it.search?.retarget(restored.text),
                 )
+            }
+            if (groupId != null) {
+                val otherSide = if (side == PaneSide.PRIMARY) PaneSide.SECONDARY else PaneSide.PRIMARY
+                mutatePane(otherSide) { it.copy(book = it.book.undoGroupOnNonActive(groupId)) }
+                for (tab in activeBook.tabs) {
+                    if (tab.path != pane.book.tabs.getOrNull(pane.book.activeIndex)?.path) {
+                        runCatching { lsp.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                    }
+                }
+                for (tab in paneOf(otherSide).book.tabs) {
+                    runCatching { lsp.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                }
             }
         }
     }
@@ -447,12 +525,26 @@ fun main() = application {
             val (newBook, restored) = result
             val caret = restored.caret.coerceIn(0, restored.text.length)
             undoTracker(side).markBreak()
+            val groupId = restored.groupId
+            val activeBook = if (groupId != null) newBook.redoGroupOnNonActive(groupId) else newBook
             mutatePane(side) {
                 it.copy(
-                    book = newBook,
+                    book = activeBook,
                     editorValue = TextFieldValue(restored.text, TextRange(caret)),
                     search = it.search?.retarget(restored.text),
                 )
+            }
+            if (groupId != null) {
+                val otherSide = if (side == PaneSide.PRIMARY) PaneSide.SECONDARY else PaneSide.PRIMARY
+                mutatePane(otherSide) { it.copy(book = it.book.redoGroupOnNonActive(groupId)) }
+                for (tab in activeBook.tabs) {
+                    if (tab.path != pane.book.tabs.getOrNull(pane.book.activeIndex)?.path) {
+                        runCatching { lsp.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                    }
+                }
+                for (tab in paneOf(otherSide).book.tabs) {
+                    runCatching { lsp.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                }
             }
         }
     }
@@ -673,6 +765,7 @@ fun main() = application {
                     onProblemsToggle = { problemsOpen = !problemsOpen },
                     onProblemsClose = { problemsOpen = false },
                     onJumpToProblem = jumpToProblem,
+                    onApplyRename = applyRename,
                     problemsHeight = problemsHeight,
                     onProblemsResizeDelta = { delta ->
                         problemsHeight = (problemsHeight + delta).coerceIn(80.dp, 600.dp)
@@ -798,6 +891,7 @@ private fun Shell(
     onProblemsToggle: () -> Unit,
     onProblemsClose: () -> Unit,
     onJumpToProblem: (Path, Int, Int) -> Unit,
+    onApplyRename: (RenameWorkspaceEdit) -> Unit,
     problemsHeight: Dp,
     onProblemsResizeDelta: (Dp) -> Unit,
 ) {
@@ -848,6 +942,7 @@ private fun Shell(
                                 onTabDragEnd = { dragSourcePane = null },
                                 onProblemsToggle = onProblemsToggle,
                                 onJumpToProblem = onJumpToProblem,
+                                onApplyRename = onApplyRename,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -876,6 +971,7 @@ private fun Shell(
                                 onTabDragEnd = { dragSourcePane = null },
                                 onProblemsToggle = onProblemsToggle,
                                 onJumpToProblem = onJumpToProblem,
+                                onApplyRename = onApplyRename,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -903,6 +999,7 @@ private fun Shell(
                         onWindowShortcut = onWindowShortcut,
                         onProblemsToggle = onProblemsToggle,
                         onJumpToProblem = onJumpToProblem,
+                        onApplyRename = onApplyRename,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -948,6 +1045,7 @@ private fun PaneRegion(
     onTabDragEnd: () -> Unit = {},
     onProblemsToggle: () -> Unit = {},
     onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
+    onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
@@ -1046,6 +1144,13 @@ private fun PaneRegion(
                         }.getOrNull()
                         if (path != null) onJumpToProblem(path, target.startLine, target.startCharacter)
                     },
+                    onRequestPrepareRename = active?.path?.let { p ->
+                        { line, ch -> lsp.prepareRename(p, line, ch) }
+                    },
+                    onRequestRename = active?.path?.let { p ->
+                        { line, ch, name -> lsp.rename(p, pane.editorValue.text, line, ch, name) }
+                    },
+                    onApplyRename = onApplyRename,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

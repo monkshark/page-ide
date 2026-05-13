@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.io.File
 import java.net.URI
 
 plugins {
@@ -15,26 +16,49 @@ dependencies {
     implementation(libs.kotlinx.coroutines.swing)
 }
 
-val klsVersion = "1.3.13"
-val klsDownloadUrl = "https://github.com/fwcd/kotlin-language-server/releases/download/$klsVersion/server.zip"
+val klsVersion = "1.3.13-page-1"
+val klsDownloadUrl = "https://github.com/Monkshark/kotlin-language-server/releases/download/$klsVersion/server.zip"
+val klsLocalZip: String? = (findProperty("page.lsp.kotlin.localZip") as? String)
+    ?: System.getenv("PAGE_LSP_KOTLIN_LOCAL_ZIP")
 val klsResourcesDir: Provider<Directory> = layout.buildDirectory.dir("composeResources")
 val klsServerDir: Provider<Directory> = klsResourcesDir.map { it.dir("common/lsp/server") }
 
-val downloadKls by tasks.registering {
-    group = "page"
-    description = "Downloads kotlin-language-server"
-    val url = klsDownloadUrl
-    val target = layout.buildDirectory.file("kls/server-$klsVersion.zip")
-    outputs.file(target)
-    outputs.cacheIf { true }
-    doLast {
+abstract class DownloadKlsTask : DefaultTask() {
+    @get:Input
+    abstract val url: Property<String>
+
+    @get:Input
+    @get:org.gradle.api.tasks.Optional
+    abstract val localZip: Property<String>
+
+    @get:OutputFile
+    abstract val target: RegularFileProperty
+
+    @TaskAction
+    fun run() {
         val out = target.get().asFile
         out.parentFile.mkdirs()
-        if (out.exists() && out.length() > 0) return@doLast
-        URI(url).toURL().openStream().use { input ->
+        val local = localZip.orNull
+        if (local != null) {
+            val src = File(local)
+            require(src.exists()) { "page.lsp.kotlin.localZip not found: $src" }
+            src.copyTo(out, overwrite = true)
+            return
+        }
+        if (out.exists() && out.length() > 0) return
+        URI(url.get()).toURL().openStream().use { input ->
             out.outputStream().use { output -> input.copyTo(output) }
         }
     }
+}
+
+val downloadKls by tasks.registering(DownloadKlsTask::class) {
+    group = "page"
+    description = "Downloads kotlin-language-server (or copies from page.lsp.kotlin.localZip)"
+    url.set(klsDownloadUrl)
+    klsLocalZip?.let { localZip.set(it) }
+    target.set(layout.buildDirectory.file("kls/server-$klsVersion.zip"))
+    outputs.cacheIf { true }
 }
 
 val extractKls by tasks.registering(Copy::class) {

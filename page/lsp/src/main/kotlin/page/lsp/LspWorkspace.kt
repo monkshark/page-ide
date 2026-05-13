@@ -9,6 +9,8 @@ import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.PrepareRenameParams
+import org.eclipse.lsp4j.RenameParams
 import org.eclipse.lsp4j.SignatureHelpContext
 import org.eclipse.lsp4j.SignatureHelpParams
 import org.eclipse.lsp4j.SignatureHelpTriggerKind
@@ -64,6 +66,19 @@ class LspWorkspace(private val client: LspClient) {
         client.server().textDocumentService.didClose(
             DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
         )
+    }
+
+    fun reopen(uri: String, newText: String) {
+        val existing = openDocs[uri] ?: return
+        val languageId = existing.languageId
+        openDocs.remove(uri)
+        client.server().textDocumentService.didClose(
+            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+        )
+        val doc = OpenDoc(languageId, version = 1, text = newText)
+        openDocs[uri] = doc
+        val item = TextDocumentItem(uri, languageId, doc.version, newText)
+        client.server().textDocumentService.didOpen(DidOpenTextDocumentParams(item))
     }
 
     fun openUris(): Set<String> = openDocs.keys.toSet()
@@ -123,6 +138,21 @@ class LspWorkspace(private val client: LspClient) {
         if (triggerCharacter != null) ctx.triggerCharacter = triggerCharacter
         params.context = ctx
         return client.server().textDocumentService.signatureHelp(params).thenApply { SignatureHelpInfo.fromLsp(it) }
+    }
+
+    fun prepareRename(uri: String, line: Int, character: Int): CompletableFuture<RenamePrepare?> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(null)
+        val params = PrepareRenameParams().apply {
+            textDocument = TextDocumentIdentifier(uri)
+            position = Position(line, character)
+        }
+        return client.server().textDocumentService.prepareRename(params).thenApply { RenamePrepare.fromLsp(it) }
+    }
+
+    fun rename(uri: String, line: Int, character: Int, newName: String): CompletableFuture<RenameWorkspaceEdit> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(RenameWorkspaceEdit.EMPTY)
+        val params = RenameParams(TextDocumentIdentifier(uri), Position(line, character), newName)
+        return client.server().textDocumentService.rename(params).thenApply { RenameWorkspaceEdit.fromLsp(it) }
     }
 
     @Suppress("DEPRECATION")

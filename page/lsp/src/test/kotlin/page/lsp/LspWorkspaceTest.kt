@@ -7,11 +7,15 @@ import org.eclipse.lsp4j.MarkupContent
 import org.eclipse.lsp4j.MarkupKind
 import org.eclipse.lsp4j.ParameterInformation
 import org.eclipse.lsp4j.Position
+import org.eclipse.lsp4j.PrepareRenameResult
 import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpTriggerKind
 import org.eclipse.lsp4j.SignatureInformation
+import org.eclipse.lsp4j.TextEdit
+import org.eclipse.lsp4j.WorkspaceEdit
 import org.eclipse.lsp4j.jsonrpc.messages.Either
+import org.eclipse.lsp4j.jsonrpc.messages.Either3
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -93,6 +97,34 @@ class LspWorkspaceTest {
     @Test
     fun `didClose on unopened doc is no-op`() {
         workspace.didClose("file:///nope.kt")
+    }
+
+    @Test
+    fun `reopen closes and re-opens with version reset`() {
+        val uri = "file:///R.kt"
+        workspace.didOpen(uri, "kotlin", "v1")
+        workspace.didChange(uri, "v2")
+        workspace.didChange(uri, "v3")
+        assertEquals(3, workspace.versionOf(uri))
+
+        workspace.reopen(uri, "fresh")
+
+        waitUntil { harness.fakeServer.didCloseCalls.isNotEmpty() }
+        assertTrue(workspace.isOpen(uri))
+        assertEquals("fresh", workspace.textOf(uri))
+        assertEquals(1, workspace.versionOf(uri))
+        assertEquals(uri, harness.fakeServer.didCloseCalls.last().textDocument.uri)
+        val lastOpen = harness.fakeServer.didOpenCalls.last()
+        assertEquals(uri, lastOpen.textDocument.uri)
+        assertEquals("fresh", lastOpen.textDocument.text)
+        assertEquals("kotlin", lastOpen.textDocument.languageId)
+    }
+
+    @Test
+    fun `reopen on unopened doc is no-op`() {
+        workspace.reopen("file:///none.kt", "ignored")
+        assertFalse(workspace.isOpen("file:///none.kt"))
+        assertTrue(harness.fakeServer.didOpenCalls.isEmpty())
     }
 
     @Test
@@ -205,6 +237,64 @@ class LspWorkspaceTest {
         val sent = harness.fakeServer.signatureHelpCalls.first()
         assertEquals(SignatureHelpTriggerKind.ContentChange, sent.context.triggerKind)
         assertTrue(sent.context.isRetrigger)
+    }
+
+    @Test
+    fun `prepareRename forwards params and parses placeholder`() {
+        val uri = "file:///R.kt"
+        workspace.didOpen(uri, "kotlin", "val foo = 1")
+        harness.fakeServer.prepareRenameResponse = Either3.forSecond(
+            PrepareRenameResult(Range(Position(0, 4), Position(0, 7)), "foo")
+        )
+
+        val p = workspace.prepareRename(uri, 0, 5).get(2, TimeUnit.SECONDS)
+        assertNotNull(p)
+        assertEquals(0, p!!.startLine)
+        assertEquals(4, p.startCharacter)
+        assertEquals(7, p.endCharacter)
+        assertEquals("foo", p.placeholder)
+
+        waitUntil { harness.fakeServer.prepareRenameCalls.isNotEmpty() }
+        val sent = harness.fakeServer.prepareRenameCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(0, sent.position.line)
+        assertEquals(5, sent.position.character)
+    }
+
+    @Test
+    fun `prepareRename on unopened doc returns null without server call`() {
+        val result = workspace.prepareRename("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
+        assertNull(result)
+        assertTrue(harness.fakeServer.prepareRenameCalls.isEmpty())
+    }
+
+    @Test
+    fun `rename forwards new name and parses workspace edit`() {
+        val uri = "file:///RW.kt"
+        workspace.didOpen(uri, "kotlin", "val foo = 1")
+        harness.fakeServer.renameResponse = WorkspaceEdit().apply {
+            changes = mutableMapOf(
+                uri to mutableListOf(TextEdit(Range(Position(0, 4), Position(0, 7)), "bar"))
+            )
+        }
+
+        val r = workspace.rename(uri, 0, 5, "bar").get(2, TimeUnit.SECONDS)
+        assertFalse(r.isEmpty)
+        assertEquals(1, r.changes.size)
+        assertEquals(uri, r.changes[0].uri)
+        assertEquals("bar", r.changes[0].edits[0].newText)
+
+        waitUntil { harness.fakeServer.renameCalls.isNotEmpty() }
+        val sent = harness.fakeServer.renameCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals("bar", sent.newName)
+    }
+
+    @Test
+    fun `rename on unopened doc returns empty without server call`() {
+        val r = workspace.rename("file:///nope.kt", 0, 0, "x").get(2, TimeUnit.SECONDS)
+        assertTrue(r.isEmpty)
+        assertTrue(harness.fakeServer.renameCalls.isEmpty())
     }
 
     private fun waitUntil(timeoutMs: Long = 2000, predicate: () -> Boolean) {

@@ -102,6 +102,30 @@ data class TabBook(
         return copy(tabs = updated) to restored
     }
 
+    fun undoGroupOnNonActive(groupId: Long): TabBook {
+        val updated = tabs.mapIndexed { idx, tab ->
+            if (idx == activeIndex) return@mapIndexed tab
+            val top = tab.history.past.lastOrNull() ?: return@mapIndexed tab
+            if (top.groupId != groupId) return@mapIndexed tab
+            val tabCurrent = EditSnapshot(tab.text, tab.caret, groupId)
+            val (newHistory, restored) = tab.history.undo(tabCurrent) ?: return@mapIndexed tab
+            tab.copy(text = restored.text, caret = restored.caret, history = newHistory)
+        }
+        return copy(tabs = updated)
+    }
+
+    fun redoGroupOnNonActive(groupId: Long): TabBook {
+        val updated = tabs.mapIndexed { idx, tab ->
+            if (idx == activeIndex) return@mapIndexed tab
+            val top = tab.history.future.lastOrNull() ?: return@mapIndexed tab
+            if (top.groupId != groupId) return@mapIndexed tab
+            val tabCurrent = EditSnapshot(tab.text, tab.caret, groupId)
+            val (newHistory, restored) = tab.history.redo(tabCurrent) ?: return@mapIndexed tab
+            tab.copy(text = restored.text, caret = restored.caret, history = newHistory)
+        }
+        return copy(tabs = updated)
+    }
+
     fun markActiveSaved(): TabBook {
         if (activeIndex !in tabs.indices) return this
         val current = tabs[activeIndex]
