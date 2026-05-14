@@ -89,6 +89,8 @@ fun main() = application {
     var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
     var problemsOpen by remember { mutableStateOf(false) }
     var problemsHeight: Dp by remember { mutableStateOf(220.dp) }
+    var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
+    var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
     val lsp = rememberLspController(workspaceRoot = rootDir)
     val currentLsp by rememberUpdatedState(lsp)
     val undoTrackerPrimary = remember { UndoGroupTracker() }
@@ -222,6 +224,36 @@ fun main() = application {
             val offset = (i + character.coerceAtLeast(0)).coerceAtMost(text.length)
             openInTabAt(picked, offset)
         }
+    }
+
+    val requestReferences: (Path, Int, Int, String) -> Unit = { p, line, char, symbol ->
+        val origin = p.toUri().toString()
+        referencesState = ReferencesQueryState(
+            symbolName = symbol,
+            originUri = origin,
+            results = emptyList(),
+            isLoading = true,
+        )
+        lsp.references(p, line, char, includeDeclaration = true, symbolName = symbol)
+            .whenComplete { results, err ->
+                referencesState = if (err != null) {
+                    ReferencesQueryState(
+                        symbolName = symbol,
+                        originUri = origin,
+                        results = emptyList(),
+                        isLoading = false,
+                        errorMessage = err.message?.lineSequence()?.firstOrNull()?.take(160)
+                            ?: "참조 검색 실패",
+                    )
+                } else {
+                    ReferencesQueryState(
+                        symbolName = symbol,
+                        originUri = origin,
+                        results = results.orEmpty(),
+                        isLoading = false,
+                    )
+                }
+            }
     }
 
     val applyRename: (RenameWorkspaceEdit) -> Unit = { edit ->
@@ -770,6 +802,14 @@ fun main() = application {
                     onProblemsResizeDelta = { delta ->
                         problemsHeight = (problemsHeight + delta).coerceIn(80.dp, 600.dp)
                     },
+                    referencesState = referencesState,
+                    onRequestReferences = requestReferences,
+                    onReferencesClose = { referencesState = null },
+                    referencesHeight = referencesHeight,
+                    onReferencesResizeDelta = { delta ->
+                        referencesHeight = (referencesHeight + delta).coerceIn(80.dp, 600.dp)
+                    },
+                    linePreviewFor = { uri, line -> currentLsp.linePreviewFor(uri, line) },
                 )
                 if (findInFiles) {
                     FindInFilesDialog(
@@ -894,6 +934,12 @@ private fun Shell(
     onApplyRename: (RenameWorkspaceEdit) -> Unit,
     problemsHeight: Dp,
     onProblemsResizeDelta: (Dp) -> Unit,
+    referencesState: ReferencesQueryState?,
+    onRequestReferences: (Path, Int, Int, String) -> Unit,
+    onReferencesClose: () -> Unit,
+    referencesHeight: Dp,
+    onReferencesResizeDelta: (Dp) -> Unit,
+    linePreviewFor: (String, Int) -> String?,
 ) {
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -943,6 +989,7 @@ private fun Shell(
                                 onProblemsToggle = onProblemsToggle,
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
+                                onRequestReferences = onRequestReferences,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -972,6 +1019,7 @@ private fun Shell(
                                 onProblemsToggle = onProblemsToggle,
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
+                                onRequestReferences = onRequestReferences,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -1000,6 +1048,7 @@ private fun Shell(
                         onProblemsToggle = onProblemsToggle,
                         onJumpToProblem = onJumpToProblem,
                         onApplyRename = onApplyRename,
+                        onRequestReferences = onRequestReferences,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -1012,6 +1061,16 @@ private fun Shell(
                 onClose = onProblemsClose,
                 height = problemsHeight,
                 onResizeDelta = onProblemsResizeDelta,
+            )
+        }
+        if (referencesState != null) {
+            ReferencesPanel(
+                state = referencesState,
+                onJump = onJumpToProblem,
+                onClose = onReferencesClose,
+                height = referencesHeight,
+                onResizeDelta = onReferencesResizeDelta,
+                linePreviewFor = linePreviewFor,
             )
         }
     }
@@ -1046,6 +1105,7 @@ private fun PaneRegion(
     onProblemsToggle: () -> Unit = {},
     onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
     onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
+    onRequestReferences: (Path, Int, Int, String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
@@ -1151,6 +1211,9 @@ private fun PaneRegion(
                         { line, ch, name -> lsp.rename(p, pane.editorValue.text, line, ch, name) }
                     },
                     onApplyRename = onApplyRename,
+                    onRequestReferences = active?.path?.let { p ->
+                        { line, ch, sym -> onRequestReferences(p, line, ch, sym) }
+                    },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

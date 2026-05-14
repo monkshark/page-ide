@@ -123,6 +123,7 @@ fun EditorPanel(
     onRequestPrepareRename: ((line: Int, character: Int) -> CompletableFuture<RenamePrepare?>)? = null,
     onRequestRename: ((line: Int, character: Int, newName: String) -> CompletableFuture<RenameWorkspaceEdit>)? = null,
     onApplyRename: ((RenameWorkspaceEdit) -> Unit)? = null,
+    onRequestReferences: ((line: Int, character: Int, symbolName: String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -814,6 +815,22 @@ fun EditorPanel(
                             renameRequest = RenameRequestState(pos.line, pos.col, placeholder)
                         }
                         return@CodeEditor true
+                    }
+                    if (event.key == Key.F12 && event.isShiftPressed && !event.isCtrlPressed) {
+                        val cb = onRequestReferences
+                        if (cb != null) {
+                            val text = value.text
+                            val caret = value.selection.end.coerceIn(0, text.length)
+                            if (!isInStringOrComment(tokens, text, caret)) {
+                                val pos = TextBuffer(text).lineColOf(caret)
+                                val word = wordRangeAt(text, caret)
+                                val symbolName = if (word != null) text.substring(word.first, word.second) else ""
+                                if (isRenamableIdentifier(symbolName)) {
+                                    cb(pos.line, pos.col, symbolName)
+                                }
+                            }
+                            return@CodeEditor true
+                        }
                     }
                     if (event.key == Key.F12 && !event.isCtrlPressed && !event.isShiftPressed) {
                         val cb = onRequestDefinition

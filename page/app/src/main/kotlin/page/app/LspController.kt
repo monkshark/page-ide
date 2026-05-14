@@ -33,11 +33,15 @@ import page.lsp.KotlinLsp
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
+import page.lsp.ReferenceLocation
 import page.lsp.RenamePrepare
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureHelpInfo
 import page.lsp.WorkspaceSymbolEntry
 import page.lsp.parseKlsActivity
+import page.editor.SyntaxLexers
+import page.editor.Token
+import page.editor.TokenKind
 import java.nio.file.Path
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
@@ -550,6 +554,362 @@ class LspController(
             }
     }
 
+    fun references(
+        path: Path,
+        line: Int,
+        character: Int,
+        includeDeclaration: Boolean = true,
+        symbolName: String? = null,
+    ): CompletableFuture<List<ReferenceLocation>> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+
+        if (!symbolName.isNullOrEmpty()) {
+            val scope = computeScope(uri, line, character, symbolName)
+            val scanned = referencesByTextScan(symbolName, scope)
+            val scopeLabel = if (scope != null) {
+                val fname = scope.uri.substringAfterLast('/')
+                "local in $fname offsets=${scope.range.first}..${scope.range.last}"
+            } else "workspace"
+            println("[lsp] references(text-scan) for '$symbolName' scope=$scopeLabel — ${scanned.size} occurrence(s)")
+            scanned.take(10).forEachIndexed { i, r ->
+                println("  scan[$i] ${r.uri} @(${r.startLine},${r.startCharacter})..(${r.endLine},${r.endCharacter})")
+            }
+            if (scanned.size > 10) println("  … (+${scanned.size - 10} more)")
+            val ms = (System.nanoTime() - tStart) / 1_000_000
+            println("[lsp] references ✓ $uri @($line,$character) '$symbolName' — ${scanned.size} ref(s) (text-scan) [${ms}ms]")
+            return CompletableFuture.completedFuture(scanned)
+        }
+
+        val refsFuture = ws.references(uri, line, character, includeDeclaration)
+            .whenComplete { raw, _ ->
+                val list = raw.orEmpty()
+                println("[lsp] references(raw KLS) $uri @($line,$character) — ${list.size} ref(s)")
+                list.forEachIndexed { i, r ->
+                    println("  raw[$i] ${r.uri} @(${r.startLine},${r.startCharacter})..(${r.endLine},${r.endCharacter})")
+                }
+            }
+        val merged = if (includeDeclaration) {
+            ws.definition(uri, line, character)
+                .handle { defs, err ->
+                    val list = defs.orEmpty()
+                    if (err != null) {
+                        println("[lsp] references(definition aux) $uri @($line,$character) failed: ${err.message}")
+                    } else {
+                        println("[lsp] references(definition aux) $uri @($line,$character) — ${list.size} decl(s)")
+                        list.forEachIndexed { i, d ->
+                            println("  def[$i] ${d.uri} @(${d.startLine},${d.startCharacter})..(${d.endLine},${d.endCharacter})")
+                        }
+                    }
+                    list
+                }
+                .thenCombine(refsFuture) { defs, refs -> mergeDeclarationIntoRefs(defs, refs.orEmpty()) }
+        } else {
+            refsFuture.thenApply { it.orEmpty() }
+        }
+        val sanitized = merged.thenApply { list -> snapReferencesToIdentifier(list, symbolName) }
+        return sanitized.whenComplete { refs, err ->
+            val ms = (System.nanoTime() - tStart) / 1_000_000
+            if (err != null) {
+                println("[lsp] references ✗ $uri @($line,$character): ${err.message} [${ms}ms]")
+            } else {
+                val list = refs.orEmpty()
+                println("[lsp] references ✓ $uri @($line,$character) — ${list.size} ref(s) [${ms}ms]")
+                list.take(5).forEachIndexed { i, r ->
+                    println("  [$i] ${r.uri} @(${r.startLine},${r.startCharacter})..(${r.endLine},${r.endCharacter})")
+                }
+                if (list.size > 5) println("  … (+${list.size - 5} more)")
+            }
+        }
+    }
+
+    private data class ReferenceScope(val uri: String, val range: IntRange)
+
+    private fun referencesByTextScan(
+        symbolName: String,
+        scope: ReferenceScope?,
+    ): List<ReferenceLocation> {
+        if (symbolName.isEmpty()) return emptyList()
+        val ws = workspace ?: return emptyList()
+        val out = mutableListOf<ReferenceLocation>()
+        val nameLen = symbolName.length
+        val urisToScan = if (scope != null) listOf(scope.uri) else ws.openUris().toList()
+        val filterNamedArgs = scope != null
+        for (uri in urisToScan) {
+            val text = ws.textOf(uri) ?: continue
+            val path = try { java.nio.file.Paths.get(java.net.URI(uri)) } catch (_: Throwable) { continue }
+            val lexer = SyntaxLexers.forPath(path) ?: continue
+            val tokens = runCatching { lexer.tokenize(text) }.getOrNull() ?: continue
+            val excluded = stringCommentRanges(tokens)
+            val lineStarts = computeLineStarts(text)
+            val searchStart = if (scope != null && scope.uri == uri) scope.range.first else 0
+            val searchEnd = if (scope != null && scope.uri == uri) scope.range.last + 1 else text.length
+            var searchFrom = searchStart
+            while (true) {
+                val idx = text.indexOf(symbolName, searchFrom)
+                if (idx < 0 || idx >= searchEnd) break
+                val endExclusive = idx + nameLen
+                if (endExclusive > searchEnd) { searchFrom = idx + 1; continue }
+                val before = if (idx == 0) ' ' else text[idx - 1]
+                val after = if (endExclusive >= text.length) ' ' else text[endExclusive]
+                val isWordStart = !before.isLetterOrDigit() && before != '_'
+                val isWordEnd = !after.isLetterOrDigit() && after != '_'
+                if (isWordStart && isWordEnd && !isInsideRange(idx, excluded)) {
+                    if (filterNamedArgs && isNamedArgumentPosition(text, idx, endExclusive)) {
+                        searchFrom = idx + 1
+                        continue
+                    }
+                    val (sl, sc) = offsetToLineCol(idx, lineStarts)
+                    val (el, ec) = offsetToLineCol(endExclusive, lineStarts)
+                    out += ReferenceLocation(uri, sl, sc, el, ec)
+                }
+                searchFrom = idx + 1
+            }
+        }
+        return out
+    }
+
+    private fun isNamedArgumentPosition(text: String, idx: Int, endExclusive: Int): Boolean {
+        var p = idx - 1
+        while (p >= 0 && (text[p] == ' ' || text[p] == '\t')) p--
+        if (p < 0) return false
+        if (text[p] != '(' && text[p] != ',') return false
+        var q = endExclusive
+        while (q < text.length && (text[q] == ' ' || text[q] == '\t')) q++
+        if (q >= text.length || text[q] != '=') return false
+        if (q + 1 < text.length && text[q + 1] == '=') return false
+        return true
+    }
+
+    private fun computeScope(uri: String, line: Int, character: Int, symbolName: String): ReferenceScope? {
+        val ws = workspace ?: return null
+        val text = ws.textOf(uri) ?: return null
+        val path = try { java.nio.file.Paths.get(java.net.URI(uri)) } catch (_: Throwable) { return null }
+        val lexer = SyntaxLexers.forPath(path) ?: return null
+        val tokens = runCatching { lexer.tokenize(text) }.getOrNull() ?: return null
+        val excluded = stringCommentRanges(tokens)
+        val caret = lineColToOffset(text, line, character) ?: return null
+        val funRange = findEnclosingFunctionRange(text, tokens, caret, excluded) ?: return null
+        val scopeText = text.substring(funRange.first, funRange.last + 1)
+        if (!hasLocalDeclaration(scopeText, symbolName, excluded, funRange.first)) return null
+        return ReferenceScope(uri, funRange)
+    }
+
+    private fun stringCommentRanges(tokens: List<Token>): List<Pair<Int, Int>> = tokens
+        .filter { it.kind == TokenKind.STRING || it.kind == TokenKind.COMMENT }
+        .map { it.range.first to (it.range.last + 1) }
+        .sortedBy { it.first }
+
+    private fun lineColToOffset(text: String, line: Int, character: Int): Int? {
+        if (line < 0) return null
+        var idx = 0
+        var l = 0
+        while (idx < text.length && l < line) {
+            if (text[idx] == '\n') l++
+            idx++
+        }
+        if (l != line) return null
+        var end = idx
+        while (end < text.length && text[end] != '\n') end++
+        val col = character.coerceIn(0, end - idx)
+        return idx + col
+    }
+
+    private fun findEnclosingFunctionRange(
+        text: String,
+        tokens: List<Token>,
+        caret: Int,
+        excluded: List<Pair<Int, Int>>,
+    ): IntRange? {
+        val funPositions = tokens.asSequence()
+            .filter { it.kind == TokenKind.KEYWORD }
+            .filter {
+                val r = it.range
+                val len = r.last + 1 - r.first
+                len == 3 && text.regionMatches(r.first, "fun", 0, 3)
+            }
+            .map { it.range.first }
+            .toList()
+        val scopes = mutableListOf<IntRange>()
+        for (funStart in funPositions) {
+            var i = funStart + 3
+            while (i < text.length && (text[i] != '{' || isInsideRange(i, excluded))) i++
+            if (i >= text.length) continue
+            var depth = 1
+            i++
+            while (i < text.length && depth > 0) {
+                if (!isInsideRange(i, excluded)) {
+                    when (text[i]) {
+                        '{' -> depth++
+                        '}' -> {
+                            depth--
+                            if (depth == 0) {
+                                scopes += funStart..i
+                                break
+                            }
+                        }
+                    }
+                }
+                i++
+            }
+        }
+        return scopes.filter { caret in it }.minByOrNull { it.last - it.first }
+    }
+
+    private fun hasLocalDeclaration(
+        scopeText: String,
+        name: String,
+        excluded: List<Pair<Int, Int>>,
+        offset: Int,
+    ): Boolean {
+        val escaped = Regex.escape(name)
+        val patterns = listOf(
+            Regex("\\b(val|var)\\s+$escaped\\b"),
+            Regex("[\\s(,]$escaped\\s*:"),
+        )
+        for (re in patterns) {
+            for (m in re.findAll(scopeText)) {
+                val absOffset = offset + m.range.first
+                if (!isInsideRange(absOffset, excluded)) return true
+            }
+        }
+        return false
+    }
+
+    private fun isInsideRange(offset: Int, sortedRanges: List<Pair<Int, Int>>): Boolean {
+        if (sortedRanges.isEmpty()) return false
+        var lo = 0
+        var hi = sortedRanges.size - 1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            val (s, e) = sortedRanges[mid]
+            if (offset < s) hi = mid - 1
+            else if (offset >= e) lo = mid + 1
+            else return true
+        }
+        return false
+    }
+
+    private fun computeLineStarts(text: String): IntArray {
+        val starts = ArrayList<Int>(64)
+        starts.add(0)
+        for (i in text.indices) {
+            if (text[i] == '\n') starts.add(i + 1)
+        }
+        return starts.toIntArray()
+    }
+
+    private fun offsetToLineCol(offset: Int, lineStarts: IntArray): Pair<Int, Int> {
+        var lo = 0
+        var hi = lineStarts.size - 1
+        while (lo < hi) {
+            val mid = (lo + hi + 1) ushr 1
+            if (lineStarts[mid] <= offset) lo = mid else hi = mid - 1
+        }
+        return lo to (offset - lineStarts[lo])
+    }
+
+    private fun snapReferencesToIdentifier(
+        refs: List<ReferenceLocation>,
+        symbolName: String?,
+    ): List<ReferenceLocation> {
+        if (symbolName.isNullOrEmpty() || refs.isEmpty()) return refs
+        val byUri = HashMap<String, String?>()
+        val out = mutableListOf<ReferenceLocation>()
+        val droppedKeys = HashSet<Triple<String, Int, Int>>()
+        for (r in refs) {
+            val text = byUri.getOrPut(r.uri) {
+                workspace?.textOf(r.uri) ?: readFileTextByUri(r.uri)
+            }
+            if (text == null) { out += r; continue }
+            val lineText = lineAtIndex(text, r.startLine)
+            if (lineText == null) { out += r; continue }
+            val sChar = r.startCharacter.coerceIn(0, lineText.length)
+            val eChar = r.endCharacter.coerceIn(sChar, lineText.length)
+            val existing = lineText.substring(sChar, eChar)
+            if (existing == symbolName) {
+                out += r
+                continue
+            }
+            val match = findWordBoundaryMatch(lineText, symbolName, prefer = r.startCharacter)
+            if (match == null) {
+                droppedKeys += Triple(r.uri, r.startLine, r.startCharacter)
+                println("[lsp] references(snap) dropped spurious — ${r.uri}@(${r.startLine},${r.startCharacter}) line='$lineText' (no '$symbolName' on this line)")
+                continue
+            }
+            val adjusted = r.copy(
+                startCharacter = match.first,
+                endLine = r.startLine,
+                endCharacter = match.second,
+            )
+            println("[lsp] references(snap) ${r.uri}@(${r.startLine},${r.startCharacter}→${match.first}) for '$symbolName' (was '$existing')")
+            out += adjusted
+        }
+        val deduped = LinkedHashMap<Triple<String, Int, Int>, ReferenceLocation>()
+        for (r in out) {
+            val key = Triple(r.uri, r.startLine, r.startCharacter)
+            deduped.putIfAbsent(key, r)
+        }
+        return deduped.values.toList()
+    }
+
+    private fun lineAtIndex(text: String, line: Int): String? {
+        if (line < 0) return null
+        var idx = 0
+        var l = 0
+        while (idx < text.length && l < line) {
+            if (text[idx] == '\n') l++
+            idx++
+        }
+        if (l != line) return null
+        var end = idx
+        while (end < text.length && text[end] != '\n') end++
+        val raw = text.substring(idx, end)
+        return if (raw.endsWith('\r')) raw.dropLast(1) else raw
+    }
+
+    private fun findWordBoundaryMatch(line: String, word: String, prefer: Int): Pair<Int, Int>? {
+        if (word.isEmpty() || word.length > line.length) return null
+        val matches = mutableListOf<Pair<Int, Int>>()
+        var i = 0
+        while (i <= line.length - word.length) {
+            if (line.regionMatches(i, word, 0, word.length)) {
+                val before = if (i == 0) ' ' else line[i - 1]
+                val after = if (i + word.length >= line.length) ' ' else line[i + word.length]
+                val boundedBefore = !before.isLetterOrDigit() && before != '_'
+                val boundedAfter = !after.isLetterOrDigit() && after != '_'
+                if (boundedBefore && boundedAfter) {
+                    matches += i to (i + word.length)
+                }
+            }
+            i++
+        }
+        if (matches.isEmpty()) return null
+        return matches.minByOrNull { kotlin.math.abs(it.first - prefer) }
+    }
+
+    private fun mergeDeclarationIntoRefs(
+        defs: List<DefinitionTarget>,
+        refs: List<ReferenceLocation>,
+    ): List<ReferenceLocation> {
+        if (defs.isEmpty()) return refs
+        val seen = refs.mapTo(HashSet()) { Triple(it.uri, it.startLine, it.startCharacter) }
+        val extra = defs.mapNotNull { d ->
+            val key = Triple(d.uri, d.startLine, d.startCharacter)
+            if (key in seen) null else ReferenceLocation(
+                uri = d.uri,
+                startLine = d.startLine,
+                startCharacter = d.startCharacter,
+                endLine = d.endLine,
+                endCharacter = d.endCharacter,
+            )
+        }
+        return if (extra.isEmpty()) refs else extra + refs
+    }
+
     fun signatureHelp(
         path: Path,
         text: String,
@@ -866,6 +1226,34 @@ class LspController(
             } catch (t: Throwable) {
                 println("[lsp] workspace walk failed: ${t.message}")
             }
+        }
+    }
+
+    fun linePreviewFor(uri: String, line: Int): String? {
+        if (line < 0) return null
+        val text = workspace?.textOf(uri) ?: readFileTextByUri(uri) ?: return null
+        var idx = 0
+        var l = 0
+        while (idx < text.length && l < line) {
+            if (text[idx] == '\n') l++
+            idx++
+        }
+        if (l != line) return null
+        var end = idx
+        while (end < text.length && text[end] != '\n') end++
+        val raw = text.substring(idx, end)
+        return if (raw.endsWith('\r')) raw.dropLast(1) else raw
+    }
+
+    private fun readFileTextByUri(uri: String): String? {
+        if (!uri.startsWith("file:")) return null
+        return try {
+            val p = java.nio.file.Paths.get(java.net.URI(uri))
+            if (!java.nio.file.Files.isRegularFile(p)) return null
+            if (java.nio.file.Files.size(p) > MAX_AUTO_OPEN_BYTES) return null
+            java.nio.file.Files.readString(p)
+        } catch (_: Throwable) {
+            null
         }
     }
 

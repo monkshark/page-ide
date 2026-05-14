@@ -18,6 +18,7 @@ import org.eclipse.lsp4j.PrepareRenameDefaultBehavior
 import org.eclipse.lsp4j.PrepareRenameParams
 import org.eclipse.lsp4j.PrepareRenameResult
 import org.eclipse.lsp4j.Range
+import org.eclipse.lsp4j.ReferenceParams
 import org.eclipse.lsp4j.RenameParams
 import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.SignatureHelp
@@ -41,11 +42,13 @@ class FakeLanguageServer : LanguageServer {
     val didCloseCalls = ConcurrentLinkedQueue<DidCloseTextDocumentParams>()
     val hoverCalls = ConcurrentLinkedQueue<HoverParams>()
     val definitionCalls = ConcurrentLinkedQueue<DefinitionParams>()
+    val referencesCalls = ConcurrentLinkedQueue<ReferenceParams>()
     val signatureHelpCalls = ConcurrentLinkedQueue<SignatureHelpParams>()
     val prepareRenameCalls = ConcurrentLinkedQueue<PrepareRenameParams>()
     val renameCalls = ConcurrentLinkedQueue<RenameParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
+    @Volatile var referencesResponse: MutableList<out Location>? = null
     @Volatile var signatureHelpResponse: SignatureHelp? = null
     @Volatile var prepareRenameResponse: Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>? = null
     @Volatile var renameResponse: WorkspaceEdit? = null
@@ -66,6 +69,10 @@ class FakeLanguageServer : LanguageServer {
         ): CompletableFuture<Either<MutableList<out Location>, MutableList<out LocationLink>>> {
             definitionCalls += params
             return CompletableFuture.completedFuture(definitionResponse)
+        }
+        override fun references(params: ReferenceParams): CompletableFuture<MutableList<out Location>> {
+            referencesCalls += params
+            return CompletableFuture.completedFuture(referencesResponse)
         }
         override fun signatureHelp(params: SignatureHelpParams): CompletableFuture<SignatureHelp> {
             signatureHelpCalls += params
