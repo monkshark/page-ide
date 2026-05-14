@@ -10,6 +10,8 @@ import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.PrepareRenameParams
+import org.eclipse.lsp4j.ReferenceContext
+import org.eclipse.lsp4j.ReferenceParams
 import org.eclipse.lsp4j.RenameParams
 import org.eclipse.lsp4j.SignatureHelpContext
 import org.eclipse.lsp4j.SignatureHelpParams
@@ -118,6 +120,18 @@ class LspWorkspace(private val client: LspClient) {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val params = DefinitionParams(TextDocumentIdentifier(uri), Position(line, character))
         return client.server().textDocumentService.definition(params).thenApply { DefinitionTarget.fromLsp(it) }
+    }
+
+    fun references(
+        uri: String,
+        line: Int,
+        character: Int,
+        includeDeclaration: Boolean = true,
+    ): CompletableFuture<List<ReferenceLocation>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val context = ReferenceContext().apply { isIncludeDeclaration = includeDeclaration }
+        val params = ReferenceParams(TextDocumentIdentifier(uri), Position(line, character), context)
+        return client.server().textDocumentService.references(params).thenApply { ReferenceLocation.fromLsp(it) }
     }
 
     fun signatureHelp(

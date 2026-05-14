@@ -178,6 +178,46 @@ class LspWorkspaceTest {
     }
 
     @Test
+    fun `references on unopened doc returns empty without server call`() {
+        val result = workspace.references("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(result.isEmpty())
+        assertTrue(harness.fakeServer.referencesCalls.isEmpty())
+    }
+
+    @Test
+    fun `references forwards params and parses locations`() {
+        val uri = "file:///F.kt"
+        workspace.didOpen(uri, "kotlin", "fun foo() {} foo()")
+        harness.fakeServer.referencesResponse = mutableListOf(
+            Location(uri, Range(Position(0, 4), Position(0, 7))),
+            Location("file:///G.kt", Range(Position(2, 0), Position(2, 3))),
+        )
+
+        val refs = workspace.references(uri, 0, 5, includeDeclaration = true).get(2, TimeUnit.SECONDS)
+        assertEquals(2, refs.size)
+        assertEquals(uri, refs[0].uri)
+        assertEquals(4, refs[0].startCharacter)
+        assertEquals("file:///G.kt", refs[1].uri)
+        assertEquals(2, refs[1].startLine)
+
+        waitUntil { harness.fakeServer.referencesCalls.isNotEmpty() }
+        val sent = harness.fakeServer.referencesCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(0, sent.position.line)
+        assertEquals(5, sent.position.character)
+        assertTrue(sent.context.isIncludeDeclaration)
+    }
+
+    @Test
+    fun `references can exclude declaration in context flag`() {
+        val uri = "file:///FE.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        workspace.references(uri, 0, 0, includeDeclaration = false).get(2, TimeUnit.SECONDS)
+        waitUntil { harness.fakeServer.referencesCalls.isNotEmpty() }
+        assertFalse(harness.fakeServer.referencesCalls.first().context.isIncludeDeclaration)
+    }
+
+    @Test
     fun `signatureHelp on unopened doc returns null without server call`() {
         val result = workspace.signatureHelp("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
         assertNull(result)
