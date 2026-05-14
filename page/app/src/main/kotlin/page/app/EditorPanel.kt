@@ -91,7 +91,7 @@ import page.ui.CodeEditor
 import page.ui.CompletionDisplay
 import page.ui.EditorDecoration
 import page.ui.EditorFontFamily
-import page.ui.GlassDarkSyntax
+import page.ui.Glass
 import page.ui.SignatureHelpDisplay
 import page.ui.SyntaxPalette
 
@@ -141,7 +141,7 @@ fun EditorPanel(
     val bracketBg = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)
     val foldPlaceholderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
     val foldPlaceholderBg = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f)
-    val palette = GlassDarkSyntax
+    val palette = Glass.colors.syntax
 
     val tokens = remember(value.text, lexer) {
         lexer?.tokenize(value.text).orEmpty()
@@ -152,8 +152,8 @@ fun EditorPanel(
         else BracketMatch.find(value.text, value.selection.start)
     }
 
-    val errorColor = androidx.compose.ui.graphics.Color(0xFFE5484D)
-    val warningColor = androidx.compose.ui.graphics.Color(0xFFE5C03A)
+    val errorColor = Glass.colors.error
+    val warningColor = Glass.colors.warn
     val infoColor = MaterialTheme.colorScheme.primary
     val tabstopActiveColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val tabstopPendingColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
@@ -1229,13 +1229,13 @@ private fun EditorStatusBar(
             StatusItem("$charCount chars")
             if (errorCount > 0) DiagnosticBadge(
                 count = errorCount,
-                color = androidx.compose.ui.graphics.Color(0xFFE5484D),
+                color = Glass.colors.error,
                 label = "errors",
                 onClick = onProblemsToggle,
             )
             if (warningCount > 0) DiagnosticBadge(
                 count = warningCount,
-                color = androidx.compose.ui.graphics.Color(0xFFE5C03A),
+                color = Glass.colors.warn,
                 label = "warnings",
                 onClick = onProblemsToggle,
             )

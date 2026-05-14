@@ -38,11 +38,9 @@ import androidx.compose.ui.unit.dp
 import java.awt.Cursor
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
+import page.ui.Glass
 import java.net.URI
 import java.nio.file.Path
-
-private val ErrorColor = Color(0xFFE5484D)
-private val WarningColor = Color(0xFFE5C03A)
 
 data class ProblemEntry(
     val path: Path,
@@ -82,8 +80,8 @@ fun ProblemsPanel(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (errorCount > 0) ProblemBadge(errorCount, "errors", ErrorColor)
-                if (warningCount > 0) ProblemBadge(warningCount, "warnings", WarningColor)
+                if (errorCount > 0) ProblemBadge(errorCount, "errors", Glass.colors.error)
+                if (warningCount > 0) ProblemBadge(warningCount, "warnings", Glass.colors.warn)
                 Box(modifier = Modifier.weight(1f))
                 Text(
                     text = "닫기",
@@ -151,16 +149,16 @@ private fun ProblemFileHeader(path: Path, list: List<ProblemEntry>) {
             )
         }
         Box(modifier = Modifier.weight(1f))
-        if (errorCount > 0) ProblemBadge(errorCount, "errors", ErrorColor)
-        if (warningCount > 0) ProblemBadge(warningCount, "warnings", WarningColor)
+        if (errorCount > 0) ProblemBadge(errorCount, "errors", Glass.colors.error)
+        if (warningCount > 0) ProblemBadge(warningCount, "warnings", Glass.colors.warn)
     }
 }
 
 @Composable
 private fun ProblemRow(entry: ProblemEntry, onJump: (Path, Int, Int) -> Unit) {
     val color = when (entry.diagnostic.severity) {
-        DiagnosticSeverity.ERROR -> ErrorColor
-        DiagnosticSeverity.WARNING -> WarningColor
+        DiagnosticSeverity.ERROR -> Glass.colors.error
+        DiagnosticSeverity.WARNING -> Glass.colors.warn
         else -> MaterialTheme.colorScheme.primary
     }
     Row(

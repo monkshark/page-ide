@@ -2,23 +2,66 @@ package page.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 
-private val GlassDark = darkColorScheme(
-    primary = Color(0xFF8AB4FF),
-    onPrimary = Color(0xFF0A1126),
-    secondary = Color(0xFFB8C5E0),
-    background = Color(0xFF0D1117),
-    onBackground = Color(0xFFE6EDF3),
-    surface = Color(0xFF161B22),
-    onSurface = Color(0xFFE6EDF3),
-    surfaceVariant = Color(0xFF1C2128),
-    onSurfaceVariant = Color(0xFF8B949E),
-    outline = Color(0xFF30363D),
-)
+object Glass {
+    val colors: GlassColors
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.color
+
+    val type: GlassType
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.type
+
+    val space: GlassSpace
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.space
+
+    val motion: GlassMotion
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.motion
+
+    val palette: GlassPalette
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.palette
+}
 
 @Composable
-fun GlassTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = GlassDark, content = content)
+fun GlassTheme(palette: GlassPalette = GlassPalette.Cool, content: @Composable () -> Unit) {
+    val tokens = remember(palette) { glassTokensFor(palette) }
+    val scheme = remember(tokens) {
+        val c = tokens.color
+        if (c.isLight) lightColorScheme(
+            primary = c.primary,
+            onPrimary = c.onPrimary,
+            secondary = c.accent,
+            background = c.background,
+            onBackground = c.text,
+            surface = c.surface,
+            onSurface = c.text,
+            surfaceVariant = c.surfaceRaised,
+            onSurfaceVariant = c.muted,
+            outline = c.outline,
+            error = c.error,
+        ) else darkColorScheme(
+            primary = c.primary,
+            onPrimary = c.onPrimary,
+            secondary = c.accent,
+            background = c.background,
+            onBackground = c.text,
+            surface = c.surface,
+            onSurface = c.text,
+            surfaceVariant = c.surfaceRaised,
+            onSurfaceVariant = c.muted,
+            outline = c.outline,
+            error = c.error,
+        )
+    }
+    CompositionLocalProvider(LocalGlassTokens provides tokens) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }

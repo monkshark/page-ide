@@ -946,8 +946,8 @@ private fun HoverPopup(text: String?, diagnostic: HoverDiagnostic?, position: Of
 @Composable
 private fun DiagnosticHeader(d: HoverDiagnostic) {
     val color = when (d.severity) {
-        HoverDiagnosticSeverity.ERROR -> Color(0xFFE5484D)
-        HoverDiagnosticSeverity.WARNING -> Color(0xFFE5C03A)
+        HoverDiagnosticSeverity.ERROR -> Glass.colors.error
+        HoverDiagnosticSeverity.WARNING -> Glass.colors.warn
         HoverDiagnosticSeverity.INFO, HoverDiagnosticSeverity.HINT ->
             MaterialTheme.colorScheme.primary
     }

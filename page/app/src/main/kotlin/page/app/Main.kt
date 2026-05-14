@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -66,6 +67,8 @@ import page.editor.SyntaxLexers
 import page.editor.TabBook
 import page.lsp.RenameApply
 import page.lsp.RenameWorkspaceEdit
+import page.ui.Glass
+import page.ui.GlassPalette
 import page.ui.GlassTheme
 import page.ui.SplitPane
 import java.awt.Cursor
@@ -91,6 +94,8 @@ fun main() = application {
     var problemsHeight: Dp by remember { mutableStateOf(220.dp) }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
     var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
+    var palette: GlassPalette by remember { mutableStateOf(AppSettings.loadPalette()) }
+    var paletteToastUntil: Long by remember { mutableStateOf(0L) }
     val lsp = rememberLspController(workspaceRoot = rootDir)
     val currentLsp by rememberUpdatedState(lsp)
     val undoTrackerPrimary = remember { UndoGroupTracker() }
@@ -654,11 +659,21 @@ fun main() = application {
         }
     }
 
+    val cyclePalette: () -> Unit = {
+        val all = GlassPalette.values()
+        palette = all[(all.indexOf(palette) + 1) % all.size]
+        paletteToastUntil = System.currentTimeMillis() + 1600L
+        AppSettings.savePalette(palette)
+    }
     val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
     val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
         if (event.type != KeyEventType.KeyDown) return@handler false
         val frame = frameRef.value
         val focusedSearch = focused().search
+        if (event.isCtrlPressed && event.isAltPressed && event.key == Key.T) {
+            cyclePalette()
+            return@handler true
+        }
         if (event.isCtrlPressed) {
             when {
                 event.key == Key.O && event.isShiftPressed -> {
@@ -720,7 +735,7 @@ fun main() = application {
         val showWelcome = rootDir == null &&
             primaryPane.book.tabs.isEmpty() &&
             secondaryPane.book.tabs.isEmpty()
-        GlassTheme {
+        GlassTheme(palette = palette) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
@@ -821,6 +836,7 @@ fun main() = application {
                         onDismiss = { findInFiles = false },
                     )
                 }
+                PaletteToast(palette = palette, visibleUntilMs = paletteToastUntil)
                 }
             }
         }
@@ -1293,5 +1309,38 @@ private fun ResizeHandle(onDeltaDp: (Dp) -> Unit) {
                 .width(1.dp)
                 .background(MaterialTheme.colorScheme.outline),
         )
+    }
+}
+
+@Composable
+private fun PaletteToast(palette: GlassPalette, visibleUntilMs: Long) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(visibleUntilMs) {
+        while (System.currentTimeMillis() < visibleUntilMs) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(60)
+        }
+        now = System.currentTimeMillis()
+    }
+    if (now >= visibleUntilMs) return
+    val label = "Glass · ${palette.name}"
+    Box(
+        modifier = Modifier.fillMaxSize().padding(20.dp),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        Surface(
+            color = Glass.colors.surfaceRaised,
+            contentColor = Glass.colors.text,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Glass.colors.outline),
+            tonalElevation = 2.dp,
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                color = Glass.colors.text,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }

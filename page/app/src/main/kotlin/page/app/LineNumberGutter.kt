@@ -22,6 +22,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import page.lsp.DiagnosticSeverity
+import page.ui.Glass
 
 internal data class GutterLine(
     val originalLine: Int,
@@ -76,8 +77,8 @@ internal fun LineNumberGutter(
 @Composable
 private fun SeverityDot(severity: DiagnosticSeverity?) {
     val color = when (severity) {
-        DiagnosticSeverity.ERROR -> Color(0xFFE5484D)
-        DiagnosticSeverity.WARNING -> Color(0xFFE5C03A)
+        DiagnosticSeverity.ERROR -> Glass.colors.error
+        DiagnosticSeverity.WARNING -> Glass.colors.warn
         DiagnosticSeverity.INFO -> MaterialTheme.colorScheme.primary
         DiagnosticSeverity.HINT -> MaterialTheme.colorScheme.tertiary
         null -> Color.Transparent
