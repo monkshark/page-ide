@@ -22,6 +22,7 @@ data class Diagnostic(
     val severity: DiagnosticSeverity,
     val message: String,
     val source: String? = null,
+    val code: String? = null,
 ) {
     companion object {
         fun fromLsp(d: org.eclipse.lsp4j.Diagnostic): Diagnostic = Diagnostic(
@@ -30,6 +31,13 @@ data class Diagnostic(
             severity = DiagnosticSeverity.fromLsp(d.severity),
             message = d.message ?: "",
             source = d.source,
+            code = d.code?.let { e ->
+                when {
+                    e.isLeft -> e.left
+                    e.isRight -> e.right?.toString()
+                    else -> null
+                }
+            },
         )
     }
 }

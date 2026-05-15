@@ -33,7 +33,9 @@ import page.lsp.KotlinLsp
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
+import page.lsp.CodeActionEntry
 import page.lsp.ReferenceLocation
+import page.lsp.RenameEdit
 import page.lsp.RenamePrepare
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureHelpInfo
@@ -662,6 +664,87 @@ class LspController(
             }
     }
 
+    fun formatting(path: Path, tabSize: Int = 4, insertSpaces: Boolean = true): CompletableFuture<List<RenameEdit>> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+        return ws.formatting(uri, tabSize, insertSpaces)
+            .whenComplete { edits, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    println("[lsp] formatting ✗ $uri: ${err.message} [${ms}ms]")
+                } else {
+                    val list = edits.orEmpty()
+                    println("[lsp] formatting ✓ $uri — ${list.size} edit(s) [${ms}ms]")
+                }
+            }
+    }
+
+    fun codeActions(
+        path: Path,
+        startLine: Int,
+        startCharacter: Int,
+        endLine: Int,
+        endCharacter: Int,
+    ): CompletableFuture<List<CodeActionEntry>> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val overlappingDiags = diagnosticsByUri[uri].orEmpty().filter { d ->
+            rangeOverlaps(
+                d.start.line, d.start.character, d.end.line, d.end.character,
+                startLine, startCharacter, endLine, endCharacter,
+            )
+        }
+        val diags = overlappingDiags.map { toLspDiagnostic(it) }
+        val currentText = ws.textOf(uri)
+        val synthesized = if (currentText != null) {
+            page.lsp.PageQuickFixes.synthesize(uri, currentText, overlappingDiags)
+        } else emptyList()
+        val tStart = System.nanoTime()
+        return ws.codeAction(uri, startLine, startCharacter, endLine, endCharacter, diags)
+            .handle<List<CodeActionEntry>> { actions, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    println("[lsp] codeAction ✗ $uri @($startLine,$startCharacter): ${err.message} [${ms}ms]")
+                    synthesized
+                } else {
+                    val server = actions.orEmpty()
+                    val merged = server + synthesized
+                    println("[lsp] codeAction ✓ $uri @($startLine,$startCharacter) — ${merged.size} action(s) (server=${server.size}, synth=${synthesized.size}), ctx=${diags.size} diag(s) [${ms}ms]")
+                    merged
+                }
+            }
+    }
+
+    private fun rangeOverlaps(
+        aSL: Int, aSC: Int, aEL: Int, aEC: Int,
+        bSL: Int, bSC: Int, bEL: Int, bEC: Int,
+    ): Boolean {
+        val aAfterB = aSL > bEL || (aSL == bEL && aSC > bEC)
+        val bAfterA = bSL > aEL || (bSL == aEL && bSC > aEC)
+        return !aAfterB && !bAfterA
+    }
+
+    private fun toLspDiagnostic(d: page.lsp.Diagnostic): org.eclipse.lsp4j.Diagnostic {
+        val r = org.eclipse.lsp4j.Range(
+            org.eclipse.lsp4j.Position(d.start.line, d.start.character),
+            org.eclipse.lsp4j.Position(d.end.line, d.end.character),
+        )
+        val sev = when (d.severity) {
+            page.lsp.DiagnosticSeverity.ERROR -> org.eclipse.lsp4j.DiagnosticSeverity.Error
+            page.lsp.DiagnosticSeverity.WARNING -> org.eclipse.lsp4j.DiagnosticSeverity.Warning
+            page.lsp.DiagnosticSeverity.INFO -> org.eclipse.lsp4j.DiagnosticSeverity.Information
+            page.lsp.DiagnosticSeverity.HINT -> org.eclipse.lsp4j.DiagnosticSeverity.Hint
+        }
+        return org.eclipse.lsp4j.Diagnostic(r, d.message, sev, d.source.orEmpty()).apply {
+            code = org.eclipse.lsp4j.jsonrpc.messages.Either.forLeft(d.code ?: "")
+        }
+    }
+
     private data class ReferenceScope(val uri: String, val range: IntRange)
 
     private fun referencesByTextScan(
@@ -735,7 +818,7 @@ class LspController(
     }
 
     private fun stringCommentRanges(tokens: List<Token>): List<Pair<Int, Int>> = tokens
-        .filter { it.kind == TokenKind.STRING || it.kind == TokenKind.COMMENT }
+        .filter { it.kind == TokenKind.STRING || it.kind == TokenKind.COMMENT || it.kind == TokenKind.DOC_COMMENT }
         .map { it.range.first to (it.range.last + 1) }
         .sortedBy { it.first }
 
@@ -1345,6 +1428,10 @@ class LspController(
         val mapped = params.diagnostics.orEmpty().map(Diagnostic::fromLsp)
         diagnosticsByUri[uri] = mapped
         println("[lsp] publishDiagnostics $uri — ${mapped.size} diagnostic(s)")
+        mapped.take(5).forEach { d ->
+            val msgPreview = d.message.take(60).replace('\n', ' ')
+            println("    · L${d.start.line}:${d.start.character} sev=${d.severity} code='${d.code ?: ""}' msg='$msgPreview'")
+        }
     }
 }
 

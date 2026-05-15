@@ -18,6 +18,7 @@ internal abstract class JvmLexer(
                     i += 2
                     while (i < n && text[i] != '\n') i++
                     out += Token(TokenKind.COMMENT, start until i)
+                    emitTodoTags(text, start + 2, i, out)
                 }
                 c == '/' && i + 1 < n && text[i + 1] == '*' -> {
                     val start = i
@@ -28,7 +29,10 @@ internal abstract class JvmLexer(
                     while (i + 1 < n && !(text[i] == '*' && text[i + 1] == '/')) i++
                     val bodyEnd = i
                     i = (i + 2).coerceAtMost(n)
-                    out += Token(TokenKind.COMMENT, start until i)
+                    val kind = if (isDocComment) TokenKind.DOC_COMMENT else TokenKind.COMMENT
+                    out += Token(kind, start until i)
+                    val tagsStart = start + if (isDocComment) 3 else 2
+                    emitTodoTags(text, tagsStart, bodyEnd, out)
                     if (isDocComment) {
                         emitDocCommentTags(text, bodyStart = start + 3, bodyEnd = bodyEnd, out = out)
                     }
@@ -207,6 +211,16 @@ internal abstract class JvmLexer(
         return i
     }
 
+    private fun emitTodoTags(text: String, from: Int, to: Int, out: MutableList<Token>) {
+        if (from >= to) return
+        val slice = text.substring(from, to.coerceAtMost(text.length))
+        for (m in todoPattern.findAll(slice)) {
+            val absStart = from + m.range.first
+            val absEnd = from + m.range.last + 1
+            out += Token(TokenKind.TODO_TAG, absStart until absEnd)
+        }
+    }
+
     private fun emitDocCommentTags(text: String, bodyStart: Int, bodyEnd: Int, out: MutableList<Token>) {
         var i = bodyStart
         while (i < bodyEnd) {
@@ -237,6 +251,8 @@ internal abstract class JvmLexer(
         }
         return true
     }
+
+    private val todoPattern = Regex("""\b(TODO|FIXME|HACK|XXX|NOTE)\b(:[^\n]*)?""")
 
     private fun isDigit(c: Char) = c in '0'..'9'
     private fun isHexDigit(c: Char) = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'

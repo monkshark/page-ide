@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -817,7 +818,9 @@ fun EditorPanel(
                         }
                         return@CodeEditor true
                     }
-                    if (event.key == Key.F12 && event.isShiftPressed && !event.isCtrlPressed) {
+                    if ((event.key == Key.F12 && event.isShiftPressed && !event.isCtrlPressed) ||
+                        (event.key == Key.B && event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed)
+                    ) {
                         val cb = onRequestReferences
                         if (cb != null) {
                             val text = value.text
@@ -1062,7 +1065,9 @@ private fun wordStartAt(text: String, caret: Int): Int {
 private fun isInStringOrComment(tokens: List<Token>, text: String, caret: Int): Boolean {
     if (tokens.isNotEmpty()) {
         val hit = tokens.firstOrNull { caret >= it.start && caret < it.endExclusive }
-        if (hit != null) return hit.kind == TokenKind.STRING || hit.kind == TokenKind.COMMENT
+        if (hit != null) return hit.kind == TokenKind.STRING ||
+            hit.kind == TokenKind.COMMENT ||
+            hit.kind == TokenKind.DOC_COMMENT
     }
     return isInsideStringLiteral(text, caret)
 }
@@ -1188,6 +1193,8 @@ private class CombinedHighlightTransformation(
         TokenKind.STRING -> palette.string
         TokenKind.NUMBER -> palette.number
         TokenKind.COMMENT -> palette.comment
+        TokenKind.DOC_COMMENT -> palette.docComment
+        TokenKind.TODO_TAG -> palette.todoTag
         TokenKind.ANNOTATION -> palette.annotation
         TokenKind.TYPE -> palette.type
         TokenKind.IDENTIFIER -> palette.identifier

@@ -107,13 +107,13 @@ class KotlinLexerTest {
     fun `kdoc tag emitted as annotation overlay inside comment`() {
         val src = "/** @param a foo */fun f(a: Int) {}"
         val toks = tokens(src)
-        val comments = toks.filter { it.kind == TokenKind.COMMENT }
+        val docs = toks.filter { it.kind == TokenKind.DOC_COMMENT }
         val annotations = toks.filter { it.kind == TokenKind.ANNOTATION }
-        assertEquals(1, comments.size)
-        assertEquals("/** @param a foo */", src.substring(comments[0].range.first, comments[0].range.last + 1))
+        assertEquals(1, docs.size)
+        assertEquals("/** @param a foo */", src.substring(docs[0].range.first, docs[0].range.last + 1))
         assertEquals(1, annotations.size)
         assertEquals("@param", src.substring(annotations[0].range.first, annotations[0].range.last + 1))
-        assertTrue(annotations[0].range.first in comments[0].range)
+        assertTrue(annotations[0].range.first in docs[0].range)
     }
 
     @Test
@@ -131,6 +131,59 @@ class KotlinLexerTest {
         val annotations = tokens(src).filter { it.kind == TokenKind.ANNOTATION }
         val texts = annotations.map { src.substring(it.range.first, it.range.last + 1) }
         assertEquals(listOf("@param", "@param", "@return"), texts)
+    }
+
+    @Test
+    fun `TODO with colon extends highlight to end of line`() {
+        val src = "// TODO: refactor later\nval x = 1"
+        val todos = tokens(src).filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, todos.size)
+        assertEquals("TODO: refactor later", src.substring(todos[0].range.first, todos[0].range.last + 1))
+    }
+
+    @Test
+    fun `bare TODO without colon highlights only keyword`() {
+        val src = "// TODO is enough\nval x = 1"
+        val todos = tokens(src).filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, todos.size)
+        assertEquals("TODO", src.substring(todos[0].range.first, todos[0].range.last + 1))
+    }
+
+    @Test
+    fun `NOTE with colon extends highlight to end of line`() {
+        val src = "// NOTE: 캐시 정책 참고\nval x = 1"
+        val todos = tokens(src).filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, todos.size)
+        assertEquals("NOTE: 캐시 정책 참고", src.substring(todos[0].range.first, todos[0].range.last + 1))
+    }
+
+    @Test
+    fun `FIXME with colon extends highlight to end of line`() {
+        val src = "// FIXME: 빈 케이스\nval x = 1"
+        val todos = tokens(src).filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, todos.size)
+        assertEquals("FIXME: 빈 케이스", src.substring(todos[0].range.first, todos[0].range.last + 1))
+    }
+
+    @Test
+    fun `TODO inside KDoc with colon extends within doc body`() {
+        val src = "/** TODO: in doc */fun f() {}"
+        val toks = tokens(src)
+        val docs = toks.filter { it.kind == TokenKind.DOC_COMMENT }
+        val todos = toks.filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, docs.size)
+        assertEquals(1, todos.size)
+        assertEquals("TODO: in doc ", src.substring(todos[0].range.first, todos[0].range.last + 1))
+        assertTrue(todos[0].range.first in docs[0].range)
+    }
+
+    @Test
+    fun `TODO colon does not cross newline boundary`() {
+        val src = "// TODO: one line\nval next = 2"
+        val todos = tokens(src).filter { it.kind == TokenKind.TODO_TAG }
+        assertEquals(1, todos.size)
+        val text = src.substring(todos[0].range.first, todos[0].range.last + 1)
+        assertTrue(!text.contains('\n'), "TODO span leaked past newline: '$text'")
     }
 
     @Test

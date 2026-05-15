@@ -97,6 +97,23 @@ class RenameTest {
     }
 
     @Test
+    fun `applyToText preserves input order for edits at the same position`() {
+        val src = "class Circle : Shape()"
+        val pos = src.length
+        val edits = listOf(
+            RenameEdit(0, pos, 0, pos, " {"),
+            RenameEdit(0, pos, 0, pos, "\n    override fun area(): Double { }"),
+            RenameEdit(0, pos, 0, pos, "\n    override fun perimeter(): Double { }"),
+            RenameEdit(0, pos, 0, pos, "\n}"),
+        )
+        val out = RenameApply.applyToText(src, edits)
+        assertEquals(
+            "class Circle : Shape() {\n    override fun area(): Double { }\n    override fun perimeter(): Double { }\n}",
+            out,
+        )
+    }
+
+    @Test
     fun `prepareRename range-only`() {
         val either: Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior> =
             Either3.forFirst(Range(Position(1, 2), Position(1, 5)))

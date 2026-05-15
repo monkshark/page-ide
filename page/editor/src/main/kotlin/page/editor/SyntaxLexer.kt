@@ -5,6 +5,8 @@ enum class TokenKind {
     STRING,
     NUMBER,
     COMMENT,
+    DOC_COMMENT,
+    TODO_TAG,
     ANNOTATION,
     TYPE,
     IDENTIFIER,

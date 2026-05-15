@@ -67,8 +67,10 @@ import page.editor.SplitPaneState
 import page.editor.SyntaxLexers
 import page.editor.TabBook
 import kotlinx.coroutines.future.await
+import page.lsp.CodeActionEntry
 import page.lsp.DocumentSymbolEntry
 import page.lsp.RenameApply
+import page.lsp.RenameFileChange
 import page.lsp.RenameWorkspaceEdit
 import page.ui.Glass
 import page.ui.GlassPalette
@@ -103,6 +105,11 @@ fun main() = application {
     var documentSymbolList by remember { mutableStateOf<List<DocumentSymbolEntry>>(emptyList()) }
     var documentSymbolUri by remember { mutableStateOf("") }
     var workspaceSymbolOpen by remember { mutableStateOf(false) }
+    var codeActionOpen by remember { mutableStateOf(false) }
+    var codeActionList by remember { mutableStateOf<List<CodeActionEntry>>(emptyList()) }
+    var codeActionUri by remember { mutableStateOf<String?>(null) }
+    var codeActionText by remember { mutableStateOf<String?>(null) }
+    var codeActionSelected by remember { mutableStateOf(0) }
     var editorFocusVersion by remember { mutableStateOf(0) }
     val lsp = rememberLspController(workspaceRoot = rootDir)
     val currentLsp by rememberUpdatedState(lsp)
@@ -399,6 +406,17 @@ fun main() = application {
         val side = focusedPane
         val idx = paneOf(side).book.activeIndex
         if (idx in paneOf(side).book.tabs.indices) requestCloseTab(side, idx)
+    }
+    val activateAdjacentTab: (Int) -> Unit = { delta ->
+        val side = focusedPane
+        val book = paneOf(side).book
+        val n = book.tabs.size
+        if (n > 1) {
+            val next = ((book.activeIndex + delta) % n + n) % n
+            if (next != book.activeIndex) {
+                mutatePane(side) { it.copy(book = it.book.activate(next)) }
+            }
+        }
     }
     val anyDirty: () -> Boolean = {
         primaryPane.book.tabs.any(isUnsavedText) || secondaryPane.book.tabs.any(isUnsavedText)
@@ -698,6 +716,62 @@ fun main() = application {
             workspaceSymbolOpen = true
         }
     }
+    val triggerFormat: () -> Unit = {
+        val active = focused().book.active
+        val activePath = active?.path
+        val isKt = activePath?.let(::isKotlinSource) == true
+        if (activePath != null
+            && isKt
+            && currentLsp.status.value == LspController.Status.READY
+        ) {
+            currentLsp.formatting(activePath).whenComplete { edits, err ->
+                val list = edits.orEmpty()
+                if (err == null && list.isNotEmpty()) {
+                    val change = RenameFileChange(activePath.toUri().toString(), list)
+                    applyRename(RenameWorkspaceEdit(listOf(change)))
+                }
+            }
+        }
+    }
+    val triggerCodeAction: () -> Unit = {
+        val active = focused().book.active
+        val activePath = active?.path
+        val isKt = activePath?.let(::isKotlinSource) == true
+        if (activePath != null
+            && isKt
+            && currentLsp.status.value == LspController.Status.READY
+        ) {
+            val text = focused().editorValue.text
+            val caret = focused().editorValue.selection.start.coerceIn(0, text.length)
+            val (line, character) = offsetToLineChar(text, caret)
+            val snapshotUri = activePath.toUri().toString()
+            val snapshotText = text
+            currentLsp.codeActions(activePath, line, character, line, character).whenComplete { actions, err ->
+                if (err == null) {
+                    val raw = actions.orEmpty()
+                    val list = raw.map { entry ->
+                        val normalized = page.lsp.CodeActionNormalize.normalize(entry.edit, snapshotUri, snapshotText)
+                        if (normalized !== entry.edit) {
+                            println("[lsp] codeAction normalize ▶ \"${entry.title}\" — KLS edit 보정됨 (import \\n 보강)")
+                            entry.copy(edit = normalized)
+                        } else entry
+                    }
+                    codeActionList = list
+                    codeActionUri = snapshotUri
+                    codeActionText = snapshotText
+                    codeActionSelected = list.indexOfFirst { it.isPreferred }.coerceAtLeast(0)
+                    codeActionOpen = list.isNotEmpty()
+                    if (list.isNotEmpty()) {
+                        println("[lsp] codeAction debug ▼ $snapshotUri @($line,$character) — ${list.size} action(s)")
+                        for ((idx, entry) in list.withIndex()) {
+                            println("[lsp] codeAction debug [${idx + 1}/${list.size}]")
+                            println(page.lsp.CodeActionDebug.format(entry, snapshotUri, snapshotText))
+                        }
+                    }
+                }
+            }
+        }
+    }
     val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
     val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
         if (event.type != KeyEventType.KeyDown) return@handler false
@@ -752,6 +826,19 @@ fun main() = application {
                 }
                 else -> false
             }
+        } else if (event.isAltPressed && event.isShiftPressed && !event.isCtrlPressed
+            && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+            triggerFormat(); true
+        } else if (event.isAltPressed && !event.isShiftPressed && !event.isCtrlPressed
+            && focusedSearch == null
+            && (event.key == Key.Enter || event.key == Key.NumPadEnter)) {
+            triggerCodeAction(); true
+        } else if (event.isAltPressed && !event.isShiftPressed && !event.isCtrlPressed
+            && focusedSearch == null && event.key == Key.DirectionLeft) {
+            activateAdjacentTab(-1); true
+        } else if (event.isAltPressed && !event.isShiftPressed && !event.isCtrlPressed
+            && focusedSearch == null && event.key == Key.DirectionRight) {
+            activateAdjacentTab(1); true
         } else if (event.key == Key.F8) {
             jumpProblemRelative(!event.isShiftPressed)
             true
@@ -769,6 +856,11 @@ fun main() = application {
         LaunchedEffect(Unit) { frameRef.value = window }
         val openWsRef = rememberUpdatedState(openWorkspaceSymbol)
         val openDocRef = rememberUpdatedState(openDocumentSymbol)
+        val triggerFormatRef = rememberUpdatedState(triggerFormat)
+        val triggerCodeActionRef = rememberUpdatedState(triggerCodeAction)
+        val codeActionOpenRef = rememberUpdatedState(codeActionOpen)
+        val codeActionListRef = rememberUpdatedState(codeActionList)
+        val codeActionSelectedRef = rememberUpdatedState(codeActionSelected)
         DisposableEffect(window) {
             val frame = window
             val dispatcher = java.awt.KeyEventDispatcher { e ->
@@ -776,14 +868,57 @@ fun main() = application {
                 if (!frame.isFocused) return@KeyEventDispatcher false
                 val ctrl = (e.modifiersEx and java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0
                 val alt = (e.modifiersEx and java.awt.event.InputEvent.ALT_DOWN_MASK) != 0
-                if (!ctrl) return@KeyEventDispatcher false
+                val shift = (e.modifiersEx and java.awt.event.InputEvent.SHIFT_DOWN_MASK) != 0
+                if (codeActionOpenRef.value && !ctrl && !alt && !shift) {
+                    val list = codeActionListRef.value
+                    val sel = codeActionSelectedRef.value
+                    when (e.keyCode) {
+                        java.awt.event.KeyEvent.VK_ESCAPE -> {
+                            codeActionOpen = false
+                            frameRef.value?.requestFocus()
+                            editorFocusVersion += 1
+                            return@KeyEventDispatcher true
+                        }
+                        java.awt.event.KeyEvent.VK_UP -> {
+                            if (list.isNotEmpty()) {
+                                codeActionSelected = ((sel - 1) + list.size) % list.size
+                            }
+                            return@KeyEventDispatcher true
+                        }
+                        java.awt.event.KeyEvent.VK_DOWN -> {
+                            if (list.isNotEmpty()) {
+                                codeActionSelected = (sel + 1) % list.size
+                            }
+                            return@KeyEventDispatcher true
+                        }
+                        java.awt.event.KeyEvent.VK_ENTER -> {
+                            val pick = list.getOrNull(sel)
+                            codeActionOpen = false
+                            if (pick != null && pick.isExecutable) {
+                                println("[lsp] codeAction apply ▶ \"${pick.title}\" — ${pick.edit.changes.sumOf { it.edits.size }} edit(s)")
+                                applyRename(pick.edit)
+                            }
+                            frameRef.value?.requestFocus()
+                            editorFocusVersion += 1
+                            return@KeyEventDispatcher true
+                        }
+                    }
+                }
                 when {
-                    !alt && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
+                    ctrl && !alt && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
                         openWsRef.value()
                         true
                     }
-                    e.keyCode == java.awt.event.KeyEvent.VK_F12 -> {
+                    ctrl && e.keyCode == java.awt.event.KeyEvent.VK_F12 -> {
                         openDocRef.value()
+                        true
+                    }
+                    !ctrl && alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_F -> {
+                        triggerFormatRef.value()
+                        true
+                    }
+                    !ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_ENTER -> {
+                        triggerCodeActionRef.value()
                         true
                     }
                     else -> false
@@ -887,6 +1022,28 @@ fun main() = application {
                     },
                     linePreviewFor = { uri, line -> currentLsp.linePreviewFor(uri, line) },
                     editorFocusVersion = editorFocusVersion,
+                    codeActionPreviewVisible = codeActionOpen,
+                    codeActionPreviewActions = codeActionList,
+                    codeActionPreviewSelected = codeActionSelected,
+                    onCodeActionSelectedChange = {
+                        codeActionSelected = it.coerceIn(0, codeActionList.lastIndex.coerceAtLeast(0))
+                    },
+                    codeActionPreviewUri = codeActionUri,
+                    codeActionPreviewText = codeActionText,
+                    onCodeActionApply = { action ->
+                        codeActionOpen = false
+                        if (action.isExecutable) {
+                            println("[lsp] codeAction apply ▶ \"${action.title}\" — ${action.edit.changes.sumOf { it.edits.size }} edit(s)")
+                            applyRename(action.edit)
+                        }
+                        frameRef.value?.requestFocus()
+                        editorFocusVersion += 1
+                    },
+                    onCodeActionDismiss = {
+                        codeActionOpen = false
+                        frameRef.value?.requestFocus()
+                        editorFocusVersion += 1
+                    },
                 )
                 if (findInFiles) {
                     FindInFilesDialog(
@@ -1004,6 +1161,16 @@ private fun windowTitle(path: Path?): String {
     return "$name — ${PageIdentity.NAME}"
 }
 
+private fun offsetToLineChar(text: String, offset: Int): Pair<Int, Int> {
+    val end = offset.coerceIn(0, text.length)
+    var line = 0
+    var col = 0
+    for (i in 0 until end) {
+        if (text[i] == '\n') { line += 1; col = 0 } else col += 1
+    }
+    return line to col
+}
+
 private fun isKotlinSource(path: Path): Boolean {
     val name = path.fileName?.toString()?.lowercase() ?: return false
     return name.endsWith(".kt") || name.endsWith(".kts")
@@ -1061,6 +1228,14 @@ private fun Shell(
     onReferencesResizeDelta: (Dp) -> Unit,
     linePreviewFor: (String, Int) -> String?,
     editorFocusVersion: Int = 0,
+    codeActionPreviewVisible: Boolean = false,
+    codeActionPreviewActions: List<CodeActionEntry> = emptyList(),
+    codeActionPreviewSelected: Int = 0,
+    onCodeActionSelectedChange: (Int) -> Unit = {},
+    codeActionPreviewUri: String? = null,
+    codeActionPreviewText: String? = null,
+    onCodeActionApply: (CodeActionEntry) -> Unit = {},
+    onCodeActionDismiss: () -> Unit = {},
 ) {
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -1176,6 +1351,18 @@ private fun Shell(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+            }
+            if (codeActionPreviewVisible) {
+                CodeActionPreviewPanel(
+                    actions = codeActionPreviewActions,
+                    selected = codeActionPreviewSelected,
+                    onSelectedChange = onCodeActionSelectedChange,
+                    currentUri = codeActionPreviewUri,
+                    currentText = codeActionPreviewText,
+                    onApply = onCodeActionApply,
+                    onDismiss = onCodeActionDismiss,
+                    width = 420.dp,
+                )
             }
         }
         if (problemsOpen) {

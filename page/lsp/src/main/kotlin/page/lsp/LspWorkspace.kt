@@ -1,5 +1,7 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CodeActionContext
+import org.eclipse.lsp4j.CodeActionParams
 import org.eclipse.lsp4j.CompletionContext
 import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.CompletionTriggerKind
@@ -7,10 +9,13 @@ import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
+import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.DocumentSymbolParams
+import org.eclipse.lsp4j.FormattingOptions
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.PrepareRenameParams
+import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.ReferenceContext
 import org.eclipse.lsp4j.ReferenceParams
 import org.eclipse.lsp4j.RenameParams
@@ -230,6 +235,54 @@ class LspWorkspace(private val client: LspClient) {
                     either == null -> null
                     either.isLeft -> DocumentSymbolEntry.fromLspSymbolInformation(either.left)
                     either.isRight -> DocumentSymbolEntry.fromLspDocumentSymbol(either.right)
+                    else -> null
+                }
+            }
+        }
+    }
+
+    fun formatting(
+        uri: String,
+        tabSize: Int = 4,
+        insertSpaces: Boolean = true,
+    ): CompletableFuture<List<RenameEdit>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val params = DocumentFormattingParams(
+            TextDocumentIdentifier(uri),
+            FormattingOptions(tabSize, insertSpaces),
+        )
+        return client.server().textDocumentService.formatting(params).thenApply { edits ->
+            edits.orEmpty().mapNotNull { te ->
+                val r = te.range ?: return@mapNotNull null
+                RenameEdit(
+                    startLine = r.start.line,
+                    startCharacter = r.start.character,
+                    endLine = r.end.line,
+                    endCharacter = r.end.character,
+                    newText = te.newText.orEmpty(),
+                )
+            }
+        }
+    }
+
+    fun codeAction(
+        uri: String,
+        startLine: Int,
+        startCharacter: Int,
+        endLine: Int,
+        endCharacter: Int,
+        diagnostics: List<org.eclipse.lsp4j.Diagnostic> = emptyList(),
+    ): CompletableFuture<List<CodeActionEntry>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
+        val context = CodeActionContext(diagnostics)
+        val params = CodeActionParams(TextDocumentIdentifier(uri), range, context)
+        return client.server().textDocumentService.codeAction(params).thenApply { list ->
+            list.orEmpty().mapNotNull { either ->
+                when {
+                    either == null -> null
+                    either.isLeft -> CodeActionEntry.fromLspCommand(either.left)
+                    either.isRight -> CodeActionEntry.fromLspCodeAction(either.right)
                     else -> null
                 }
             }

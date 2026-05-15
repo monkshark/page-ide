@@ -1,5 +1,8 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CodeAction
+import org.eclipse.lsp4j.CodeActionParams
+import org.eclipse.lsp4j.Command
 import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.DidChangeConfigurationParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
@@ -7,6 +10,7 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DidSaveTextDocumentParams
+import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.DocumentSymbol
 import org.eclipse.lsp4j.DocumentSymbolParams
 import org.eclipse.lsp4j.Hover
@@ -27,6 +31,7 @@ import org.eclipse.lsp4j.SignatureHelp
 import org.eclipse.lsp4j.SignatureHelpParams
 import org.eclipse.lsp4j.SymbolInformation
 import org.eclipse.lsp4j.TextDocumentSyncKind
+import org.eclipse.lsp4j.TextEdit
 import org.eclipse.lsp4j.WorkspaceEdit
 import org.eclipse.lsp4j.WorkspaceSymbol
 import org.eclipse.lsp4j.WorkspaceSymbolParams
@@ -53,6 +58,8 @@ class FakeLanguageServer : LanguageServer {
     val renameCalls = ConcurrentLinkedQueue<RenameParams>()
     val documentSymbolCalls = ConcurrentLinkedQueue<DocumentSymbolParams>()
     val workspaceSymbolCalls = ConcurrentLinkedQueue<WorkspaceSymbolParams>()
+    val formattingCalls = ConcurrentLinkedQueue<DocumentFormattingParams>()
+    val codeActionCalls = ConcurrentLinkedQueue<CodeActionParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
     @Volatile var referencesResponse: MutableList<out Location>? = null
@@ -61,6 +68,8 @@ class FakeLanguageServer : LanguageServer {
     @Volatile var renameResponse: WorkspaceEdit? = null
     @Volatile var documentSymbolResponse: MutableList<Either<SymbolInformation, DocumentSymbol>>? = null
     @Volatile var workspaceSymbolResponse: Either<MutableList<out SymbolInformation>, MutableList<out WorkspaceSymbol>>? = null
+    @Volatile var formattingResponse: MutableList<out TextEdit>? = null
+    @Volatile var codeActionResponse: MutableList<Either<Command, CodeAction>>? = null
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
 
@@ -102,6 +111,16 @@ class FakeLanguageServer : LanguageServer {
         ): CompletableFuture<MutableList<Either<SymbolInformation, DocumentSymbol>>> {
             documentSymbolCalls += params
             return CompletableFuture.completedFuture(documentSymbolResponse)
+        }
+        override fun formatting(params: DocumentFormattingParams): CompletableFuture<MutableList<out TextEdit>> {
+            formattingCalls += params
+            return CompletableFuture.completedFuture(formattingResponse)
+        }
+        override fun codeAction(
+            params: CodeActionParams,
+        ): CompletableFuture<MutableList<Either<Command, CodeAction>>> {
+            codeActionCalls += params
+            return CompletableFuture.completedFuture(codeActionResponse)
         }
     }
 

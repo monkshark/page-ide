@@ -1,5 +1,7 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CodeAction
+import org.eclipse.lsp4j.Command
 import org.eclipse.lsp4j.DocumentSymbol
 import org.eclipse.lsp4j.Hover
 import org.eclipse.lsp4j.Location
@@ -476,6 +478,127 @@ class LspWorkspaceTest {
     fun `workspaceSymbolsLocated returns empty for null server response`() {
         harness.fakeServer.workspaceSymbolResponse = null
         val list = workspace.workspaceSymbolsLocated("X").get(2, TimeUnit.SECONDS)
+        assertTrue(list.isEmpty())
+    }
+
+    @Test
+    fun `formatting on unopened doc returns empty without server call`() {
+        val edits = workspace.formatting("file:///nope.kt").get(2, TimeUnit.SECONDS)
+        assertTrue(edits.isEmpty())
+        assertTrue(harness.fakeServer.formattingCalls.isEmpty())
+    }
+
+    @Test
+    fun `formatting forwards params and maps text edits`() {
+        val uri = "file:///FMT.kt"
+        workspace.didOpen(uri, "kotlin", "fun  a()  {}")
+        harness.fakeServer.formattingResponse = mutableListOf(
+            TextEdit(Range(Position(0, 3), Position(0, 5)), " "),
+            TextEdit(Range(Position(0, 7), Position(0, 9)), " "),
+        )
+
+        val edits = workspace.formatting(uri, tabSize = 2, insertSpaces = true).get(2, TimeUnit.SECONDS)
+        assertEquals(2, edits.size)
+        assertEquals(0, edits[0].startLine)
+        assertEquals(3, edits[0].startCharacter)
+        assertEquals(5, edits[0].endCharacter)
+        assertEquals(" ", edits[0].newText)
+        assertEquals(7, edits[1].startCharacter)
+
+        waitUntil { harness.fakeServer.formattingCalls.isNotEmpty() }
+        val sent = harness.fakeServer.formattingCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(2, sent.options.tabSize)
+        assertTrue(sent.options.isInsertSpaces)
+    }
+
+    @Test
+    fun `formatting passes tabs option when insertSpaces is false`() {
+        val uri = "file:///FMT2.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        workspace.formatting(uri, tabSize = 4, insertSpaces = false).get(2, TimeUnit.SECONDS)
+        waitUntil { harness.fakeServer.formattingCalls.isNotEmpty() }
+        val sent = harness.fakeServer.formattingCalls.first()
+        assertEquals(4, sent.options.tabSize)
+        assertFalse(sent.options.isInsertSpaces)
+    }
+
+    @Test
+    fun `codeAction on unopened doc returns empty without server call`() {
+        val list = workspace.codeAction("file:///nope.kt", 0, 0, 0, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(list.isEmpty())
+        assertTrue(harness.fakeServer.codeActionCalls.isEmpty())
+    }
+
+    @Test
+    fun `codeAction maps CodeAction with workspace edit and isPreferred`() {
+        val uri = "file:///CA.kt"
+        workspace.didOpen(uri, "kotlin", "val x = 1")
+        val we = WorkspaceEdit().apply {
+            changes = mutableMapOf(
+                uri to mutableListOf(TextEdit(Range(Position(0, 4), Position(0, 5)), "y"))
+            )
+        }
+        val action = CodeAction("Rename to y").apply {
+            kind = "quickfix"
+            isPreferred = true
+            edit = we
+        }
+        harness.fakeServer.codeActionResponse = mutableListOf(Either.forRight(action))
+
+        val list = workspace.codeAction(uri, 0, 4, 0, 5).get(2, TimeUnit.SECONDS)
+        assertEquals(1, list.size)
+        assertEquals("Rename to y", list[0].title)
+        assertEquals("quickfix", list[0].kind)
+        assertTrue(list[0].isPreferred)
+        assertTrue(list[0].hasEdit)
+        assertTrue(list[0].isExecutable)
+        assertEquals(1, list[0].edit.changes.size)
+        assertEquals("y", list[0].edit.changes[0].edits[0].newText)
+    }
+
+    @Test
+    fun `codeAction maps Command as title-only non-executable entry`() {
+        val uri = "file:///CC.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        val cmd = Command("Show in panel", "page.showPanel")
+        harness.fakeServer.codeActionResponse = mutableListOf(Either.forLeft(cmd))
+
+        val list = workspace.codeAction(uri, 0, 0, 0, 0).get(2, TimeUnit.SECONDS)
+        assertEquals(1, list.size)
+        assertEquals("Show in panel", list[0].title)
+        assertNull(list[0].kind)
+        assertFalse(list[0].hasEdit)
+        assertFalse(list[0].isExecutable)
+    }
+
+    @Test
+    fun `codeAction forwards range and diagnostics in context`() {
+        val uri = "file:///CD.kt"
+        workspace.didOpen(uri, "kotlin", "val z = 1")
+        val diag = org.eclipse.lsp4j.Diagnostic(
+            Range(Position(0, 4), Position(0, 5)),
+            "unused variable",
+        )
+        harness.fakeServer.codeActionResponse = mutableListOf()
+        workspace.codeAction(uri, 0, 2, 0, 6, listOf(diag)).get(2, TimeUnit.SECONDS)
+
+        waitUntil { harness.fakeServer.codeActionCalls.isNotEmpty() }
+        val sent = harness.fakeServer.codeActionCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(0, sent.range.start.line)
+        assertEquals(2, sent.range.start.character)
+        assertEquals(6, sent.range.end.character)
+        assertEquals(1, sent.context.diagnostics.size)
+        assertEquals("unused variable", sent.context.diagnostics[0].message)
+    }
+
+    @Test
+    fun `codeAction returns empty for null server response`() {
+        val uri = "file:///CE.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.codeActionResponse = null
+        val list = workspace.codeAction(uri, 0, 0, 0, 0).get(2, TimeUnit.SECONDS)
         assertTrue(list.isEmpty())
     }
 

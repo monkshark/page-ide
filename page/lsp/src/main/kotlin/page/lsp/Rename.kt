@@ -137,9 +137,11 @@ data class RenamePrepare(
 object RenameApply {
     fun applyToText(text: String, edits: List<RenameEdit>): String {
         if (edits.isEmpty()) return text
-        val ordered = edits.sortedWith(
-            compareByDescending<RenameEdit> { it.startLine }.thenByDescending { it.startCharacter }
-        )
+        val ordered = edits.withIndex().sortedWith(
+            compareByDescending<IndexedValue<RenameEdit>> { it.value.startLine }
+                .thenByDescending { it.value.startCharacter }
+                .thenByDescending { it.index }
+        ).map { it.value }
         val lineStarts = computeLineStarts(text)
         val sb = StringBuilder(text)
         for (e in ordered) {
