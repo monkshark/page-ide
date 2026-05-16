@@ -6,7 +6,7 @@ import org.eclipse.lsp4j.services.LanguageClient
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 
-class LspTestHarness {
+class LspTestHarness(initialSettings: Any? = null) {
     val fakeServer = FakeLanguageServer()
     val client: LspClient
     private val transport: LspTransport
@@ -19,7 +19,7 @@ class LspTestHarness {
         val clientFromServer = PipedInputStream(serverToClient, BUFFER)
 
         transport = StreamTransport(clientFromServer, clientToServer)
-        client = LspClient(transport)
+        client = LspClient(transport, initialSettings = initialSettings)
 
         serverLauncher = LSPLauncher.createServerLauncher(fakeServer, serverFromClient, serverToClient)
         serverLauncher.startListening()

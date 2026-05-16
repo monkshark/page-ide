@@ -13,6 +13,7 @@ import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.DocumentSymbolParams
 import org.eclipse.lsp4j.FormattingOptions
 import org.eclipse.lsp4j.HoverParams
+import org.eclipse.lsp4j.InlayHintParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.PrepareRenameParams
 import org.eclipse.lsp4j.Range
@@ -262,6 +263,21 @@ class LspWorkspace(private val client: LspClient) {
                     newText = te.newText.orEmpty(),
                 )
             }
+        }
+    }
+
+    fun inlayHints(
+        uri: String,
+        startLine: Int,
+        startCharacter: Int,
+        endLine: Int,
+        endCharacter: Int,
+    ): CompletableFuture<List<InlayHintItem>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
+        val params = InlayHintParams(TextDocumentIdentifier(uri), range)
+        return client.server().textDocumentService.inlayHint(params).thenApply { list ->
+            InlayHintItem.fromLspList(list)
         }
     }
 

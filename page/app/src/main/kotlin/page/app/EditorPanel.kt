@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -81,6 +82,7 @@ import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
 import page.lsp.HoverInfo
+import page.lsp.InlayHintItem
 import page.lsp.RenamePrepare
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureActiveParam
@@ -116,6 +118,8 @@ fun EditorPanel(
     lspStatusText: String? = null,
     lspActivities: List<LspController.Activity> = emptyList(),
     onProblemsToggle: (() -> Unit)? = null,
+    todoCount: Int = 0,
+    onTodoToggle: (() -> Unit)? = null,
     onRequestCompletion: ((line: Int, character: Int, triggerCharacter: String?) -> CompletableFuture<CompletionList>)? = null,
     onRequestHover: ((line: Int, character: Int) -> CompletableFuture<HoverInfo?>)? = null,
     onRequestDefinition: ((line: Int, character: Int) -> CompletableFuture<List<DefinitionTarget>>)? = null,
@@ -125,7 +129,11 @@ fun EditorPanel(
     onRequestRename: ((line: Int, character: Int, newName: String) -> CompletableFuture<RenameWorkspaceEdit>)? = null,
     onApplyRename: ((RenameWorkspaceEdit) -> Unit)? = null,
     onRequestReferences: ((line: Int, character: Int, symbolName: String) -> Unit)? = null,
+    onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
+    workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
+    initialFoldedStartLines: Set<Int> = emptySet(),
+    onFoldStartLinesChange: (Set<Int>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -144,9 +152,56 @@ fun EditorPanel(
     val foldPlaceholderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
     val foldPlaceholderBg = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f)
     val palette = Glass.colors.syntax
+    val defaultTodoColors = mapOf(
+        "TODO" to MaterialTheme.colorScheme.secondary,
+        "FIXME" to Glass.colors.error,
+        "HACK" to Glass.colors.warn,
+        "XXX" to MaterialTheme.colorScheme.tertiary,
+        "NOTE" to MaterialTheme.colorScheme.primary,
+        "BUG" to Color(0xFFD13438),
+        "REVIEW" to Color(0xFF1AB1A8),
+        "EXCEPTION" to Color(0xFFC2185B),
+    )
+    val customKeywordColors = workspaceRoot?.let { KeywordOverridesStore.load(it).colors }.orEmpty()
+    val todoColors = defaultTodoColors + customKeywordColors.mapNotNull { (k, hex) ->
+        parseHexColor(hex)?.let { k.uppercase() to it }
+    }.toMap()
 
     val tokens = remember(value.text, lexer) {
         lexer?.tokenize(value.text).orEmpty()
+    }
+
+    val multiKeywordComments = remember(value.text, tokens) {
+        TodoMultiKeyword.analyze(value.text, tokens)
+    }
+    val keywordOverrideByRange = remember(multiKeywordComments, todoColors, palette) {
+        multiKeywordComments.associate { c ->
+            c.commentRange to (todoColors[c.effectiveKeyword] ?: palette.todoTag)
+        }
+    }
+    val multiKeywordByLine = remember(multiKeywordComments, todoColors, palette) {
+        multiKeywordComments.associateBy({ it.line }) { c ->
+            MultiKeywordChoice(
+                commentRange = c.commentRange,
+                chosenKeyword = c.effectiveKeyword,
+                keywords = c.keywords,
+                chosenColor = todoColors[c.effectiveKeyword] ?: palette.todoTag,
+                keywordColors = c.keywords.associateWith { kw -> todoColors[kw] ?: palette.todoTag },
+            )
+        }
+    }
+    val onPickKeyword: (IntRange, String, String) -> Unit = { commentRange, oldKeyword, newKeyword ->
+        if (oldKeyword != newKeyword) {
+            val rewritten = rewriteFirstKeyword(value.text, commentRange, oldKeyword, newKeyword)
+            if (rewritten != null) {
+                val delta = rewritten.length - value.text.length
+                val sel = value.selection
+                val newSel = if (sel.start > commentRange.last) {
+                    TextRange(sel.start + delta, sel.end + delta)
+                } else sel
+                onValueChange(value.copy(text = rewritten, selection = newSel))
+            }
+        }
     }
 
     val bracketMatch = remember(value.text, value.selection.start, value.selection.end) {
@@ -157,6 +212,7 @@ fun EditorPanel(
     val errorColor = Glass.colors.error
     val warningColor = Glass.colors.warn
     val infoColor = MaterialTheme.colorScheme.primary
+    val hintColor = MaterialTheme.colorScheme.tertiary
     val tabstopActiveColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val tabstopPendingColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
     val diagnosticDecorations = remember(value.text, diagnostics) {
@@ -167,9 +223,16 @@ fun EditorPanel(
             val color = when (d.severity) {
                 DiagnosticSeverity.ERROR -> errorColor
                 DiagnosticSeverity.WARNING -> warningColor
-                DiagnosticSeverity.INFO, DiagnosticSeverity.HINT -> infoColor
+                DiagnosticSeverity.INFO -> infoColor
+                DiagnosticSeverity.HINT -> hintColor
             }
-            EditorDecoration(startOff, endOff, color, EditorDecoration.Style.WAVY_UNDERLINE)
+            val style = when (d.severity) {
+                DiagnosticSeverity.ERROR, DiagnosticSeverity.WARNING ->
+                    EditorDecoration.Style.WAVY_UNDERLINE
+                DiagnosticSeverity.INFO, DiagnosticSeverity.HINT ->
+                    EditorDecoration.Style.DOTTED_UNDERLINE
+            }
+            EditorDecoration(startOff, endOff, color, style)
         }
     }
     val errorCount = diagnostics.count { it.severity == DiagnosticSeverity.ERROR }
@@ -205,6 +268,7 @@ fun EditorPanel(
         val cb = onRequestHover ?: return@LaunchedEffect
         val text = value.text
         val safeOff = off.coerceIn(0, text.length)
+        if (isInStringOrComment(tokens, text, safeOff)) return@LaunchedEffect
         val pos = TextBuffer(text).lineColOf(safeOff)
         delay(350)
         if (token != lspHoverRequestToken) return@LaunchedEffect
@@ -228,6 +292,21 @@ fun EditorPanel(
 
     val foldRegions = remember(value.text) { FoldRegions.detect(value.text) }
     var foldedRegions by remember(activePath) { mutableStateOf<Set<FoldRegions.Region>>(emptySet()) }
+    var initialFoldApplied by remember(activePath) { mutableStateOf(false) }
+    LaunchedEffect(activePath, foldRegions) {
+        if (initialFoldApplied) return@LaunchedEffect
+        if (initialFoldedStartLines.isEmpty()) {
+            initialFoldApplied = true
+            return@LaunchedEffect
+        }
+        val matched = foldRegions.filter { it.startLine in initialFoldedStartLines }.toSet()
+        if (matched.isNotEmpty()) foldedRegions = matched
+        initialFoldApplied = true
+    }
+    LaunchedEffect(foldedRegions, initialFoldApplied) {
+        if (!initialFoldApplied) return@LaunchedEffect
+        onFoldStartLinesChange(foldedRegions.map { it.startLine }.toSet())
+    }
     val activeFolds = remember(foldedRegions, foldRegions) {
         val live = foldRegions.toSet()
         foldedRegions.filter { it in live }.toSet()
@@ -253,7 +332,7 @@ fun EditorPanel(
         }
         map.toMap()
     }
-    val gutterLines = remember(buffer.lineCount, foldStartByLine, foldedStartLines, hiddenLines, severityByLine) {
+    val gutterLines = remember(buffer.lineCount, foldStartByLine, foldedStartLines, hiddenLines, severityByLine, multiKeywordByLine) {
         (0 until buffer.lineCount)
             .filter { it !in hiddenLines }
             .map { ln ->
@@ -262,22 +341,55 @@ fun EditorPanel(
                     foldable = ln in foldStartByLine,
                     folded = ln in foldedStartLines,
                     severity = severityByLine[ln],
+                    multiKeyword = multiKeywordByLine[ln],
                 )
             }
     }
 
+    var inlayHints by remember(activePath) { mutableStateOf<List<InlayHintItem>>(emptyList()) }
+    LaunchedEffect(activePath, value.text, onRequestInlayHints) {
+        val cb = onRequestInlayHints
+        if (cb == null) {
+            inlayHints = emptyList()
+            return@LaunchedEffect
+        }
+        delay(300)
+        val lineCount = buffer.lineCount
+        cb(0, 0, lineCount, 0).whenComplete { hints, _ ->
+            inlayHints = hints.orEmpty()
+        }
+    }
+    val inlayHintDisplays = remember(inlayHints, value.text) {
+        val text = value.text
+        inlayHints.mapNotNull { h ->
+            val off = lineColToOffset(text, h.line, h.character)
+            if (off < 0) null
+            else InlayHintDisplay(
+                originalOffset = off,
+                label = h.label,
+                kind = h.kind,
+                paddingLeft = h.paddingLeft,
+                paddingRight = h.paddingRight,
+            )
+        }
+    }
+    val inlayHintColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+
     val visualTransformation = remember(
         search, tokens, bracketMatch, matchBg, activeBg, bracketBg, palette,
-        foldSegments, foldPlaceholderColor, foldPlaceholderBg,
+        foldSegments, foldPlaceholderColor, foldPlaceholderBg, todoColors,
+        keywordOverrideByRange, inlayHintDisplays, inlayHintColor,
     ) {
         val matches = search?.matches.orEmpty()
         val activeIndex = search?.activeMatchIndex ?: -1
-        if (tokens.isEmpty() && matches.isEmpty() && bracketMatch == null && foldSegments.isEmpty()) {
+        if (tokens.isEmpty() && matches.isEmpty() && bracketMatch == null && foldSegments.isEmpty() && inlayHintDisplays.isEmpty()) {
             VisualTransformation.None
         } else {
             CombinedHighlightTransformation(
                 tokens = tokens,
                 palette = palette,
+                todoColors = todoColors,
+                commentColorOverrides = keywordOverrideByRange,
                 matches = matches,
                 activeIndex = activeIndex,
                 matchBg = matchBg,
@@ -288,6 +400,11 @@ fun EditorPanel(
                 foldPlaceholderStyle = SpanStyle(
                     color = foldPlaceholderColor,
                     background = foldPlaceholderBg,
+                ),
+                inlayHints = inlayHintDisplays,
+                inlayHintStyle = SpanStyle(
+                    color = inlayHintColor,
+                    fontSize = 11.sp,
                 ),
             )
         }
@@ -319,6 +436,8 @@ fun EditorPanel(
     var completionSelectedIndex by remember(activePath) { mutableStateOf(0) }
     var completionTriggerOffset by remember(activePath) { mutableStateOf(-1) }
     var completionRequestToken by remember(activePath) { mutableStateOf(0) }
+    var commentKeywordMode by remember(activePath) { mutableStateOf(false) }
+    var commentKeywordNeedsSpace by remember(activePath) { mutableStateOf(false) }
     var lastSeenText by remember(activePath) { mutableStateOf(value.text) }
     var lastSeenSelectionLen by remember(activePath) { mutableStateOf(0) }
     var activeTabstops by remember(activePath) { mutableStateOf<List<page.lsp.SnippetTabstop>>(emptyList()) }
@@ -362,6 +481,8 @@ fun EditorPanel(
         completionItems = emptyList()
         completionSelectedIndex = 0
         completionTriggerOffset = -1
+        commentKeywordMode = false
+        commentKeywordNeedsSpace = false
     }
 
     val closeSignatureHelp: () -> Unit = {
@@ -455,6 +576,10 @@ fun EditorPanel(
             closeCompletion()
             return@lambda
         }
+        if (commentKeywordMode && item.insertText.isEmpty() && item.label.isEmpty()) {
+            closeCompletion()
+            return@lambda
+        }
         val text = value.text
         val caret = value.selection.end.coerceIn(0, text.length)
         val edit = item.edit
@@ -474,7 +599,8 @@ fun EditorPanel(
             replaceStart = completionTriggerOffset.coerceIn(0, caret)
             replaceEnd = caret
         }
-        val rawInsert = item.insertText
+        val rawInsert = if (commentKeywordMode && commentKeywordNeedsSpace) " " + item.insertText
+        else item.insertText
         val expanded = if (item.isSnippet) SnippetExpander.expand(rawInsert)
         else page.lsp.ExpandedSnippet(rawInsert, rawInsert.length)
         val addEdits = item.additionalEdits
@@ -548,7 +674,23 @@ fun EditorPanel(
         }
         val isInsertOne = newText.length == oldText.length + 1 && newCaret > 0
         var didTrigger = false
-        if (isInsertOne) {
+        val commentCtx = CommentKeywordCompletion.detect(newText, newCaret)
+            ?.takeUnless { isInsideStringLiteral(newText, it.anchor) }
+        if (commentCtx != null) {
+            val needsRefresh = !commentKeywordMode || completionTriggerOffset != commentCtx.anchor
+            if (needsRefresh) {
+                completionRequestToken += 1
+                completionItems = CommentKeywordCompletion.items
+                completionTriggerOffset = commentCtx.anchor
+                completionSelectedIndex = 0
+                commentKeywordMode = true
+            }
+            commentKeywordNeedsSpace = commentCtx.needsLeadingSpace
+            didTrigger = true
+        } else if (commentKeywordMode) {
+            closeCompletion()
+        }
+        if (isInsertOne && !didTrigger) {
             val inserted = newText[newCaret - 1]
             val isWordChar = inserted.isLetter() || inserted == '_'
             val prevIsBoundary = newCaret < 2 ||
@@ -602,15 +744,19 @@ fun EditorPanel(
 
     val completionDisplay = remember(filteredItems) {
         filteredItems.map { item ->
-            val displayLabel = sanitizeLabel(item.label)
-                ?: sanitizeLabel(item.filterText)
-                ?: sanitizeLabel(item.insertText)
-                ?: "<unnamed>"
-            CompletionDisplay(
-                label = displayLabel,
-                kindHint = kindHint(item.kind),
-                detail = item.detail?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() },
-            )
+            if (item.insertText.isEmpty() && item.label.isEmpty()) {
+                CompletionDisplay(label = " ", kindHint = "", detail = null)
+            } else {
+                val displayLabel = sanitizeLabel(item.label)
+                    ?: sanitizeLabel(item.filterText)
+                    ?: sanitizeLabel(item.insertText)
+                    ?: "<unnamed>"
+                CompletionDisplay(
+                    label = displayLabel,
+                    kindHint = kindHint(item.kind),
+                    detail = item.detail?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() },
+                )
+            }
         }
     }
 
@@ -707,6 +853,7 @@ fun EditorPanel(
                     foldedRegions = if (region in foldedRegions) foldedRegions - region
                     else foldedRegions + region
                 },
+                onPickKeyword = onPickKeyword,
                 textStyle = textStyle,
             )
             CodeEditor(
@@ -738,6 +885,40 @@ fun EditorPanel(
                         } else false
                     }
                 },
+                onCtrlPress = { origOff ->
+                    val cb = onRequestReferences
+                    if (cb == null) false
+                    else {
+                        val text = latestValue.text
+                        val word = wordRangeAt(text, origOff)
+                        val symbolName = if (word != null) text.substring(word.first, word.second) else ""
+                        if (
+                            !isInStringOrComment(tokens, text, origOff) &&
+                            isRenamableIdentifier(symbolName)
+                        ) {
+                            val pos = TextBuffer(text).lineColOf(origOff)
+                            cb(pos.line, pos.col, symbolName)
+                            true
+                        } else false
+                    }
+                },
+                onResolveCtrlHoverLink = { origOff ->
+                    if (onRequestReferences == null) null
+                    else {
+                        val text = latestValue.text
+                        val word = wordRangeAt(text, origOff)
+                        if (word == null) null
+                        else {
+                            val symbolName = text.substring(word.first, word.second)
+                            if (
+                                !isInStringOrComment(tokens, text, origOff) &&
+                                isRenamableIdentifier(symbolName)
+                            ) word.first until word.second
+                            else null
+                        }
+                    }
+                },
+                ctrlHoverLinkColor = MaterialTheme.colorScheme.primary,
                 onPreviewKeyEvent = { event ->
                     if (event.type != KeyEventType.KeyDown) return@CodeEditor false
                     if (filteredItems.isNotEmpty()) {
@@ -771,6 +952,24 @@ fun EditorPanel(
                     if (event.key == Key.Escape && activeTabstops.isNotEmpty()) {
                         clearTabstops()
                         return@CodeEditor true
+                    }
+                    if (
+                        (event.key == Key.Enter || event.key == Key.NumPadEnter) &&
+                        !event.isShiftPressed && !event.isCtrlPressed && !event.isAltPressed &&
+                        value.selection.start == value.selection.end
+                    ) {
+                        val caret = value.selection.end.coerceIn(0, value.text.length)
+                        val cont = KdocContinuation.compute(value.text, caret, tokens)
+                        if (cont != null) {
+                            val resumeAt = (caret + cont.consumeAfterCaret).coerceAtMost(value.text.length)
+                            val newText = value.text.substring(0, caret) +
+                                cont.insertText + value.text.substring(resumeAt)
+                            val newCaret = caret + cont.caretOffsetWithinInsert
+                            onValueChange(
+                                value.copy(text = newText, selection = TextRange(newCaret))
+                            )
+                            return@CodeEditor true
+                        }
                     }
                     if (event.isCtrlPressed && event.isShiftPressed && event.key == Key.Spacebar) {
                         val caret = value.selection.end.coerceIn(0, value.text.length)
@@ -950,6 +1149,8 @@ fun EditorPanel(
             lspStatusText = lspStatusText,
             lspActivities = lspActivities,
             onProblemsToggle = onProblemsToggle,
+            todoCount = todoCount,
+            onTodoToggle = onTodoToggle,
         )
     }
 
@@ -1122,9 +1323,19 @@ private fun lineColToOffset(text: String, line: Int, col: Int): Int {
     return target.coerceIn(lineStart, lineEnd)
 }
 
+internal data class InlayHintDisplay(
+    val originalOffset: Int,
+    val label: String,
+    val kind: InlayHintItem.Kind,
+    val paddingLeft: Boolean,
+    val paddingRight: Boolean,
+)
+
 private class CombinedHighlightTransformation(
     private val tokens: List<Token>,
     private val palette: SyntaxPalette,
+    private val todoColors: Map<String, androidx.compose.ui.graphics.Color>,
+    private val commentColorOverrides: Map<IntRange, androidx.compose.ui.graphics.Color>,
     private val matches: List<IntRange>,
     private val activeIndex: Int,
     private val matchBg: androidx.compose.ui.graphics.Color,
@@ -1133,41 +1344,132 @@ private class CombinedHighlightTransformation(
     private val bracketBg: androidx.compose.ui.graphics.Color,
     private val foldSegments: List<FoldRegions.Segment>,
     private val foldPlaceholderStyle: SpanStyle,
+    private val inlayHints: List<InlayHintDisplay> = emptyList(),
+    private val inlayHintStyle: SpanStyle = SpanStyle(),
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val styled = applyHighlights(text)
-        if (foldSegments.isEmpty()) {
+        val hasFolds = foldSegments.isNotEmpty()
+        val hasHints = inlayHints.isNotEmpty()
+        if (!hasFolds && !hasHints) {
             return TransformedText(styled, OffsetMapping.Identity)
         }
-        val builder = AnnotatedString.Builder()
+        val foldBuilder = AnnotatedString.Builder()
+        if (hasFolds) {
+            var cursor = 0
+            for (seg in foldSegments) {
+                if (cursor < seg.origStart) {
+                    foldBuilder.append(styled.subSequence(cursor, seg.origStart))
+                }
+                val placeholderStart = foldBuilder.length
+                foldBuilder.append(seg.replacement)
+                val dotsOffset = seg.replacement.indexOf("...")
+                if (dotsOffset >= 0) {
+                    val dotsStart = placeholderStart + dotsOffset
+                    val dotsEnd = dotsStart + 3
+                    foldBuilder.addStyle(foldPlaceholderStyle, dotsStart, dotsEnd)
+                }
+                cursor = seg.origEnd
+            }
+            if (cursor < styled.length) {
+                foldBuilder.append(styled.subSequence(cursor, styled.length))
+            }
+        } else {
+            foldBuilder.append(styled)
+        }
+        val foldText = foldBuilder.toAnnotatedString()
+        if (!hasHints) {
+            return TransformedText(foldText, FoldOffsetMapping(foldSegments))
+        }
+        val foldMapping = if (hasFolds) FoldOffsetMapping(foldSegments) else IdentityFoldMapping
+        val insertions = mutableListOf<HintInsertion>()
+        for (hint in inlayHints) {
+            val origAnchor = hint.originalOffset.coerceIn(0, text.length)
+            if (isInsideFoldSegment(origAnchor)) continue
+            val foldAnchor = foldMapping.originalToTransformed(origAnchor)
+            val rendered = buildString {
+                if (hint.paddingLeft) append(' ')
+                append(hint.label)
+                if (hint.paddingRight) append(' ')
+            }
+            if (rendered.isEmpty()) continue
+            insertions += HintInsertion(foldAnchor, origAnchor, rendered)
+        }
+        if (insertions.isEmpty()) {
+            return TransformedText(foldText, FoldOffsetMapping(foldSegments))
+        }
+        insertions.sortBy { it.foldOffset }
+        val finalBuilder = AnnotatedString.Builder()
         var cursor = 0
+        for (ins in insertions) {
+            val target = ins.foldOffset.coerceIn(cursor, foldText.length)
+            if (target > cursor) {
+                finalBuilder.append(foldText.subSequence(cursor, target))
+            }
+            val labelStart = finalBuilder.length
+            finalBuilder.append(ins.label)
+            finalBuilder.addStyle(inlayHintStyle, labelStart, labelStart + ins.label.length)
+            cursor = target
+        }
+        if (cursor < foldText.length) {
+            finalBuilder.append(foldText.subSequence(cursor, foldText.length))
+        }
+        return TransformedText(
+            finalBuilder.toAnnotatedString(),
+            ComposedFoldInlayMapping(foldMapping, insertions),
+        )
+    }
+
+    private fun isInsideFoldSegment(originalOffset: Int): Boolean {
         for (seg in foldSegments) {
-            if (cursor < seg.origStart) {
-                builder.append(styled.subSequence(cursor, seg.origStart))
-            }
-            val placeholderStart = builder.length
-            builder.append(seg.replacement)
-            val dotsOffset = seg.replacement.indexOf("...")
-            if (dotsOffset >= 0) {
-                val dotsStart = placeholderStart + dotsOffset
-                val dotsEnd = dotsStart + 3
-                builder.addStyle(foldPlaceholderStyle, dotsStart, dotsEnd)
-            }
-            cursor = seg.origEnd
+            if (originalOffset >= seg.origStart && originalOffset < seg.origEnd) return true
         }
-        if (cursor < styled.length) {
-            builder.append(styled.subSequence(cursor, styled.length))
-        }
-        return TransformedText(builder.toAnnotatedString(), FoldOffsetMapping(foldSegments))
+        return false
     }
 
     private fun applyHighlights(text: AnnotatedString): AnnotatedString {
         val builder = AnnotatedString.Builder(text)
+        val raw = text.text
+        val commentOverride = HashMap<IntRange, androidx.compose.ui.graphics.Color>()
+        val tokenOverride = HashMap<IntRange, androidx.compose.ui.graphics.Color>()
+        for (i in tokens.indices) {
+            val t = tokens[i]
+            if (t.kind != TokenKind.TODO_TAG) continue
+            val ks = t.range.first.coerceIn(0, text.length)
+            val ke = (t.range.last + 1).coerceIn(ks, text.length)
+            if (ks == ke) continue
+            val color = todoKeywordColor(raw, ks, ke) ?: continue
+            for (j in i - 1 downTo 0) {
+                val p = tokens[j]
+                val isComment = p.kind == TokenKind.COMMENT || p.kind == TokenKind.DOC_COMMENT
+                if (!isComment) continue
+                if (p.range.first <= t.range.first && p.range.last >= t.range.last) {
+                    val forced = commentColorOverrides[p.range]
+                    if (forced != null) {
+                        commentOverride[p.range] = forced
+                        tokenOverride[t.range] = forced
+                    } else {
+                        commentOverride.putIfAbsent(p.range, color)
+                        tokenOverride[t.range] = commentOverride[p.range]!!
+                    }
+                }
+                break
+            }
+        }
         for (token in tokens) {
             val start = token.range.first.coerceIn(0, text.length)
             val end = (token.range.last + 1).coerceIn(start, text.length)
             if (start == end) continue
-            val color = colorFor(token.kind, palette) ?: continue
+            val color = when {
+                token.kind == TokenKind.TODO_TAG ->
+                    tokenOverride[token.range]
+                        ?: todoKeywordColor(raw, start, end)
+                        ?: palette.todoTag
+                (token.kind == TokenKind.COMMENT || token.kind == TokenKind.DOC_COMMENT) &&
+                    commentOverride.containsKey(token.range) ->
+                    commentOverride[token.range]!!
+                else -> colorFor(token.kind, palette) ?: continue
+            }
             builder.addStyle(SpanStyle(color = color), start, end)
         }
         matches.forEachIndexed { index, range ->
@@ -1186,6 +1488,15 @@ private class CombinedHighlightTransformation(
             }
         }
         return builder.toAnnotatedString()
+    }
+
+    private fun todoKeywordColor(raw: String, start: Int, end: Int): androidx.compose.ui.graphics.Color? {
+        for ((keyword, color) in todoColors) {
+            if (end - start >= keyword.length && raw.regionMatches(start, keyword, 0, keyword.length)) {
+                return color
+            }
+        }
+        return null
     }
 
     private fun colorFor(kind: TokenKind, palette: SyntaxPalette) = when (kind) {
@@ -1212,6 +1523,43 @@ private class FoldOffsetMapping(
         FoldRegions.transformedToOriginal(segments, offset)
 }
 
+internal object IdentityFoldMapping : OffsetMapping {
+    override fun originalToTransformed(offset: Int): Int = offset
+    override fun transformedToOriginal(offset: Int): Int = offset
+}
+
+internal data class HintInsertion(
+    val foldOffset: Int,
+    val originalAnchor: Int,
+    val label: String,
+)
+
+internal class ComposedFoldInlayMapping(
+    private val foldMapping: OffsetMapping,
+    private val insertions: List<HintInsertion>,
+) : OffsetMapping {
+    override fun originalToTransformed(offset: Int): Int {
+        val foldOffset = foldMapping.originalToTransformed(offset)
+        var shift = 0
+        for (ins in insertions) {
+            if (ins.foldOffset < foldOffset) shift += ins.label.length else break
+        }
+        return foldOffset + shift
+    }
+
+    override fun transformedToOriginal(offset: Int): Int {
+        var shift = 0
+        for (ins in insertions) {
+            val transStart = ins.foldOffset + shift
+            if (offset <= transStart) return foldMapping.transformedToOriginal(offset - shift)
+            val transEnd = transStart + ins.label.length
+            if (offset < transEnd) return ins.originalAnchor
+            shift += ins.label.length
+        }
+        return foldMapping.transformedToOriginal(offset - shift)
+    }
+}
+
 @Composable
 private fun EditorStatusBar(
     line: Int,
@@ -1223,6 +1571,8 @@ private fun EditorStatusBar(
     lspStatusText: String? = null,
     lspActivities: List<LspController.Activity> = emptyList(),
     onProblemsToggle: (() -> Unit)? = null,
+    todoCount: Int = 0,
+    onTodoToggle: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(28.dp),
@@ -1247,6 +1597,11 @@ private fun EditorStatusBar(
                 color = Glass.colors.warn,
                 label = "warnings",
                 onClick = onProblemsToggle,
+            )
+            TodoStatusBadge(
+                count = todoCount,
+                color = MaterialTheme.colorScheme.secondary,
+                onClick = onTodoToggle,
             )
             val showLifecycle = !lspStatusText.isNullOrBlank()
             val showActivities = lspActivities.isNotEmpty()
@@ -1376,6 +1731,33 @@ private fun DiagnosticBadge(
         )
         Text(
             text = "$count $label",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TodoStatusBadge(
+    count: Int,
+    color: androidx.compose.ui.graphics.Color,
+    onClick: (() -> Unit)? = null,
+) {
+    val rowMod = Modifier.then(
+        if (onClick != null) Modifier.clickable { onClick() } else Modifier,
+    )
+    Row(
+        modifier = rowMod,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape),
+        )
+        Text(
+            text = if (count > 0) "TODO $count" else "TODO",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

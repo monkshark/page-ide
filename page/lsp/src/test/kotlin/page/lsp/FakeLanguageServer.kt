@@ -18,6 +18,8 @@ import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.InitializedParams
+import org.eclipse.lsp4j.InlayHint
+import org.eclipse.lsp4j.InlayHintParams
 import org.eclipse.lsp4j.Location
 import org.eclipse.lsp4j.LocationLink
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior
@@ -60,6 +62,8 @@ class FakeLanguageServer : LanguageServer {
     val workspaceSymbolCalls = ConcurrentLinkedQueue<WorkspaceSymbolParams>()
     val formattingCalls = ConcurrentLinkedQueue<DocumentFormattingParams>()
     val codeActionCalls = ConcurrentLinkedQueue<CodeActionParams>()
+    val inlayHintCalls = ConcurrentLinkedQueue<InlayHintParams>()
+    val didChangeConfigurationCalls = ConcurrentLinkedQueue<DidChangeConfigurationParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
     @Volatile var referencesResponse: MutableList<out Location>? = null
@@ -70,6 +74,7 @@ class FakeLanguageServer : LanguageServer {
     @Volatile var workspaceSymbolResponse: Either<MutableList<out SymbolInformation>, MutableList<out WorkspaceSymbol>>? = null
     @Volatile var formattingResponse: MutableList<out TextEdit>? = null
     @Volatile var codeActionResponse: MutableList<Either<Command, CodeAction>>? = null
+    @Volatile var inlayHintResponse: MutableList<InlayHint>? = null
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
 
@@ -122,10 +127,16 @@ class FakeLanguageServer : LanguageServer {
             codeActionCalls += params
             return CompletableFuture.completedFuture(codeActionResponse)
         }
+        override fun inlayHint(params: InlayHintParams): CompletableFuture<MutableList<InlayHint>> {
+            inlayHintCalls += params
+            return CompletableFuture.completedFuture(inlayHintResponse)
+        }
     }
 
     private val workspaceService = object : WorkspaceService {
-        override fun didChangeConfiguration(params: DidChangeConfigurationParams) {}
+        override fun didChangeConfiguration(params: DidChangeConfigurationParams) {
+            didChangeConfigurationCalls += params
+        }
         override fun didChangeWatchedFiles(params: DidChangeWatchedFilesParams) {}
         @Suppress("DEPRECATION")
         override fun symbol(

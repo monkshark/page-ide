@@ -61,9 +61,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -108,6 +110,9 @@ fun CodeEditor(
     onTextLayout: (TextLayoutResult) -> Unit = {},
     onPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
     onPointerPress: ((transformedOffset: Int) -> Boolean)? = null,
+    onCtrlPress: ((originalOffset: Int) -> Boolean)? = null,
+    onResolveCtrlHoverLink: ((originalOffset: Int) -> IntRange?)? = null,
+    ctrlHoverLinkColor: Color = MaterialTheme.colorScheme.primary,
     onHover: ((originalOffset: Int?) -> Unit)? = null,
     hoverText: String? = null,
     hoverDiagnostic: HoverDiagnostic? = null,
@@ -168,6 +173,8 @@ fun CodeEditor(
     val latestOnChange by rememberUpdatedState(onValueChange)
     val latestPreview by rememberUpdatedState(onPreviewKeyEvent)
     val latestPointerPress by rememberUpdatedState(onPointerPress)
+    val latestCtrlPress by rememberUpdatedState(onCtrlPress)
+    val latestResolveCtrlHoverLink by rememberUpdatedState(onResolveCtrlHoverLink)
     val latestOnHover by rememberUpdatedState(onHover)
     val latestMapping by rememberUpdatedState(mapping)
     val latestLayout by rememberUpdatedState(layout)
@@ -176,6 +183,13 @@ fun CodeEditor(
     val dragMoveTarget = remember { mutableStateOf<Int?>(null) }
     var hoverPosition by remember { mutableStateOf<Offset?>(null) }
     var latchedHoverPosition by remember { mutableStateOf<Offset?>(null) }
+    var ctrlPressedState by remember { mutableStateOf(false) }
+    var hoverOriginalOffset by remember { mutableStateOf<Int?>(null) }
+    val ctrlHoverLinkRange: IntRange? = run {
+        val off = hoverOriginalOffset
+        val resolver = latestResolveCtrlHoverLink
+        if (ctrlPressedState && off != null && resolver != null) resolver(off) else null
+    }
     LaunchedEffect(hoverText, hoverDiagnostic) {
         if (hoverText.isNullOrBlank() && hoverDiagnostic == null) {
             latchedHoverPosition = null
@@ -257,6 +271,7 @@ fun CodeEditor(
             .focusRequester(focusRequester)
             .focusable(interactionSource = remember { MutableInteractionSource() })
             .onPreviewKeyEvent { event ->
+                ctrlPressedState = event.isCtrlPressed
                 if (latestPreview(event)) return@onPreviewKeyEvent true
                 handleDefaultKey(
                     event = event,
@@ -288,6 +303,9 @@ fun CodeEditor(
                 .requiredWidth(widthDp)
                 .requiredHeight(heightDp)
                 .bringIntoViewRequester(bringIntoView)
+                .pointerHoverIcon(
+                    if (ctrlHoverLinkRange != null) PointerIcon.Hand else PointerIcon.Default,
+                )
                 .pointerInput(value.text) {
                     awaitPointerEventScope {
                         var anchor = 0
@@ -323,6 +341,20 @@ fun CodeEditor(
                                         change.consume()
                                         clickCount = 0
                                         continue
+                                    }
+                                    if (
+                                        e.keyboardModifiers.isCtrlPressed &&
+                                        !e.keyboardModifiers.isShiftPressed &&
+                                        latestCtrlPress != null
+                                    ) {
+                                        latestOnChange(latestValue.copy(selection = TextRange(origOff)))
+                                        focusRequester.requestFocus()
+                                        val consumed = latestCtrlPress?.invoke(origOff) == true
+                                        if (consumed) {
+                                            change.consume()
+                                            clickCount = 0
+                                            continue
+                                        }
                                     }
                                     if (e.keyboardModifiers.isShiftPressed) {
                                         val anchorPos = latestValue.selection.start
@@ -403,11 +435,14 @@ fun CodeEditor(
                                         val transOff = latestLayout.getOffsetForPosition(change.position)
                                         val origOff = latestMapping.transformedToOriginal(transOff)
                                         hoverPosition = change.position
+                                        hoverOriginalOffset = origOff
+                                        ctrlPressedState = e.keyboardModifiers.isCtrlPressed
                                         latestOnHover?.invoke(origOff)
                                     }
                                 }
                                 PointerEventType.Exit -> {
                                     hoverPosition = null
+                                    hoverOriginalOffset = null
                                     latestOnHover?.invoke(null)
                                 }
                                 PointerEventType.Release -> {
@@ -484,6 +519,24 @@ fun CodeEditor(
                 }
             }
             drawText(textLayoutResult = layout)
+            if (ctrlHoverLinkRange != null) {
+                val linkStart = ctrlHoverLinkRange.first.coerceIn(0, value.text.length)
+                val linkEnd = (ctrlHoverLinkRange.last + 1).coerceIn(linkStart, value.text.length)
+                if (linkStart < linkEnd) {
+                    val transStart = latestMapping.originalToTransformed(linkStart)
+                    val transEnd = latestMapping.originalToTransformed(linkEnd)
+                    if (transStart in 0..displayText.length && transEnd in 0..displayText.length && transStart < transEnd) {
+                        val startRect = layout.getCursorRect(transStart)
+                        val endRect = layout.getCursorRect(transEnd)
+                        val underlineThickness = with(density) { 1.dp.toPx() }
+                        drawRect(
+                            color = ctrlHoverLinkColor,
+                            topLeft = Offset(startRect.left, startRect.bottom - underlineThickness),
+                            size = Size(endRect.left - startRect.left, underlineThickness),
+                        )
+                    }
+                }
+            }
             if (decorations.isNotEmpty()) {
                 val strokePx = with(density) { 1.2.dp.toPx() }
                 val ampPx = with(density) { 1.5.dp.toPx() }
@@ -504,6 +557,14 @@ fun CodeEditor(
                             color = deco.color,
                             strokeWidth = strokePx,
                             amplitude = ampPx,
+                        )
+                        EditorDecoration.Style.DOTTED_UNDERLINE -> drawDottedUnderline(
+                            layout = layout,
+                            transStart = transStart,
+                            transEnd = transEnd,
+                            color = deco.color,
+                            strokeWidth = strokePx,
+                            density = density,
                         )
                         EditorDecoration.Style.TABSTOP_ACTIVE -> Unit
                         EditorDecoration.Style.TABSTOP_PENDING -> Unit
@@ -955,8 +1016,8 @@ private fun DiagnosticHeader(d: HoverDiagnostic) {
     val color = when (d.severity) {
         HoverDiagnosticSeverity.ERROR -> Glass.colors.error
         HoverDiagnosticSeverity.WARNING -> Glass.colors.warn
-        HoverDiagnosticSeverity.INFO, HoverDiagnosticSeverity.HINT ->
-            MaterialTheme.colorScheme.primary
+        HoverDiagnosticSeverity.INFO -> MaterialTheme.colorScheme.primary
+        HoverDiagnosticSeverity.HINT -> MaterialTheme.colorScheme.tertiary
     }
     Row(
         modifier = Modifier
@@ -1429,5 +1490,43 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyUnderline(
             color = color,
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth),
         )
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDottedUnderline(
+    layout: TextLayoutResult,
+    transStart: Int,
+    transEnd: Int,
+    color: Color,
+    strokeWidth: Float,
+    density: androidx.compose.ui.unit.Density,
+) {
+    val dotPx = with(density) { 1.2.dp.toPx() }
+    val gapPx = with(density) { 2.0.dp.toPx() }
+    val startLine = layout.getLineForOffset(transStart)
+    val endLine = layout.getLineForOffset(transEnd)
+    for (line in startLine..endLine) {
+        val lineStart = layout.getLineStart(line)
+        val lineEnd = layout.getLineEnd(line, visibleEnd = true)
+        val from = maxOf(transStart, lineStart)
+        val to = minOf(transEnd, lineEnd)
+        if (from >= to) continue
+        val leftRect = layout.getCursorRect(from)
+        val rightRect = layout.getCursorRect(to)
+        val baseline = layout.getLineBottom(line) - strokeWidth
+        val left = leftRect.left
+        val right = rightRect.left
+        if (right <= left) continue
+        var x = left
+        while (x < right) {
+            val nextX = (x + dotPx).coerceAtMost(right)
+            drawLine(
+                color = color,
+                start = Offset(x, baseline),
+                end = Offset(nextX, baseline),
+                strokeWidth = strokeWidth,
+            )
+            x = nextX + gapPx
+        }
     }
 }

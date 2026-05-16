@@ -69,8 +69,23 @@ internal object CodeEditorActions {
 
     fun applyWordBackspace(value: TextFieldValue): TextFieldValue? {
         if (!value.selection.collapsed) return applyBackspace(value)
-        val r = WordBoundary.deleteWordBackward(TextEdit(value.text, value.selection.end)) ?: return null
-        return value.copy(text = r.text, selection = TextRange(r.caret))
+        val caret = value.selection.end
+        if (caret == 0) return null
+        val text = value.text
+        val lineStart = text.lastIndexOf('\n', caret - 1) + 1
+        if (caret == lineStart) {
+            return value.copy(
+                text = text.removeRange(caret - 1, caret),
+                selection = TextRange(caret - 1),
+            )
+        }
+        val r = WordBoundary.deleteWordBackward(TextEdit(text, caret)) ?: return null
+        val clippedCaret = maxOf(r.caret, lineStart)
+        if (clippedCaret >= caret) return null
+        return value.copy(
+            text = text.removeRange(clippedCaret, caret),
+            selection = TextRange(clippedCaret),
+        )
     }
 
     fun applyWordDelete(value: TextFieldValue): TextFieldValue? {

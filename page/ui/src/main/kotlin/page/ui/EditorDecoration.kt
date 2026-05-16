@@ -8,5 +8,5 @@ data class EditorDecoration(
     val color: Color,
     val style: Style,
 ) {
-    enum class Style { WAVY_UNDERLINE, TABSTOP_ACTIVE, TABSTOP_PENDING }
+    enum class Style { WAVY_UNDERLINE, DOTTED_UNDERLINE, TABSTOP_ACTIVE, TABSTOP_PENDING }
 }

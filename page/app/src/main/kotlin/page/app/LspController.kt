@@ -24,6 +24,7 @@ import page.lsp.CompletionList
 import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
 import page.lsp.HoverInfo
+import page.lsp.InlayHintItem
 import page.lsp.KLS_GRADLE_DEPS_KIND
 import page.lsp.KLS_GRADLE_SCRIPT_DEPS_KIND
 import page.lsp.KLS_LINTING_KIND
@@ -94,6 +95,21 @@ class LspController(
     )
 
     private val lastCompletionByLine = ConcurrentHashMap<Pair<String, Int>, LastCompletion>()
+
+    private data class InlayHintCacheKey(
+        val uri: String,
+        val version: Int,
+        val startLine: Int,
+        val startCharacter: Int,
+        val endLine: Int,
+        val endCharacter: Int,
+    )
+
+    private val inlayHintCache: MutableMap<InlayHintCacheKey, List<InlayHintItem>> = Collections.synchronizedMap(
+        object : LinkedHashMap<InlayHintCacheKey, List<InlayHintItem>>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<InlayHintCacheKey, List<InlayHintItem>>): Boolean = size > INLAY_HINT_CACHE_MAX
+        }
+    )
 
     @Volatile private var prepareRenameSupported: Boolean = false
 
@@ -248,9 +264,17 @@ class LspController(
         pendingChanges.remove(uri)?.cancel()
         pendingOpens.remove(uri)
         invalidateCompletionCache(uri)
+        invalidateInlayHintCache(uri)
         val ws = workspace
         if (ws != null && ws.isOpen(uri)) ws.didClose(uri)
         diagnosticsByUri.remove(uri)
+    }
+
+    private fun invalidateInlayHintCache(uri: String) {
+        synchronized(inlayHintCache) {
+            val it = inlayHintCache.keys.iterator()
+            while (it.hasNext()) if (it.next().uri == uri) it.remove()
+        }
     }
 
     fun diagnosticsFor(path: Path): List<Diagnostic> {
@@ -716,6 +740,39 @@ class LspController(
                     val merged = server + synthesized
                     println("[lsp] codeAction ✓ $uri @($startLine,$startCharacter) — ${merged.size} action(s) (server=${server.size}, synth=${synthesized.size}), ctx=${diags.size} diag(s) [${ms}ms]")
                     merged
+                }
+            }
+    }
+
+    fun inlayHints(
+        path: Path,
+        startLine: Int,
+        startCharacter: Int,
+        endLine: Int,
+        endCharacter: Int,
+    ): CompletableFuture<List<InlayHintItem>> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val version = ws.versionOf(uri) ?: return CompletableFuture.completedFuture(emptyList())
+        val key = InlayHintCacheKey(uri, version, startLine, startCharacter, endLine, endCharacter)
+        inlayHintCache[key]?.let {
+            println("[lsp] inlayHints ✓ $uri @($startLine..$endLine) — ${it.size} hint(s), v=$version [cache=hit]")
+            return CompletableFuture.completedFuture(it)
+        }
+        val tStart = System.nanoTime()
+        return ws.inlayHints(uri, startLine, startCharacter, endLine, endCharacter)
+            .handle<List<InlayHintItem>> { hints, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    println("[lsp] inlayHints ✗ $uri @($startLine..$endLine): ${err.message} [${ms}ms]")
+                    emptyList()
+                } else {
+                    val result = hints.orEmpty()
+                    inlayHintCache[key] = result
+                    println("[lsp] inlayHints ✓ $uri @($startLine..$endLine) — ${result.size} hint(s), v=$version [${ms}ms]")
+                    result
                 }
             }
     }
@@ -1394,6 +1451,7 @@ class LspController(
 
     companion object {
         private const val COMPLETION_CACHE_MAX = 64
+        private const val INLAY_HINT_CACHE_MAX = 32
         private const val MAX_AUTO_OPEN_BYTES = 512L * 1024
         private const val EXTERNAL_SYMBOL_MESSAGE =
             "외부 라이브러리 심볼은 rename 할 수 없습니다 (kotlin-stdlib · 의존성 jar)"

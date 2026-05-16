@@ -14,6 +14,11 @@ dependencies {
     implementation(project(":page:editor"))
     implementation(project(":page:lsp"))
     implementation(libs.kotlinx.coroutines.swing)
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 val klsVersion = "1.3.13-page-1"

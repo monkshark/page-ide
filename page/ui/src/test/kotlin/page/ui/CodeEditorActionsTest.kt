@@ -105,6 +105,27 @@ class CodeEditorActionsTest {
     }
 
     @Test
+    fun `applyWordBackspace stops at current line start without crossing newline`() {
+        val r = CodeEditorActions.applyWordBackspace(v("foo\nbar baz", 11))!!
+        assertEquals("foo\nbar ", r.text)
+        assertEquals(8, r.selection.start)
+    }
+
+    @Test
+    fun `applyWordBackspace at line start deletes only the preceding newline`() {
+        val r = CodeEditorActions.applyWordBackspace(v("foo\nbar", 4))!!
+        assertEquals("foobar", r.text)
+        assertEquals(3, r.selection.start)
+    }
+
+    @Test
+    fun `applyWordBackspace with only whitespace before caret clips to line start`() {
+        val r = CodeEditorActions.applyWordBackspace(v("foo\n    bar", 8))!!
+        assertEquals("foo\nbar", r.text)
+        assertEquals(4, r.selection.start)
+    }
+
+    @Test
     fun `applyLineMove down swaps two lines`() {
         val r = CodeEditorActions.applyLineMove(v("a\nb", 0), down = true, duplicate = false)!!
         assertEquals("b\na", r.text)

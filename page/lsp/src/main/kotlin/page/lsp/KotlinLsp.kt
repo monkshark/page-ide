@@ -1,5 +1,6 @@
 package page.lsp
 
+import com.google.gson.JsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -7,6 +8,20 @@ import kotlin.io.path.exists
 import kotlin.io.path.isExecutable
 
 object KotlinLsp {
+
+    fun inlayHintsSettings(
+        typeHints: Boolean = true,
+        parameterHints: Boolean = true,
+        chainedHints: Boolean = true,
+    ): JsonObject {
+        val inlay = JsonObject().apply {
+            addProperty("typeHints", typeHints)
+            addProperty("parameterHints", parameterHints)
+            addProperty("chainedHints", chainedHints)
+        }
+        val kotlinSection = JsonObject().apply { add("inlayHints", inlay) }
+        return JsonObject().apply { add("kotlin", kotlinSection) }
+    }
 
     private const val PATH_OVERRIDE_PROP = "page.lsp.kotlin.path"
     private const val RESOURCES_PROP = "compose.application.resources.dir"
@@ -90,7 +105,7 @@ object KotlinLsp {
         val process = builder.start()
         val transport = if (onStderrLine != null) ProcessTransport(process, onStderrLine)
         else ProcessTransport(process)
-        return LspClient(transport, workspaceRoot)
+        return LspClient(transport, workspaceRoot, initialSettings = inlayHintsSettings())
     }
 
     private fun prependGradleToPath(builder: ProcessBuilder) {

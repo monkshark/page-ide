@@ -1,9 +1,11 @@
 package page.lsp
 
+import com.google.gson.JsonObject
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LspClientTest {
@@ -41,6 +43,50 @@ class LspClientTest {
         } finally {
             harness.close()
         }
+    }
+
+    @Test
+    fun `initialSettings null sends no didChangeConfiguration`() {
+        val harness = LspTestHarness()
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            waitUntil { harness.fakeServer.initializedCalls.isNotEmpty() }
+            assertTrue(harness.fakeServer.didChangeConfigurationCalls.isEmpty())
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `initialSettings forwards kotlin inlay hints config after initialized`() {
+        val settings = KotlinLsp.inlayHintsSettings()
+        val harness = LspTestHarness(initialSettings = settings)
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            waitUntil { harness.fakeServer.didChangeConfigurationCalls.isNotEmpty() }
+            assertEquals(1, harness.fakeServer.didChangeConfigurationCalls.size)
+            val received = harness.fakeServer.didChangeConfigurationCalls.peek().settings as JsonObject
+            val inlay = received.getAsJsonObject("kotlin").getAsJsonObject("inlayHints")
+            assertTrue(inlay.get("typeHints").asBoolean)
+            assertTrue(inlay.get("parameterHints").asBoolean)
+            assertTrue(inlay.get("chainedHints").asBoolean)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `inlayHintsSettings respects explicit flags`() {
+        val settings = KotlinLsp.inlayHintsSettings(
+            typeHints = false,
+            parameterHints = true,
+            chainedHints = false,
+        )
+        val inlay = settings.getAsJsonObject("kotlin").getAsJsonObject("inlayHints")
+        assertEquals(false, inlay.get("typeHints").asBoolean)
+        assertEquals(true, inlay.get("parameterHints").asBoolean)
+        assertEquals(false, inlay.get("chainedHints").asBoolean)
+        assertNull(settings.getAsJsonObject("kotlin").get("unknown"))
     }
 
     @Test

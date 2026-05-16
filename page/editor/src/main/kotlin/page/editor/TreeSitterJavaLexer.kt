@@ -61,7 +61,7 @@ object TreeSitterJavaLexer : SyntaxLexer {
         }
     }
 
-    private val todoPattern = Regex("""\b(TODO|FIXME|HACK|XXX|NOTE)\b(:[^\n]*)?""")
+    private val todoPattern = Regex("""\b(TODO|FIXME|HACK|XXX|NOTE|BUG|REVIEW|EXCEPTION)\b(:[^\n]*)?""")
 
     private fun classify(node: TSNode): TokenKind? {
         val type = node.type ?: return null

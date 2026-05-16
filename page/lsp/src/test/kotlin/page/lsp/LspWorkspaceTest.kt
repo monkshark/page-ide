@@ -602,6 +602,106 @@ class LspWorkspaceTest {
         assertTrue(list.isEmpty())
     }
 
+    @Test
+    fun `inlayHints on unopened doc returns empty without server call`() {
+        val list = workspace.inlayHints("file:///nope.kt", 0, 0, 5, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(list.isEmpty())
+        assertTrue(harness.fakeServer.inlayHintCalls.isEmpty())
+    }
+
+    @Test
+    fun `inlayHints forwards range and parses Parameter and Type hints`() {
+        val uri = "file:///IH.kt"
+        workspace.didOpen(uri, "kotlin", "fun greet(name: String) = name\nval x = greet(\"page\")")
+        val paramHint = org.eclipse.lsp4j.InlayHint(
+            Position(1, 14),
+            Either.forLeft<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>("name:"),
+        ).apply {
+            kind = org.eclipse.lsp4j.InlayHintKind.Parameter
+            paddingRight = true
+        }
+        val typeHint = org.eclipse.lsp4j.InlayHint(
+            Position(1, 5),
+            Either.forLeft<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>(": String"),
+        ).apply {
+            kind = org.eclipse.lsp4j.InlayHintKind.Type
+            paddingLeft = true
+        }
+        harness.fakeServer.inlayHintResponse = mutableListOf(paramHint, typeHint)
+
+        val list = workspace.inlayHints(uri, 0, 0, 2, 0).get(2, TimeUnit.SECONDS)
+        assertEquals(2, list.size)
+
+        val param = list.first { it.kind == InlayHintItem.Kind.PARAMETER }
+        assertEquals(1, param.line)
+        assertEquals(14, param.character)
+        assertEquals("name:", param.label)
+        assertTrue(param.paddingRight)
+        assertFalse(param.paddingLeft)
+
+        val type = list.first { it.kind == InlayHintItem.Kind.TYPE }
+        assertEquals(": String", type.label)
+        assertTrue(type.paddingLeft)
+        assertFalse(type.paddingRight)
+
+        waitUntil { harness.fakeServer.inlayHintCalls.isNotEmpty() }
+        val sent = harness.fakeServer.inlayHintCalls.first()
+        assertEquals(uri, sent.textDocument.uri)
+        assertEquals(0, sent.range.start.line)
+        assertEquals(0, sent.range.start.character)
+        assertEquals(2, sent.range.end.line)
+    }
+
+    @Test
+    fun `inlayHints joins label part list into single string`() {
+        val uri = "file:///IH2.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        val parts = mutableListOf(
+            org.eclipse.lsp4j.InlayHintLabelPart("name"),
+            org.eclipse.lsp4j.InlayHintLabelPart(":"),
+        )
+        val hint = org.eclipse.lsp4j.InlayHint(
+            Position(0, 3),
+            Either.forRight<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>(parts),
+        ).apply { kind = org.eclipse.lsp4j.InlayHintKind.Parameter }
+        harness.fakeServer.inlayHintResponse = mutableListOf(hint)
+
+        val list = workspace.inlayHints(uri, 0, 0, 1, 0).get(2, TimeUnit.SECONDS)
+        assertEquals(1, list.size)
+        assertEquals("name:", list[0].label)
+    }
+
+    @Test
+    fun `inlayHints drops blank and missing-position entries`() {
+        val uri = "file:///IH3.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        val blank = org.eclipse.lsp4j.InlayHint(
+            Position(0, 0),
+            Either.forLeft<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>("   "),
+        )
+        val noPos = org.eclipse.lsp4j.InlayHint().apply {
+            label = Either.forLeft<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>("name:")
+        }
+        val good = org.eclipse.lsp4j.InlayHint(
+            Position(0, 1),
+            Either.forLeft<String, MutableList<org.eclipse.lsp4j.InlayHintLabelPart>>("ok"),
+        )
+        harness.fakeServer.inlayHintResponse = mutableListOf(blank, noPos, good)
+
+        val list = workspace.inlayHints(uri, 0, 0, 1, 0).get(2, TimeUnit.SECONDS)
+        assertEquals(1, list.size)
+        assertEquals("ok", list[0].label)
+    }
+
+    @Test
+    fun `inlayHints returns empty for null server response`() {
+        val uri = "file:///IH4.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.inlayHintResponse = null
+        val list = workspace.inlayHints(uri, 0, 0, 1, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(list.isEmpty())
+    }
+
     private fun waitUntil(timeoutMs: Long = 2000, predicate: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {

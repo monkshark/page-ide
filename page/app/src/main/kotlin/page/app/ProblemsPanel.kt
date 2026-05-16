@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -73,11 +72,17 @@ fun ProblemsPanel(
     onClose: () -> Unit,
     height: Dp,
     onResizeDelta: (Dp) -> Unit,
+    collapsedKeys: Set<String>,
+    onCollapsedKeysChange: (Set<String>) -> Unit,
+    fileOrder: List<String>,
+    onFileOrderChange: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val entries = flattenAndSort(diagnostics)
     val errorCount = entries.count { it.diagnostic.severity == DiagnosticSeverity.ERROR }
     val warningCount = entries.count { it.diagnostic.severity == DiagnosticSeverity.WARNING }
+    val infoCount = entries.count { it.diagnostic.severity == DiagnosticSeverity.INFO }
+    val hintCount = entries.count { it.diagnostic.severity == DiagnosticSeverity.HINT }
     val clipboard = LocalClipboardManager.current
 
     val groups: List<Pair<Path, List<ProblemEntry>>> = run {
@@ -85,7 +90,8 @@ fun ProblemsPanel(
         for (entry in entries) {
             byPath.getOrPut(entry.path) { mutableListOf() }.add(entry)
         }
-        byPath.map { (k, v) -> k to v.toList() }
+        val raw = byPath.map { (k, v) -> k to v.toList() }
+        applyFileOrder(raw, fileOrder)
     }
     val displayList: List<ProblemEntry> = groups.flatMap { it.second }
 
@@ -148,6 +154,8 @@ fun ProblemsPanel(
                 )
                 if (errorCount > 0) ProblemBadge(errorCount, "errors", Glass.colors.error)
                 if (warningCount > 0) ProblemBadge(warningCount, "warnings", Glass.colors.warn)
+                if (infoCount > 0) ProblemBadge(infoCount, "info", MaterialTheme.colorScheme.primary)
+                if (hintCount > 0) ProblemBadge(hintCount, "hints", MaterialTheme.colorScheme.tertiary)
                 Box(modifier = Modifier.weight(1f))
                 if (entries.isNotEmpty()) {
                     Text(
@@ -183,7 +191,19 @@ fun ProblemsPanel(
                     )
                 }
             } else {
-                LazyColumn(
+                val orderKeys = groups.map { it.first.toString() }
+                val rowStartByGroup = run {
+                    val acc = IntArray(groups.size)
+                    var cur = 0
+                    for (i in groups.indices) {
+                        acc[i] = cur
+                        cur += groups[i].second.size
+                    }
+                    acc
+                }
+                ReorderableFileColumn(
+                    keys = orderKeys,
+                    onMove = { newKeys -> onFileOrderChange(newKeys) },
                     modifier = Modifier
                         .fillMaxSize()
                         .focusRequester(focusRequester)
@@ -203,40 +223,60 @@ fun ProblemsPanel(
                                 else -> false
                             }
                         },
-                ) {
-                    var rowIndex = 0
-                    for ((path, list) in groups) {
-                        item(key = "header:$path") { ProblemFileHeader(path, list) }
-                        for (entry in list) {
-                            val idx = rowIndex
-                            item(
-                                key = "row:$idx:${entry.path}:${entry.diagnostic.start.line}:${entry.diagnostic.start.character}",
-                            ) {
-                                ProblemRow(
-                                    entry = entry,
-                                    index = idx,
-                                    isSelected = idx in selected,
-                                    onJump = onJump,
-                                    onSelectOne = selectOne,
-                                    onSelectRange = selectRange,
-                                    onToggle = toggleOne,
-                                    onSecondaryPress = ensureSelected,
-                                    selectionSnapshot = selectionSnapshot,
-                                )
+                    onGroupClick = { idx ->
+                        val pathKey = groups[idx].first.toString()
+                        val collapsed = pathKey in collapsedKeys
+                        val next = if (collapsed) collapsedKeys - pathKey else collapsedKeys + pathKey
+                        onCollapsedKeysChange(next)
+                    },
+                    headerContent = { idx ->
+                        val (path, list) = groups[idx]
+                        val collapsed = path.toString() in collapsedKeys
+                        ProblemFileHeader(
+                            path = path,
+                            list = list,
+                            collapsed = collapsed,
+                        )
+                    },
+                    bodyContent = { idx ->
+                        val (path, list) = groups[idx]
+                        val collapsed = path.toString() in collapsedKeys
+                        if (!collapsed) {
+                            val baseIdx = rowStartByGroup[idx]
+                            Column {
+                                list.forEachIndexed { i, entry ->
+                                    val rowIdx = baseIdx + i
+                                    ProblemRow(
+                                        entry = entry,
+                                        index = rowIdx,
+                                        isSelected = rowIdx in selected,
+                                        onJump = onJump,
+                                        onSelectOne = selectOne,
+                                        onSelectRange = selectRange,
+                                        onToggle = toggleOne,
+                                        onSecondaryPress = ensureSelected,
+                                        selectionSnapshot = selectionSnapshot,
+                                    )
+                                }
                             }
-                            rowIndex++
                         }
-                    }
-                }
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ProblemFileHeader(path: Path, list: List<ProblemEntry>) {
+private fun ProblemFileHeader(
+    path: Path,
+    list: List<ProblemEntry>,
+    collapsed: Boolean,
+) {
     val errorCount = list.count { it.diagnostic.severity == DiagnosticSeverity.ERROR }
     val warningCount = list.count { it.diagnostic.severity == DiagnosticSeverity.WARNING }
+    val infoCount = list.count { it.diagnostic.severity == DiagnosticSeverity.INFO }
+    val hintCount = list.count { it.diagnostic.severity == DiagnosticSeverity.HINT }
     val clipboard = LocalClipboardManager.current
     ContextMenuArea(
         items = {
@@ -253,10 +293,16 @@ private fun ProblemFileHeader(path: Path, list: List<ProblemEntry>) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Text(
+                text = if (collapsed) "▸" else "▾",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 text = path.fileName?.toString() ?: path.toString(),
                 style = MaterialTheme.typography.labelMedium,
@@ -274,6 +320,8 @@ private fun ProblemFileHeader(path: Path, list: List<ProblemEntry>) {
             Box(modifier = Modifier.weight(1f))
             if (errorCount > 0) ProblemBadge(errorCount, "errors", Glass.colors.error)
             if (warningCount > 0) ProblemBadge(warningCount, "warnings", Glass.colors.warn)
+            if (infoCount > 0) ProblemBadge(infoCount, "info", MaterialTheme.colorScheme.primary)
+            if (hintCount > 0) ProblemBadge(hintCount, "hints", MaterialTheme.colorScheme.tertiary)
         }
     }
 }
@@ -293,7 +341,8 @@ private fun ProblemRow(
     val color = when (entry.diagnostic.severity) {
         DiagnosticSeverity.ERROR -> Glass.colors.error
         DiagnosticSeverity.WARNING -> Glass.colors.warn
-        else -> MaterialTheme.colorScheme.primary
+        DiagnosticSeverity.INFO -> MaterialTheme.colorScheme.primary
+        DiagnosticSeverity.HINT -> MaterialTheme.colorScheme.tertiary
     }
     val clipboard = LocalClipboardManager.current
     val rowBg = if (isSelected) {
@@ -387,6 +436,23 @@ private fun ProblemBadge(count: Int, label: String, color: Color) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+internal fun <T> applyFileOrder(
+    raw: List<Pair<Path, T>>,
+    order: List<String>,
+): List<Pair<Path, T>> {
+    if (order.isEmpty()) return raw
+    val byKey = raw.associateBy { it.first.toString() }
+    val ordered = LinkedHashMap<String, Pair<Path, T>>()
+    for (key in order) {
+        val hit = byKey[key] ?: continue
+        ordered[key] = hit
+    }
+    for ((key, value) in byKey) {
+        ordered.putIfAbsent(key, value)
+    }
+    return ordered.values.toList()
 }
 
 private fun flattenAndSort(diagnostics: Map<String, List<Diagnostic>>): List<ProblemEntry> {

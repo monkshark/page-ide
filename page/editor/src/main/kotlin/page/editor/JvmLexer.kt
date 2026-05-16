@@ -252,7 +252,7 @@ internal abstract class JvmLexer(
         return true
     }
 
-    private val todoPattern = Regex("""\b(TODO|FIXME|HACK|XXX|NOTE)\b(:[^\n]*)?""")
+    private val todoPattern = Regex("""\b(TODO|FIXME|HACK|XXX|NOTE|BUG|REVIEW|EXCEPTION)\b(:[^\n]*)?""")
 
     private fun isDigit(c: Char) = c in '0'..'9'
     private fun isHexDigit(c: Char) = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'

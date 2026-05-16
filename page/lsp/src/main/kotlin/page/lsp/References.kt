@@ -9,6 +9,14 @@ data class ReferenceLocation(
     val endLine: Int,
     val endCharacter: Int,
 ) {
+    fun contains(uri: String, line: Int, character: Int): Boolean {
+        if (this.uri != uri) return false
+        if (line < startLine || line > endLine) return false
+        val afterStart = line > startLine || character >= startCharacter
+        val beforeEnd = line < endLine || character <= endCharacter
+        return afterStart && beforeEnd
+    }
+
     companion object {
         fun fromLsp(locations: List<Location?>?): List<ReferenceLocation> {
             if (locations == null) return emptyList()
@@ -28,4 +36,15 @@ data class ReferenceLocation(
             )
         }
     }
+}
+
+fun pickSingleOtherReference(
+    results: List<ReferenceLocation>,
+    originUri: String,
+    line: Int,
+    character: Int,
+): ReferenceLocation? {
+    if (results.size != 2) return null
+    val caretMatch = results.firstOrNull { it.contains(originUri, line, character) } ?: return null
+    return results.firstOrNull { it !== caretMatch }
 }

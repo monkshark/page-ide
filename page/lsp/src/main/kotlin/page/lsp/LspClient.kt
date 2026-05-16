@@ -3,6 +3,7 @@ package page.lsp
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.CompletionCapabilities
 import org.eclipse.lsp4j.CompletionItemCapabilities
+import org.eclipse.lsp4j.DidChangeConfigurationParams
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.MessageActionItem
@@ -29,6 +30,7 @@ class LspClient(
     private val workspaceRoot: Path? = null,
     private val clientName: String = "PAGE",
     private val clientVersion: String = "0.1.0",
+    private val initialSettings: Any? = null,
 ) : LanguageClient {
 
     private val stateRef = AtomicReference(LspState.NOT_STARTED)
@@ -70,6 +72,12 @@ class LspClient(
                     } else {
                         try {
                             server!!.initialized(org.eclipse.lsp4j.InitializedParams())
+                            if (initialSettings != null) {
+                                server!!.workspaceService.didChangeConfiguration(
+                                    DidChangeConfigurationParams(initialSettings)
+                                )
+                                println("[lsp] didChangeConfiguration sent: $initialSettings")
+                            }
                             stateRef.set(LspState.INITIALIZED)
                         } catch (t: Throwable) {
                             stateRef.set(LspState.FAILED)

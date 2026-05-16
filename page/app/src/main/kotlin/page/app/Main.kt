@@ -72,6 +72,7 @@ import page.lsp.DocumentSymbolEntry
 import page.lsp.RenameApply
 import page.lsp.RenameFileChange
 import page.lsp.RenameWorkspaceEdit
+import page.lsp.pickSingleOtherReference
 import page.ui.Glass
 import page.ui.GlassPalette
 import page.ui.GlassTheme
@@ -86,6 +87,7 @@ fun main() = application {
     var focusedPane: PaneSide by remember { mutableStateOf(PaneSide.PRIMARY) }
     var rootDir: Path? by remember { mutableStateOf(null) }
     var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
+    var treeRevision by remember { mutableStateOf(0) }
     var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
     var quickOpen by remember { mutableStateOf(false) }
@@ -97,6 +99,12 @@ fun main() = application {
     var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
     var problemsOpen by remember { mutableStateOf(false) }
     var problemsHeight: Dp by remember { mutableStateOf(220.dp) }
+    var problemsCollapsed by remember { mutableStateOf(emptySet<String>()) }
+    var problemsFileOrder by remember { mutableStateOf(emptyList<String>()) }
+    var todoOpen by remember { mutableStateOf(false) }
+    var todoHeight: Dp by remember { mutableStateOf(220.dp) }
+    var todoCollapsed by remember { mutableStateOf(emptySet<String>()) }
+    var todoFileOrder by remember { mutableStateOf(emptyList<String>()) }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
     var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
     var palette: GlassPalette by remember { mutableStateOf(AppSettings.loadPalette()) }
@@ -113,6 +121,8 @@ fun main() = application {
     var editorFocusVersion by remember { mutableStateOf(0) }
     val lsp = rememberLspController(workspaceRoot = rootDir)
     val currentLsp by rememberUpdatedState(lsp)
+    val todo = rememberTodoController(workspaceRoot = rootDir)
+    val todoItems by todo.items
     val undoTrackerPrimary = remember { UndoGroupTracker() }
     val undoTrackerSecondary = remember { UndoGroupTracker() }
     fun undoTracker(side: PaneSide): UndoGroupTracker = when (side) {
@@ -174,6 +184,139 @@ fun main() = application {
 
     LaunchedEffect(rootDir) {
         if (rootDir != null) lsp.ensureStarted()
+        todo.scanWorkspaceAsync()
+    }
+
+    var sessionLoaded by remember { mutableStateOf(false) }
+    var foldByPath by remember { mutableStateOf<Map<String, Set<Int>>>(emptyMap()) }
+    var historyFile by remember { mutableStateOf(HistoryFile()) }
+    var historyLoaded by remember { mutableStateOf(false) }
+    var workspaceFile by remember { mutableStateOf(WorkspaceFile()) }
+    LaunchedEffect(rootDir) {
+        sessionLoaded = false
+        val root = rootDir
+        if (root == null) {
+            sessionLoaded = true
+            return@LaunchedEffect
+        }
+        val session = runCatching { SessionStore.load(root) }.getOrNull()
+        if (session != null) {
+            primaryPane = primaryPane.copy(book = restoreTabBook(session.primary))
+            secondaryPane = secondaryPane.copy(book = restoreTabBook(session.secondary))
+            focusedPane = runCatching { PaneSide.valueOf(session.focusedPane) }
+                .getOrDefault(PaneSide.PRIMARY)
+            splitEnabled = session.splitEnabled
+            splitOrientation = runCatching { SplitOrientation.valueOf(session.splitOrientation) }
+                .getOrDefault(SplitOrientation.HORIZONTAL)
+            splitState = SplitPaneState(ratio = session.splitRatio.coerceIn(0.1f, 0.9f))
+            sidebarWidth = session.sidebarWidth.coerceIn(160f, 600f).dp
+            problemsOpen = session.problemsOpen
+            problemsHeight = session.problemsHeight.coerceIn(120f, 600f).dp
+            problemsCollapsed = session.problemsCollapsed.toSet()
+            problemsFileOrder = session.problemsFileOrder
+            todoOpen = session.todoOpen
+            todoHeight = session.todoHeight.coerceIn(120f, 600f).dp
+            todoCollapsed = session.todoCollapsed.toSet()
+            todoFileOrder = session.todoFileOrder
+            foldByPath = session.foldedStartLinesByPath.mapValues { it.value.toSet() }
+            val restoredExpanded = restoreExpandedDirs(session.expandedDirs)
+            if (restoredExpanded.isNotEmpty()) expanded = restoredExpanded
+        } else {
+            foldByPath = emptyMap()
+        }
+        sessionLoaded = true
+    }
+
+    val onFoldChange: (Path, Set<Int>) -> Unit = { path, lines ->
+        val key = path.toString()
+        foldByPath = if (lines.isEmpty()) foldByPath - key else foldByPath + (key to lines)
+    }
+    val foldedLinesFor: (Path?) -> Set<Int> = { p ->
+        p?.let { foldByPath[it.toString()] } ?: emptySet()
+    }
+
+    val sessionSnapshot = SessionFile(
+        primary = paneSnapshot(primaryPane),
+        secondary = paneSnapshot(secondaryPane),
+        focusedPane = focusedPane.name,
+        splitEnabled = splitEnabled,
+        splitOrientation = splitOrientation.name,
+        splitRatio = splitState.ratio,
+        sidebarWidth = sidebarWidth.value,
+        problemsOpen = problemsOpen,
+        problemsHeight = problemsHeight.value,
+        problemsCollapsed = problemsCollapsed.toList().sorted(),
+        problemsFileOrder = problemsFileOrder,
+        todoOpen = todoOpen,
+        todoHeight = todoHeight.value,
+        todoCollapsed = todoCollapsed.toList().sorted(),
+        todoFileOrder = todoFileOrder,
+        foldedStartLinesByPath = foldByPath.mapValues { it.value.toList().sorted() },
+        expandedDirs = expanded.map { it.toString() }.sorted(),
+    )
+    LaunchedEffect(rootDir, sessionLoaded, sessionSnapshot) {
+        if (!sessionLoaded) return@LaunchedEffect
+        val root = rootDir ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(500)
+        runCatching { SessionStore.save(root, sessionSnapshot) }
+    }
+
+    LaunchedEffect(rootDir) {
+        historyLoaded = false
+        val root = rootDir
+        if (root == null) {
+            historyFile = HistoryFile()
+            historyLoaded = true
+            return@LaunchedEffect
+        }
+        historyFile = runCatching { HistoryStore.load(root) }.getOrDefault(HistoryFile())
+        historyLoaded = true
+    }
+    LaunchedEffect(rootDir) {
+        val root = rootDir
+        if (root == null) {
+            workspaceFile = WorkspaceFile()
+            return@LaunchedEffect
+        }
+        val ws = runCatching { WorkspaceStore.load(root) }.getOrDefault(WorkspaceFile())
+        workspaceFile = ws
+        val name = ws.palette
+        if (name != null) {
+            val resolved = GlassPalette.values().firstOrNull { it.name.equals(name, ignoreCase = true) }
+            if (resolved != null) palette = resolved
+        }
+    }
+    LaunchedEffect(rootDir, historyLoaded, historyFile) {
+        if (!historyLoaded) return@LaunchedEffect
+        val root = rootDir ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(500)
+        runCatching { HistoryStore.save(root, historyFile) }
+    }
+    LaunchedEffect(rootDir, expanded) {
+        val dirs = watchableDirs(rootDir, expanded)
+        if (dirs.isEmpty()) return@LaunchedEffect
+        val watcher = FileTreeWatcher(dirs)
+        if (!watcher.active) { watcher.close(); return@LaunchedEffect }
+        try {
+            watcher.runLoop { treeRevision++ }
+        } finally {
+            watcher.close()
+        }
+    }
+    val addRecentFile: (Path) -> Unit = { p ->
+        historyFile = historyFile.copy(
+            recentFiles = pushMru(historyFile.recentFiles, p.toString(), HistoryStore.MAX_RECENT_FILES),
+        )
+    }
+    val addSearchQuery: (String) -> Unit = { q ->
+        if (q.isNotBlank()) historyFile = historyFile.copy(
+            searchHistory = pushMru(historyFile.searchHistory, q, HistoryStore.MAX_SEARCH_HISTORY),
+        )
+    }
+    val addReplaceText: (String) -> Unit = { r ->
+        if (r.isNotEmpty()) historyFile = historyFile.copy(
+            replaceHistory = pushMru(historyFile.replaceHistory, r, HistoryStore.MAX_REPLACE_HISTORY),
+        )
     }
 
     val focusedActivePath = focused().book.active?.path
@@ -190,6 +333,7 @@ fun main() = application {
         if (path != null && isKotlinSource(path)) {
             lsp.didChange(path, focusedActiveText)
         }
+        if (path != null) todo.updateFile(path, focusedActiveText)
     }
 
     val openInTab: (Path) -> Unit = { picked ->
@@ -197,9 +341,11 @@ fun main() = application {
         if (kind.isEditableAsText) {
             FileDocument.loadOrNull(picked)?.let { text ->
                 mutateFocused { it.copy(book = it.book.openOrFocus(picked, text)) }
+                addRecentFile(picked)
             }
         } else {
             mutateFocused { it.copy(book = it.book.openOrFocus(picked, "")) }
+            addRecentFile(picked)
         }
     }
     val openInTabAt: (Path, Int) -> Unit = { picked, offset ->
@@ -215,6 +361,7 @@ fun main() = application {
                         editorValue = TextFieldValue(tab.text, TextRange(caret)),
                     )
                 }
+                addRecentFile(picked)
             } else {
                 FileDocument.loadOrNull(picked)?.let { text ->
                     val caret = offset.coerceIn(0, text.length)
@@ -225,6 +372,7 @@ fun main() = application {
                             editorValue = TextFieldValue(text, TextRange(caret)),
                         )
                     }
+                    addRecentFile(picked)
                 }
             }
         }
@@ -256,8 +404,8 @@ fun main() = application {
         )
         lsp.references(p, line, char, includeDeclaration = true, symbolName = symbol)
             .whenComplete { results, err ->
-                referencesState = if (err != null) {
-                    ReferencesQueryState(
+                if (err != null) {
+                    referencesState = ReferencesQueryState(
                         symbolName = symbol,
                         originUri = origin,
                         results = emptyList(),
@@ -265,11 +413,30 @@ fun main() = application {
                         errorMessage = err.message?.lineSequence()?.firstOrNull()?.take(160)
                             ?: "참조 검색 실패",
                     )
+                    return@whenComplete
+                }
+                val list = results.orEmpty()
+                val autoJump = pickSingleOtherReference(list, origin, line, char)
+                if (autoJump != null) {
+                    referencesState = null
+                    val target = runCatching {
+                        java.nio.file.Paths.get(java.net.URI(autoJump.uri))
+                    }.getOrNull()
+                    if (target != null) {
+                        jumpToProblem(target, autoJump.startLine, autoJump.startCharacter)
+                    } else {
+                        referencesState = ReferencesQueryState(
+                            symbolName = symbol,
+                            originUri = origin,
+                            results = list,
+                            isLoading = false,
+                        )
+                    }
                 } else {
-                    ReferencesQueryState(
+                    referencesState = ReferencesQueryState(
                         symbolName = symbol,
                         originUri = origin,
-                        results = results.orEmpty(),
+                        results = list,
                         isLoading = false,
                     )
                 }
@@ -487,6 +654,7 @@ fun main() = application {
             val updated = s.next()
             mutatePane(side) { it.copy(search = updated) }
             moveCaretToActiveMatch(side, updated)
+            addSearchQuery(updated.query)
         }
     }
     val onSearchPrev: (PaneSide) -> Unit = { side ->
@@ -525,6 +693,8 @@ fun main() = application {
                 )
             }
             moveCaretToActiveMatch(side, updatedSearch)
+            addSearchQuery(s.query)
+            addReplaceText(s.replace)
         }
     }
     val onReplaceAll: (PaneSide) -> Unit = { side ->
@@ -544,6 +714,8 @@ fun main() = application {
                     search = s.retarget(r.text),
                 )
             }
+            addSearchQuery(s.query)
+            addReplaceText(s.replace)
         }
     }
 
@@ -689,7 +861,13 @@ fun main() = application {
         val all = GlassPalette.values()
         palette = all[(all.indexOf(palette) + 1) % all.size]
         paletteToastUntil = System.currentTimeMillis() + 1600L
-        AppSettings.savePalette(palette)
+        val root = rootDir
+        if (root != null) {
+            workspaceFile = workspaceFile.copy(palette = palette.name)
+            runCatching { WorkspaceStore.save(root, workspaceFile) }
+        } else {
+            AppSettings.savePalette(palette)
+        }
     }
     val openDocumentSymbol: () -> Unit = {
         val active = focused().book.active
@@ -746,7 +924,12 @@ fun main() = application {
             val (line, character) = offsetToLineChar(text, caret)
             val snapshotUri = activePath.toUri().toString()
             val snapshotText = text
-            currentLsp.codeActions(activePath, line, character, line, character).whenComplete { actions, err ->
+            val lineLen = run {
+                val lineStart = text.lastIndexOf('\n', (caret - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+                val lineEnd = text.indexOf('\n', lineStart).let { if (it < 0) text.length else it }
+                lineEnd - lineStart
+            }
+            currentLsp.codeActions(activePath, line, 0, line, lineLen).whenComplete { actions, err ->
                 if (err == null) {
                     val raw = actions.orEmpty()
                     val list = raw.map { entry ->
@@ -797,6 +980,10 @@ fun main() = application {
                     problemsOpen = !problemsOpen
                     true
                 }
+                event.key == Key.Six && event.isShiftPressed -> {
+                    todoOpen = !todoOpen
+                    true
+                }
                 event.key == Key.F && event.isShiftPressed -> {
                     if (findInFiles) findInFiles = false else openFindInFiles()
                     true
@@ -841,6 +1028,9 @@ fun main() = application {
             activateAdjacentTab(1); true
         } else if (event.key == Key.F8) {
             jumpProblemRelative(!event.isShiftPressed)
+            true
+        } else if (event.key == Key.F5) {
+            treeRevision++
             true
         } else if (event.key == Key.Escape && focusedSearch != null) {
             closeSearch(focusedPane); true
@@ -985,6 +1175,7 @@ fun main() = application {
                     onMoveTabAcross = moveTabAcross,
                     rootDir = rootDir,
                     expanded = expanded,
+                    treeRevision = treeRevision,
                     sidebarWidth = sidebarWidth,
                     onSidebarResize = { delta ->
                         sidebarWidth = (sidebarWidth + delta).coerceIn(160.dp, 600.dp)
@@ -1013,6 +1204,22 @@ fun main() = application {
                     onProblemsResizeDelta = { delta ->
                         problemsHeight = (problemsHeight + delta).coerceIn(80.dp, 600.dp)
                     },
+                    problemsCollapsed = problemsCollapsed,
+                    onProblemsCollapsedChange = { problemsCollapsed = it },
+                    problemsFileOrder = problemsFileOrder,
+                    onProblemsFileOrderChange = { problemsFileOrder = it },
+                    todoOpen = todoOpen,
+                    todoItems = todoItems,
+                    onTodoToggle = { todoOpen = !todoOpen },
+                    onTodoClose = { todoOpen = false },
+                    todoHeight = todoHeight,
+                    onTodoResizeDelta = { delta ->
+                        todoHeight = (todoHeight + delta).coerceIn(80.dp, 600.dp)
+                    },
+                    todoCollapsed = todoCollapsed,
+                    onTodoCollapsedChange = { todoCollapsed = it },
+                    todoFileOrder = todoFileOrder,
+                    onTodoFileOrderChange = { todoFileOrder = it },
                     referencesState = referencesState,
                     onRequestReferences = requestReferences,
                     onReferencesClose = { referencesState = null },
@@ -1021,6 +1228,8 @@ fun main() = application {
                         referencesHeight = (referencesHeight + delta).coerceIn(80.dp, 600.dp)
                     },
                     linePreviewFor = { uri, line -> currentLsp.linePreviewFor(uri, line) },
+                    foldedLinesFor = foldedLinesFor,
+                    onFoldChange = onFoldChange,
                     editorFocusVersion = editorFocusVersion,
                     codeActionPreviewVisible = codeActionOpen,
                     codeActionPreviewActions = codeActionList,
@@ -1197,6 +1406,7 @@ private fun Shell(
     onMoveTabAcross: ((PaneSide, Int) -> Unit)?,
     rootDir: Path?,
     expanded: Set<Path>,
+    treeRevision: Int,
     sidebarWidth: Dp,
     onSidebarResize: (Dp) -> Unit,
     onToggle: (Path) -> Unit,
@@ -1221,12 +1431,28 @@ private fun Shell(
     onApplyRename: (RenameWorkspaceEdit) -> Unit,
     problemsHeight: Dp,
     onProblemsResizeDelta: (Dp) -> Unit,
+    problemsCollapsed: Set<String>,
+    onProblemsCollapsedChange: (Set<String>) -> Unit,
+    problemsFileOrder: List<String>,
+    onProblemsFileOrderChange: (List<String>) -> Unit,
+    todoOpen: Boolean,
+    todoItems: List<page.editor.TodoItem>,
+    onTodoToggle: () -> Unit,
+    onTodoClose: () -> Unit,
+    todoHeight: Dp,
+    onTodoResizeDelta: (Dp) -> Unit,
+    todoCollapsed: Set<String>,
+    onTodoCollapsedChange: (Set<String>) -> Unit,
+    todoFileOrder: List<String>,
+    onTodoFileOrderChange: (List<String>) -> Unit,
     referencesState: ReferencesQueryState?,
     onRequestReferences: (Path, Int, Int, String) -> Unit,
     onReferencesClose: () -> Unit,
     referencesHeight: Dp,
     onReferencesResizeDelta: (Dp) -> Unit,
     linePreviewFor: (String, Int) -> String?,
+    foldedLinesFor: (Path?) -> Set<Int> = { emptySet() },
+    onFoldChange: (Path, Set<Int>) -> Unit = { _, _ -> },
     editorFocusVersion: Int = 0,
     codeActionPreviewVisible: Boolean = false,
     codeActionPreviewActions: List<CodeActionEntry> = emptyList(),
@@ -1247,6 +1473,7 @@ private fun Shell(
                 selectedFile = paneFor(focusedPane, primary, secondary).book.active?.path,
                 onToggle = onToggle,
                 onOpenFile = onOpenFile,
+                revision = treeRevision,
                 modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
             )
             ResizeHandle(onSidebarResize)
@@ -1286,7 +1513,12 @@ private fun Shell(
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
+                                todoCount = todoItems.size,
+                                onTodoToggle = onTodoToggle,
+                                workspaceRoot = rootDir,
                                 editorFocusVersion = if (focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
+                                initialFoldedStartLines = foldedLinesFor(primary.book.active?.path),
+                                onFoldStartLinesChange = onFoldChange,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -1317,7 +1549,12 @@ private fun Shell(
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
+                                todoCount = todoItems.size,
+                                onTodoToggle = onTodoToggle,
+                                workspaceRoot = rootDir,
                                 editorFocusVersion = if (focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
+                                initialFoldedStartLines = foldedLinesFor(secondary.book.active?.path),
+                                onFoldStartLinesChange = onFoldChange,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -1347,7 +1584,12 @@ private fun Shell(
                         onJumpToProblem = onJumpToProblem,
                         onApplyRename = onApplyRename,
                         onRequestReferences = onRequestReferences,
+                        todoCount = todoItems.size,
+                        onTodoToggle = onTodoToggle,
+                        workspaceRoot = rootDir,
                         editorFocusVersion = editorFocusVersion,
+                        initialFoldedStartLines = foldedLinesFor(primary.book.active?.path),
+                        onFoldStartLinesChange = onFoldChange,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -1372,6 +1614,23 @@ private fun Shell(
                 onClose = onProblemsClose,
                 height = problemsHeight,
                 onResizeDelta = onProblemsResizeDelta,
+                collapsedKeys = problemsCollapsed,
+                onCollapsedKeysChange = onProblemsCollapsedChange,
+                fileOrder = problemsFileOrder,
+                onFileOrderChange = onProblemsFileOrderChange,
+            )
+        }
+        if (todoOpen) {
+            TodoPanel(
+                items = todoItems,
+                onJump = onJumpToProblem,
+                onClose = onTodoClose,
+                height = todoHeight,
+                onResizeDelta = onTodoResizeDelta,
+                collapsedKeys = todoCollapsed,
+                onCollapsedKeysChange = onTodoCollapsedChange,
+                fileOrder = todoFileOrder,
+                onFileOrderChange = onTodoFileOrderChange,
             )
         }
         if (referencesState != null) {
@@ -1417,7 +1676,12 @@ private fun PaneRegion(
     onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
     onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
     onRequestReferences: (Path, Int, Int, String) -> Unit = { _, _, _, _ -> },
+    todoCount: Int = 0,
+    onTodoToggle: () -> Unit = {},
+    workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
+    initialFoldedStartLines: Set<Int> = emptySet(),
+    onFoldStartLinesChange: (Path, Set<Int>) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
@@ -1498,6 +1762,8 @@ private fun PaneRegion(
                     lspStatusText = lspStatusText,
                     lspActivities = lspActivities,
                     onProblemsToggle = onProblemsToggle,
+                    todoCount = todoCount,
+                    onTodoToggle = onTodoToggle,
                     onRequestCompletion = active?.path?.let { p ->
                         { line, ch, trig -> lsp.completion(p, pane.editorValue.text, line, ch, trig) }
                     },
@@ -1526,7 +1792,17 @@ private fun PaneRegion(
                     onRequestReferences = active?.path?.let { p ->
                         { line, ch, sym -> onRequestReferences(p, line, ch, sym) }
                     },
+                    onRequestInlayHints = active?.path
+                        ?.takeIf { lsp.status.value == LspController.Status.READY }
+                        ?.let { p ->
+                            { sl, sc, el, ec -> lsp.inlayHints(p, sl, sc, el, ec) }
+                        },
+                    workspaceRoot = workspaceRoot,
                     editorFocusVersion = editorFocusVersion,
+                    initialFoldedStartLines = initialFoldedStartLines,
+                    onFoldStartLinesChange = { lines ->
+                        active?.path?.let { p -> onFoldStartLinesChange(p, lines) }
+                    },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

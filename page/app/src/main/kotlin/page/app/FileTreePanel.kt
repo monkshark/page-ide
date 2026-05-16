@@ -53,6 +53,7 @@ fun FileTreePanel(
     selectedFile: Path?,
     onToggle: (Path) -> Unit,
     onOpenFile: (Path) -> Unit,
+    revision: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -65,7 +66,7 @@ fun FileTreePanel(
             if (root == null) {
                 EmptyTreeHint()
             } else {
-                val nodes = remember(root, expanded) { FileTree.listTree(root, expanded) }
+                val nodes = remember(root, expanded, revision) { FileTree.listTree(root, expanded) }
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)) {
                     items(nodes, key = { it.path.toString() }) { node ->
                         TreeRow(
