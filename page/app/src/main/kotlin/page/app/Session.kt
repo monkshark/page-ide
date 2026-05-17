@@ -12,6 +12,10 @@ data class SessionTabState(
     val caret: Int = 0,
 )
 
+data class SessionTerminalTab(
+    val name: String,
+)
+
 data class SessionPane(
     val tabs: List<SessionTabState> = emptyList(),
     val activeIndex: Int = -1,
@@ -34,6 +38,10 @@ data class SessionFile(
     val todoHeight: Float = 220f,
     val todoCollapsed: List<String> = emptyList(),
     val todoFileOrder: List<String> = emptyList(),
+    val terminalOpen: Boolean = false,
+    val terminalHeight: Float = 240f,
+    val terminalTabs: List<SessionTerminalTab> = emptyList(),
+    val terminalActiveIndex: Int = -1,
     val foldedStartLinesByPath: Map<String, List<Int>> = emptyMap(),
     val expandedDirs: List<String> = emptyList(),
 )

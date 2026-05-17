@@ -10,12 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import page.lsp.DiagnosticSeverity
+import page.ui.CompactDropdown
+import page.ui.CompactMenuSlot
 import page.ui.Glass
 
 internal data class MultiKeywordChoice(
@@ -121,41 +120,39 @@ private fun MultiKeywordDot(
             style = MaterialTheme.typography.labelSmall,
             modifier = Modifier.clickable { expanded = true },
         )
-        DropdownMenu(
+        CompactDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            minWidth = 120.dp,
         ) {
             for (kw in choice.keywords) {
                 val swatch = choice.keywordColors[kw] ?: MaterialTheme.colorScheme.onSurfaceVariant
                 val isActive = kw == choice.chosenKeyword
-                DropdownMenuItem(
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    modifier = Modifier.fillMaxWidth().padding(0.dp).size(width = 120.dp, height = 22.dp),
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = kw.first().uppercase(),
-                                color = swatch,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.width(10.dp),
-                            )
-                            Text(
-                                text = kw,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isActive) swatch else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    },
+                CompactMenuSlot(
                     onClick = {
                         expanded = false
                         onPick(kw)
                     },
-                )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = kw.first().uppercase(),
+                            color = swatch,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.width(10.dp),
+                        )
+                        Text(
+                            text = kw,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isActive) swatch else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         }
     }

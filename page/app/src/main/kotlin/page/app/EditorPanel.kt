@@ -91,6 +91,7 @@ import page.lsp.enrichForPropertyDecl
 import page.lsp.enrichWithKDocFromDefinition
 import page.lsp.needsKdocEnrichment
 import page.ui.CodeEditor
+import page.ui.CompactDropdown
 import page.ui.CompletionDisplay
 import page.ui.EditorDecoration
 import page.ui.EditorFontFamily
@@ -1675,32 +1676,31 @@ private fun LspActivitiesItem(activities: List<LspController.Activity>) {
                 }
             }
         }
-        if (canExpand && expanded) {
-            androidx.compose.material3.DropdownMenu(
-                expanded = true,
-                onDismissRequest = { expanded = false },
+        CompactDropdown(
+            expanded = canExpand && expanded,
+            onDismissRequest = { expanded = false },
+            minWidth = 220.dp,
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (a in activities) {
-                            val secs = ((nowMs - a.startedAtMs) / 1000L).coerceAtLeast(0L).toInt()
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                androidx.compose.material3.LinearProgressIndicator(
-                                    modifier = Modifier.width(72.dp).height(3.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                )
-                                Text(
-                                    text = if (secs > 0) "${a.label} (${secs}s)" else a.label,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (a in activities) {
+                        val secs = ((nowMs - a.startedAtMs) / 1000L).coerceAtLeast(0L).toInt()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                modifier = Modifier.width(72.dp).height(3.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                            Text(
+                                text = if (secs > 0) "${a.label} (${secs}s)" else a.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                     }
                 }

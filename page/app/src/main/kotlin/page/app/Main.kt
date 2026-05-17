@@ -1,7 +1,9 @@
 package page.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -24,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -105,6 +108,16 @@ fun main() = application {
     var todoHeight: Dp by remember { mutableStateOf(220.dp) }
     var todoCollapsed by remember { mutableStateOf(emptySet<String>()) }
     var todoFileOrder by remember { mutableStateOf(emptyList<String>()) }
+    var terminalOpen by remember { mutableStateOf(false) }
+    var terminalHeight: Dp by remember { mutableStateOf(240.dp) }
+    val terminalScope = rememberCoroutineScope()
+    val terminalManager = remember(rootDir) {
+        val dir = rootDir ?: Path.of(System.getProperty("user.home"))
+        TerminalManager(dir, terminalScope)
+    }
+    DisposableEffect(terminalManager) {
+        onDispose { terminalManager.closeAll() }
+    }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
     var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
     var palette: GlassPalette by remember { mutableStateOf(AppSettings.loadPalette()) }
@@ -218,6 +231,15 @@ fun main() = application {
             todoHeight = session.todoHeight.coerceIn(120f, 600f).dp
             todoCollapsed = session.todoCollapsed.toSet()
             todoFileOrder = session.todoFileOrder
+            terminalOpen = session.terminalOpen
+            terminalHeight = session.terminalHeight.coerceIn(120f, 600f).dp
+            if (session.terminalTabs.isNotEmpty()) {
+                terminalManager.restoreFrom(
+                    names = session.terminalTabs.map { it.name },
+                    activeIndex = session.terminalActiveIndex,
+                    autoStart = true,
+                )
+            }
             foldByPath = session.foldedStartLinesByPath.mapValues { it.value.toSet() }
             val restoredExpanded = restoreExpandedDirs(session.expandedDirs)
             if (restoredExpanded.isNotEmpty()) expanded = restoredExpanded
@@ -251,6 +273,10 @@ fun main() = application {
         todoHeight = todoHeight.value,
         todoCollapsed = todoCollapsed.toList().sorted(),
         todoFileOrder = todoFileOrder,
+        terminalOpen = terminalOpen,
+        terminalHeight = terminalHeight.value,
+        terminalTabs = terminalManager.snapshotNames().map { SessionTerminalTab(name = it) },
+        terminalActiveIndex = terminalManager.activeIndex(),
         foldedStartLinesByPath = foldByPath.mapValues { it.value.toList().sorted() },
         expandedDirs = expanded.map { it.toString() }.sorted(),
     )
@@ -1051,6 +1077,11 @@ fun main() = application {
         val codeActionOpenRef = rememberUpdatedState(codeActionOpen)
         val codeActionListRef = rememberUpdatedState(codeActionList)
         val codeActionSelectedRef = rememberUpdatedState(codeActionSelected)
+        val toggleTerminal: () -> Unit = {
+            terminalOpen = !terminalOpen
+            if (terminalOpen && terminalManager.tabs.isEmpty()) terminalManager.newTab()
+        }
+        val toggleTerminalRef = rememberUpdatedState(toggleTerminal)
         DisposableEffect(window) {
             val frame = window
             val dispatcher = java.awt.KeyEventDispatcher { e ->
@@ -1095,7 +1126,15 @@ fun main() = application {
                     }
                 }
                 when {
-                    ctrl && !alt && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
+                    ctrl && !alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
+                        toggleTerminalRef.value()
+                        true
+                    }
+                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_BACK_QUOTE -> {
+                        toggleTerminalRef.value()
+                        true
+                    }
+                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
                         openWsRef.value()
                         true
                     }
@@ -1220,6 +1259,14 @@ fun main() = application {
                     onTodoCollapsedChange = { todoCollapsed = it },
                     todoFileOrder = todoFileOrder,
                     onTodoFileOrderChange = { todoFileOrder = it },
+                    terminalOpen = terminalOpen,
+                    terminalManager = terminalManager,
+                    onTerminalToggle = toggleTerminal,
+                    onTerminalClose = { terminalOpen = false },
+                    terminalHeight = terminalHeight,
+                    onTerminalResizeDelta = { delta ->
+                        terminalHeight = (terminalHeight + delta).coerceIn(120.dp, 600.dp)
+                    },
                     referencesState = referencesState,
                     onRequestReferences = requestReferences,
                     onReferencesClose = { referencesState = null },
@@ -1445,6 +1492,12 @@ private fun Shell(
     onTodoCollapsedChange: (Set<String>) -> Unit,
     todoFileOrder: List<String>,
     onTodoFileOrderChange: (List<String>) -> Unit,
+    terminalOpen: Boolean,
+    terminalManager: TerminalManager,
+    onTerminalToggle: () -> Unit,
+    onTerminalClose: () -> Unit,
+    terminalHeight: Dp,
+    onTerminalResizeDelta: (Dp) -> Unit,
     referencesState: ReferencesQueryState?,
     onRequestReferences: (Path, Int, Int, String) -> Unit,
     onReferencesClose: () -> Unit,
@@ -1465,7 +1518,11 @@ private fun Shell(
 ) {
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     Column(modifier = Modifier.fillMaxSize()) {
-        TitleBar(path = paneFor(focusedPane, primary, secondary).book.active?.path)
+        TitleBar(
+            path = paneFor(focusedPane, primary, secondary).book.active?.path,
+            terminalOpen = terminalOpen,
+            onTerminalToggle = onTerminalToggle,
+        )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             FileTreePanel(
                 root = rootDir,
@@ -1641,6 +1698,14 @@ private fun Shell(
                 height = referencesHeight,
                 onResizeDelta = onReferencesResizeDelta,
                 linePreviewFor = linePreviewFor,
+            )
+        }
+        if (terminalOpen) {
+            TerminalPanel(
+                manager = terminalManager,
+                onPanelClose = onTerminalClose,
+                height = terminalHeight,
+                onResizeDelta = onTerminalResizeDelta,
             )
         }
     }
@@ -1824,7 +1889,11 @@ private fun FocusIndicator(visible: Boolean) {
 }
 
 @Composable
-private fun TitleBar(path: Path?) {
+private fun TitleBar(
+    path: Path?,
+    terminalOpen: Boolean,
+    onTerminalToggle: () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(36.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -1850,7 +1919,33 @@ private fun TitleBar(path: Path?) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.weight(1f))
+            TitleBarToggle(
+                label = "터미널",
+                selected = terminalOpen,
+                onClick = onTerminalToggle,
+            )
         }
+    }
+}
+
+@Composable
+private fun TitleBarToggle(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    val fg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(4.dp),
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(horizontal = 2.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = fg,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }
 

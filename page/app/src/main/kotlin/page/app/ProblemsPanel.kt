@@ -2,6 +2,7 @@ package page.app
 
 import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
+import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import java.awt.Cursor
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticSeverity
+import page.ui.CompactContextMenuRepresentation
 import page.ui.Glass
 import java.net.URI
 import java.nio.file.Path
@@ -278,6 +281,7 @@ private fun ProblemFileHeader(
     val infoCount = list.count { it.diagnostic.severity == DiagnosticSeverity.INFO }
     val hintCount = list.count { it.diagnostic.severity == DiagnosticSeverity.HINT }
     val clipboard = LocalClipboardManager.current
+    CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
     ContextMenuArea(
         items = {
             listOf(
@@ -324,6 +328,7 @@ private fun ProblemFileHeader(
             if (hintCount > 0) ProblemBadge(hintCount, "hints", MaterialTheme.colorScheme.tertiary)
         }
     }
+    }
 }
 
 @Composable
@@ -350,6 +355,7 @@ private fun ProblemRow(
     } else {
         Color.Transparent
     }
+    CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
     ContextMenuArea(
         items = {
             val snap = selectionSnapshot().ifEmpty { listOf(entry) }
@@ -423,6 +429,7 @@ private fun ProblemRow(
                 modifier = Modifier.weight(1f),
             )
         }
+    }
     }
 }
 

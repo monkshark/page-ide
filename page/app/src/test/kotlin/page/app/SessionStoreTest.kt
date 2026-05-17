@@ -188,6 +188,17 @@ class SessionStoreTest {
     }
 
     @Test
+    fun `terminal fields round-trip`() {
+        val ws = newWorkspace()
+        val file = SessionFile(terminalOpen = true, terminalHeight = 320f)
+        SessionStore.save(ws, file)
+        val loaded = SessionStore.load(ws)
+        assertNotNull(loaded)
+        assertEquals(true, loaded.terminalOpen)
+        assertEquals(320f, loaded.terminalHeight)
+    }
+
+    @Test
     fun `legacy session without new fields loads with empty defaults`() {
         val ws = newWorkspace()
         SessionStore.save(ws, SessionFile())

@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":page:editor"))
     implementation(project(":page:lsp"))
     implementation(libs.kotlinx.coroutines.swing)
+    implementation(libs.pty4j)
     testImplementation(kotlin("test"))
 }
 

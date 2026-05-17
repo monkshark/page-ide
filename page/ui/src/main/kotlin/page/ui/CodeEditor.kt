@@ -25,8 +25,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -609,15 +607,15 @@ fun CodeEditor(
                 )
             }
         }
-        DropdownMenu(
+        CompactDropdown(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
             offset = menuOffset,
         ) {
             val sel = value.selection
             val hasSelection = !sel.collapsed
-            DropdownMenuItem(
-                text = { Text("잘라내기") },
+            CompactMenuItem(
+                label = "잘라내기",
                 enabled = hasSelection,
                 onClick = {
                     if (!sel.collapsed) {
@@ -628,8 +626,8 @@ fun CodeEditor(
                     menuExpanded = false
                 },
             )
-            DropdownMenuItem(
-                text = { Text("복사") },
+            CompactMenuItem(
+                label = "복사",
                 enabled = hasSelection,
                 onClick = {
                     if (!sel.collapsed) {
@@ -638,8 +636,8 @@ fun CodeEditor(
                     menuExpanded = false
                 },
             )
-            DropdownMenuItem(
-                text = { Text("붙여넣기") },
+            CompactMenuItem(
+                label = "붙여넣기",
                 onClick = {
                     val pasted = clipboard.getText()?.text.orEmpty()
                     if (pasted.isNotEmpty()) {
@@ -650,8 +648,8 @@ fun CodeEditor(
                     menuExpanded = false
                 },
             )
-            DropdownMenuItem(
-                text = { Text("전체 선택") },
+            CompactMenuItem(
+                label = "전체 선택",
                 onClick = {
                     onValueChange(value.copy(selection = TextRange(0, value.text.length)))
                     menuExpanded = false
