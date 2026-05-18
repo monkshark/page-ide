@@ -42,6 +42,8 @@ data class SessionFile(
     val terminalHeight: Float = 240f,
     val terminalTabs: List<SessionTerminalTab> = emptyList(),
     val terminalActiveIndex: Int = -1,
+    val outputOpen: Boolean = false,
+    val outputHeight: Float = 220f,
     val foldedStartLinesByPath: Map<String, List<Int>> = emptyMap(),
     val expandedDirs: List<String> = emptyList(),
 )

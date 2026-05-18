@@ -121,13 +121,13 @@ class LspController(
         if (resolution !is KotlinLsp.Resolution.Found) {
             val attempted = (resolution as KotlinLsp.Resolution.NotFound).attempted.joinToString("\n  ")
             status.value = Status.MISSING
-            statusDetail.value = "kotlin-language-server 를 찾지 못했습니다. 시도한 위치:\n  $attempted"
+            statusDetail.value = "kotlin-language-server not found. Tried:\n  $attempted"
             println("[lsp] MISSING — attempted:\n  $attempted")
             return
         }
         status.value = Status.STARTING
         statusDetail.value = "starting (${resolution.origin}: ${resolution.executable})"
-        startActivity(STARTUP_KIND, "시작 중…")
+        startActivity(STARTUP_KIND, "Starting…")
         println("[lsp] STARTING — ${resolution.origin}: ${resolution.executable}")
         try {
             val c = KotlinLsp.spawn(resolution.executable, workspaceRoot, onStderrLine = ::onLspStderr)
@@ -1233,11 +1233,11 @@ class LspController(
         findRenameException(err)?.message?.let { return it }
         val raw = err.message ?: err.toString()
         return when {
-            raw.contains("UnsupportedOperationException") -> "LSP 서버가 rename 을 지원하지 않습니다"
+            raw.contains("UnsupportedOperationException") -> "LSP server does not support rename"
             raw.contains("Internal error", ignoreCase = true) ||
                 raw.contains("KotlinFrontEndException") ||
-                raw.contains("NoTopLevelDescriptorProvider") -> "LSP 서버 내부 오류 — 이 위치에서는 rename 을 처리할 수 없습니다"
-            else -> raw.lineSequence().firstOrNull()?.take(160) ?: "rename 실패"
+                raw.contains("NoTopLevelDescriptorProvider") -> "LSP server internal error — cannot rename at this position"
+            else -> raw.lineSequence().firstOrNull()?.take(160) ?: "rename failed"
         }
     }
 
@@ -1454,7 +1454,7 @@ class LspController(
         private const val INLAY_HINT_CACHE_MAX = 32
         private const val MAX_AUTO_OPEN_BYTES = 512L * 1024
         private const val EXTERNAL_SYMBOL_MESSAGE =
-            "외부 라이브러리 심볼은 rename 할 수 없습니다 (kotlin-stdlib · 의존성 jar)"
+            "Cannot rename external library symbols (kotlin-stdlib · dependency jars)"
         private val WORKSPACE_AUTO_OPEN_EXCLUDES = setOf(
             ".git", ".hg", ".svn", ".idea", ".idea_modules", ".vs", ".vscode",
             ".gradle", "build", "out", "bin", "target", "node_modules",

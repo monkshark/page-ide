@@ -112,7 +112,7 @@ fun TodoPanel(
                 }
                 Box(modifier = Modifier.weight(1f))
                 Text(
-                    text = "닫기",
+                    text = "Close",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onClose() }.padding(4.dp),
@@ -127,8 +127,8 @@ fun TodoPanel(
             if (visibleItems.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = if (items.isEmpty()) "표시할 TODO 가 없습니다."
-                        else "선택한 필터에 해당하는 항목이 없습니다.",
+                        text = if (items.isEmpty()) "No TODOs to display."
+                        else "No items match the selected filters.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

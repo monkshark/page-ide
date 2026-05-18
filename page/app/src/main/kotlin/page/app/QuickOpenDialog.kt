@@ -80,7 +80,7 @@ internal fun QuickOpenDialog(
     DialogWindow(
         onCloseRequest = onDismiss,
         state = state,
-        title = "빠른 열기",
+        title = "Quick open",
         resizable = false,
         undecorated = true,
         onPreviewKeyEvent = { event ->
@@ -160,7 +160,7 @@ private fun QueryInput(value: String, onChange: (String) -> Unit, focus: FocusRe
         )
         if (value.isEmpty()) {
             Text(
-                text = "파일 이름…",
+                text = "File name…",
                 style = LocalTextStyle.current.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     fontFamily = FontFamily.Monospace,
@@ -185,7 +185,7 @@ private fun ResultList(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "결과 없음",
+                text = "No results",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
             )

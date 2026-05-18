@@ -1175,7 +1175,7 @@ fun EditorPanel(
                         renameInProgress = false
                         when {
                             err != null -> renameError = err.message ?: err.toString()
-                            edit.isEmpty -> renameError = "변경 사항 없음"
+                            edit.isEmpty -> renameError = "No changes"
                             else -> {
                                 onApplyRename?.invoke(edit)
                                 renameRequest = null

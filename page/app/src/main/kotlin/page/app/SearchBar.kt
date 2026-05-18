@@ -143,13 +143,13 @@ fun SearchBar(
                     }
                     Spacer(Modifier.width(10.dp))
                     TextChip(
-                        label = "바꾸기",
+                        label = "Replace",
                         onClick = onReplace,
                         enabled = state.matches.isNotEmpty(),
                     )
                     Spacer(Modifier.width(6.dp))
                     TextChip(
-                        label = "전부 바꾸기",
+                        label = "Replace all",
                         onClick = onReplaceAll,
                         enabled = state.matches.isNotEmpty(),
                     )

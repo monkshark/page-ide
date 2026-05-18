@@ -66,7 +66,7 @@ internal fun RenameDialog(
     DialogWindow(
         onCloseRequest = onDismiss,
         state = state,
-        title = "이름 바꾸기",
+        title = "Rename",
         resizable = false,
         undecorated = true,
         onPreviewKeyEvent = { event ->
@@ -95,7 +95,7 @@ internal fun RenameDialog(
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
                     Text(
-                        text = "새 이름",
+                        text = "New name",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                     )
@@ -125,9 +125,9 @@ internal fun RenameDialog(
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val status = when {
-                            inProgress -> "적용 중…"
+                            inProgress -> "Applying…"
                             error != null -> error
-                            else -> "Enter 적용 · Esc 취소"
+                            else -> "Enter to apply · Esc to cancel"
                         }
                         val color = when {
                             error != null -> MaterialTheme.colorScheme.error

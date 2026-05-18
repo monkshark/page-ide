@@ -304,24 +304,24 @@ private fun SvgToolbar(
             horizontalArrangement = Arrangement.End,
         ) {
             ViewModeButton(
-                label = "수정창만",
+                label = "Editor",
                 selected = viewMode == SvgViewMode.EDITOR_ONLY,
                 onClick = { onViewModeChange(SvgViewMode.EDITOR_ONLY) },
             )
             Spacer(Modifier.width(2.dp))
             ViewModeButton(
-                label = "같이",
+                label = "Split",
                 selected = viewMode == SvgViewMode.BOTH,
                 onClick = { onViewModeChange(SvgViewMode.BOTH) },
             )
             Spacer(Modifier.width(2.dp))
             ViewModeButton(
-                label = "SVG만",
+                label = "Preview",
                 selected = viewMode == SvgViewMode.PREVIEW_ONLY,
                 onClick = { onViewModeChange(SvgViewMode.PREVIEW_ONLY) },
             )
             Spacer(Modifier.width(12.dp))
-            ToolbarTextButton(label = "정리", enabled = true, onClick = onFormat)
+            ToolbarTextButton(label = "Format", enabled = true, onClick = onFormat)
             Spacer(Modifier.width(12.dp))
             ZoomIconButton(symbol = "−", enabled = zoomEnabled, onClick = onZoomOut)
             Spacer(Modifier.width(4.dp))

@@ -101,10 +101,10 @@ internal fun CodeActionPreviewPanel(
                 )
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when {
-                        current == null -> PanelMessage("선택된 액션 없음")
+                        current == null -> PanelMessage("No action selected")
                         current.command != null && !current.hasEdit ->
-                            PanelMessage("서버 실행 액션 (변경 미리보기 없음)\n• command: ${current.command}")
-                        previews.isEmpty() -> PanelMessage("변경 내역 없음")
+                            PanelMessage("Server-executed action (no edit preview)\n• command: ${current.command}")
+                        previews.isEmpty() -> PanelMessage("No changes")
                         else -> PreviewContent(previews)
                     }
                 }
@@ -136,7 +136,7 @@ private fun PanelHeader(count: Int) {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "${count}건",
+            text = "$count items",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp,
         )
@@ -253,7 +253,7 @@ private fun FileHunkBlock(file: CodeActionPreview.FilePreview) {
         }
         if (file.lines.isEmpty()) {
             Text(
-                text = if (file.isCurrent) "(변경 없음)" else "(다른 파일 — 미리보기 생략)",
+                text = if (file.isCurrent) "(no changes)" else "(other file — preview skipped)",
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                 fontSize = 11.sp,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 2.dp),

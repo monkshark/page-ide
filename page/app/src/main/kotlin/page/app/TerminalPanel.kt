@@ -131,7 +131,7 @@ fun TerminalPanel(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "열린 터미널이 없습니다 — 상단 + 버튼으로 새로 여세요",
+                        text = "No terminal open — click + above to start one",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -165,7 +165,7 @@ private fun TerminalHeader(
             onSelected = onShellSelected,
         )
         ToggleChip(
-            label = "관리자",
+            label = "Admin",
             selected = elevated,
             onClick = { onElevatedToggle(!elevated) },
         )
@@ -176,7 +176,7 @@ private fun TerminalHeader(
         )
         Box(modifier = Modifier.weight(1f))
         if (!alive) {
-            ClickableLabel(text = "다시 시작", onClick = onRestart)
+            ClickableLabel(text = "Restart", onClick = onRestart)
         }
     }
 }
@@ -213,7 +213,7 @@ private fun ShellSelector(
             }
             if (shells.isEmpty()) {
                 CompactMenuItem(
-                    label = "사용 가능한 셸이 없습니다",
+                    label = "No shells available",
                     enabled = false,
                     onClick = { expanded = false },
                 )
@@ -297,7 +297,7 @@ private fun TerminalTabBar(
             }
             ClickableLabel(text = "+", onClick = onNewTab)
         }
-        ClickableLabel(text = "닫기", onClick = onPanelClose)
+        ClickableLabel(text = "Close", onClick = onPanelClose)
     }
 }
 
@@ -343,8 +343,8 @@ private fun TerminalTabChip(
         androidx.compose.foundation.ContextMenuArea(
             items = {
                 listOf(
-                    androidx.compose.foundation.ContextMenuItem("이름 바꾸기") { editing = true },
-                    androidx.compose.foundation.ContextMenuItem("닫기") { onClose() },
+                    androidx.compose.foundation.ContextMenuItem("Rename") { editing = true },
+                    androidx.compose.foundation.ContextMenuItem("Close") { onClose() },
                 )
             },
         ) {

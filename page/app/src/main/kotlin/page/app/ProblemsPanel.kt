@@ -162,7 +162,7 @@ fun ProblemsPanel(
                 Box(modifier = Modifier.weight(1f))
                 if (entries.isNotEmpty()) {
                     Text(
-                        text = "모두 복사",
+                        text = "Copy all",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -173,7 +173,7 @@ fun ProblemsPanel(
                     )
                 }
                 Text(
-                    text = "닫기",
+                    text = "Close",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onClose() }.padding(4.dp),
@@ -188,7 +188,7 @@ fun ProblemsPanel(
             if (entries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "현재 보고된 문제가 없습니다.",
+                        text = "No problems reported.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -285,10 +285,10 @@ private fun ProblemFileHeader(
     ContextMenuArea(
         items = {
             listOf(
-                ContextMenuItem("이 파일의 진단 복사") {
+                ContextMenuItem("Copy diagnostics for this file") {
                     clipboard.setText(AnnotatedString(formatFileEntries(path, list)))
                 },
-                ContextMenuItem("파일 경로 복사") {
+                ContextMenuItem("Copy file path") {
                     clipboard.setText(AnnotatedString(path.toString()))
                 },
             )
@@ -360,8 +360,8 @@ private fun ProblemRow(
         items = {
             val snap = selectionSnapshot().ifEmpty { listOf(entry) }
             val n = snap.size
-            val msgLabel = if (n <= 1) "메시지 복사" else "선택 ${n}건 메시지 복사"
-            val locLabel = if (n <= 1) "위치+메시지 복사" else "선택 ${n}건 위치+메시지 복사"
+            val msgLabel = if (n <= 1) "Copy message" else "Copy $n messages"
+            val locLabel = if (n <= 1) "Copy location + message" else "Copy $n locations + messages"
             listOf(
                 ContextMenuItem(msgLabel) {
                     val text = snap.joinToString("\n") { it.diagnostic.message }

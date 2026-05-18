@@ -41,8 +41,8 @@ class TerminalManagerTest {
         val mgr = TerminalManager(workspace, scope)
         val t1 = mgr.newTab(autoStart = false)
         val t2 = mgr.newTab(autoStart = false)
-        assertEquals("터미널 1", t1.name)
-        assertEquals("터미널 2", t2.name)
+        assertEquals("Terminal 1", t1.name)
+        assertEquals("Terminal 2", t2.name)
         assertNotEquals(t1.id, t2.id)
     }
 
@@ -57,7 +57,7 @@ class TerminalManagerTest {
     fun `newTab with blank explicit name falls back to default`() {
         val mgr = TerminalManager(workspace, scope)
         val tab = mgr.newTab(name = "   ", autoStart = false)
-        assertEquals("터미널 1", tab.name)
+        assertEquals("Terminal 1", tab.name)
     }
 
     @Test
@@ -131,7 +131,7 @@ class TerminalManagerTest {
         val mgr = TerminalManager(workspace, scope)
         val tab = mgr.newTab(autoStart = false)
         mgr.renameTab(tab.id, "   ")
-        assertEquals("터미널", tab.name)
+        assertEquals("Terminal", tab.name)
     }
 
     @Test

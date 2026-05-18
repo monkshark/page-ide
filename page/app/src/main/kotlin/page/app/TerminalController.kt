@@ -83,7 +83,7 @@ class TerminalController(
             alive = true
         } catch (e: Throwable) {
             val hint = if (elevated) {
-                "관리자 모드는 gsudo 가 필요합니다. 'winget install gsudo' 후 다시 시도해 주세요.\r\n"
+                "Admin mode requires gsudo. Install via 'winget install gsudo' and try again.\r\n"
             } else ""
             buffer.feed("${e.javaClass.simpleName}: ${e.message}\r\n$hint")
             lines = buffer.snapshot

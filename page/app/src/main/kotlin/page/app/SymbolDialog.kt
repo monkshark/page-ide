@@ -83,8 +83,8 @@ internal fun DocumentSymbolDialog(
     val showTree = query.isBlank()
 
     SymbolDialogShell(
-        title = "파일 내 심볼",
-        placeholder = "심볼 이름…",
+        title = "Symbols in file",
+        placeholder = "Symbol name…",
         query = query,
         onQueryChange = { query = it; selected = 0 },
         selected = selected,
@@ -98,7 +98,7 @@ internal fun DocumentSymbolDialog(
         onDismiss = onDismiss,
     ) { listState, onHover ->
         if (results.isEmpty()) {
-            EmptyState(if (flattened.isEmpty()) "심볼 없음" else "결과 없음")
+            EmptyState(if (flattened.isEmpty()) "No symbols" else "No results")
         } else {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(results, key = { idx, _ -> idx }) { idx, r ->
@@ -144,8 +144,8 @@ internal fun WorkspaceSymbolDialog(
     }
 
     SymbolDialogShell(
-        title = "워크스페이스 심볼",
-        placeholder = "심볼 이름… (LSP 검색)",
+        title = "Workspace symbols",
+        placeholder = "Symbol name… (LSP search)",
         query = query,
         onQueryChange = { query = it; selected = 0 },
         selected = selected,
@@ -160,9 +160,9 @@ internal fun WorkspaceSymbolDialog(
         onDismiss = onDismiss,
     ) { listState, onHover ->
         when {
-            query.isBlank() -> EmptyState("타이핑하여 워크스페이스 전체에서 검색")
-            isLoading && symbols.isEmpty() -> EmptyState("검색 중…")
-            symbols.isEmpty() -> EmptyState("결과 없음")
+            query.isBlank() -> EmptyState("Type to search across the workspace")
+            isLoading && symbols.isEmpty() -> EmptyState("Searching…")
+            symbols.isEmpty() -> EmptyState("No results")
             else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(symbols, key = { idx, _ -> idx }) { idx, sym ->
                     WorkspaceSymbolRow(

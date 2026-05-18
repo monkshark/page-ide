@@ -62,19 +62,19 @@ fun WelcomeScreen(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 WelcomeAction(
-                    title = "폴더 열기",
-                    subtitle = "기존 프로젝트 디렉터리 열기",
+                    title = "Open folder",
+                    subtitle = "Open an existing project directory",
                     onClick = onOpenFolder,
                 )
                 WelcomeAction(
-                    title = "새 파일",
-                    subtitle = "빈 파일 만들고 시작하기",
+                    title = "New file",
+                    subtitle = "Create an empty file and start typing",
                     onClick = onNewFile,
                 )
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "단축키: Ctrl+Shift+O 폴더 열기 · Ctrl+O 파일 열기",
+                text = "Shortcuts: Ctrl+Shift+O open folder · Ctrl+O open file",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

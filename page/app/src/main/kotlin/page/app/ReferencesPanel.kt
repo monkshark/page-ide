@@ -77,7 +77,7 @@ fun ReferencesPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "참조",
+                    text = "References",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -93,7 +93,7 @@ fun ReferencesPanel(
                 CountBadge(state.results.size)
                 Box(modifier = Modifier.weight(1f))
                 Text(
-                    text = "닫기",
+                    text = "Close",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onClose() }.padding(4.dp),
@@ -106,10 +106,10 @@ fun ReferencesPanel(
                     .background(MaterialTheme.colorScheme.outlineVariant),
             )
             when {
-                state.isLoading -> CenteredMessage("검색 중…")
+                state.isLoading -> CenteredMessage("Searching…")
                 state.errorMessage != null -> CenteredMessage(state.errorMessage, isError = true)
                 state.results.isEmpty() -> CenteredMessage(
-                    "'${state.symbolName}' 에 대한 참조를 찾지 못했습니다."
+                    "No references found for '${state.symbolName}'."
                 )
                 else -> ReferenceList(
                     results = state.results,
@@ -222,7 +222,7 @@ private fun ReferenceRow(
         )
         if (trimmedPreview == null) {
             Text(
-                text = "(미리보기 없음)",
+                text = "(no preview)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
@@ -276,7 +276,7 @@ private fun CountBadge(count: Int, compact: Boolean = false) {
         shape = RoundedCornerShape(8.dp),
     ) {
         Text(
-            text = if (compact) "$count" else "$count 건",
+            text = if (compact) "$count" else "$count refs",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),

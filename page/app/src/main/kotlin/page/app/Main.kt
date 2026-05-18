@@ -79,6 +79,8 @@ import page.lsp.RenameApply
 import page.lsp.RenameFileChange
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.pickSingleOtherReference
+import page.ui.CompactDropdown
+import page.ui.CompactMenuItem
 import page.ui.Glass
 import page.ui.GlassPalette
 import page.ui.GlassTheme
@@ -120,6 +122,18 @@ fun main() = application {
     }
     DisposableEffect(terminalManager) {
         onDispose { terminalManager.closeAll() }
+    }
+    var runState: RunConfigsState by remember { mutableStateOf(RunConfigsState()) }
+    var runDialogOpen by remember { mutableStateOf(false) }
+    var outputOpen by remember { mutableStateOf(false) }
+    var outputHeight: Dp by remember { mutableStateOf(220.dp) }
+    val outputState = remember { OutputPanelState() }
+    val runScope = rememberCoroutineScope()
+    val runController = remember {
+        RunController(runScope) { event -> outputState.onEvent(event) }
+    }
+    DisposableEffect(runController) {
+        onDispose { runController.stop() }
     }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
     var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
@@ -203,6 +217,20 @@ fun main() = application {
         todo.scanWorkspaceAsync()
     }
 
+    LaunchedEffect(rootDir) {
+        val root = rootDir ?: run {
+            runState = RunConfigsState()
+            return@LaunchedEffect
+        }
+        runState = runCatching { RunConfigStore.load(root) }.getOrDefault(RunConfigsState())
+    }
+
+    LaunchedEffect(rootDir, runState) {
+        val root = rootDir ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(400)
+        runCatching { RunConfigStore.save(root, runState) }
+    }
+
     var sessionLoaded by remember { mutableStateOf(false) }
     var foldByPath by remember { mutableStateOf<Map<String, Set<Int>>>(emptyMap()) }
     var historyFile by remember { mutableStateOf(HistoryFile()) }
@@ -236,6 +264,8 @@ fun main() = application {
             todoFileOrder = session.todoFileOrder
             terminalOpen = session.terminalOpen
             terminalHeight = session.terminalHeight.coerceIn(120f, 600f).dp
+            outputOpen = session.outputOpen
+            outputHeight = session.outputHeight.coerceIn(120f, 600f).dp
             if (session.terminalTabs.isNotEmpty()) {
                 terminalManager.restoreFrom(
                     names = session.terminalTabs.map { it.name },
@@ -280,6 +310,8 @@ fun main() = application {
         terminalHeight = terminalHeight.value,
         terminalTabs = terminalManager.snapshotNames().map { SessionTerminalTab(name = it) },
         terminalActiveIndex = terminalManager.activeIndex(),
+        outputOpen = outputOpen,
+        outputHeight = outputHeight.value,
         foldedStartLinesByPath = foldByPath.mapValues { it.value.toList().sorted() },
         expandedDirs = expanded.map { it.toString() }.sorted(),
     )
@@ -488,7 +520,7 @@ fun main() = application {
                         results = emptyList(),
                         isLoading = false,
                         errorMessage = err.message?.lineSequence()?.firstOrNull()?.take(160)
-                            ?: "참조 검색 실패",
+                            ?: "Find references failed",
                     )
                     return@whenComplete
                 }
@@ -1133,6 +1165,24 @@ fun main() = application {
             if (terminalOpen && terminalManager.tabs.isEmpty()) terminalManager.newTab()
         }
         val toggleTerminalRef = rememberUpdatedState(toggleTerminal)
+        val startActiveRun: () -> Unit = run@{
+            if (runController.isRunning) return@run
+            val cfg = if (runState.isCurrentFileActive) {
+                val file = focused().book.active?.path ?: return@run
+                LanguageRunDefaults.buildConfig(file, rootDir) ?: return@run
+            } else {
+                runState.active ?: return@run
+            }
+            outputOpen = true
+            runController.start(cfg)
+        }
+        val stopActiveRun: () -> Unit = {
+            runController.stop()
+        }
+        val openRunDialog: () -> Unit = { runDialogOpen = true }
+        val startActiveRunRef = rememberUpdatedState(startActiveRun)
+        val stopActiveRunRef = rememberUpdatedState(stopActiveRun)
+        val openRunDialogRef = rememberUpdatedState(openRunDialog)
         DisposableEffect(window) {
             val frame = window
             val dispatcher = java.awt.KeyEventDispatcher { e ->
@@ -1199,6 +1249,18 @@ fun main() = application {
                     }
                     !ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_ENTER -> {
                         triggerCodeActionRef.value()
+                        true
+                    }
+                    !ctrl && !alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_F10 -> {
+                        startActiveRunRef.value()
+                        true
+                    }
+                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_F2 -> {
+                        stopActiveRunRef.value()
+                        true
+                    }
+                    ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_R -> {
+                        openRunDialogRef.value()
                         true
                     }
                     else -> false
@@ -1318,6 +1380,21 @@ fun main() = application {
                     onTerminalResizeDelta = { delta ->
                         terminalHeight = (terminalHeight + delta).coerceIn(120.dp, 600.dp)
                     },
+                    runState = runState,
+                    onSelectRunConfig = { id -> runState = runState.select(id) },
+                    onStartRun = startActiveRun,
+                    onStopRun = stopActiveRun,
+                    onOpenRunDialog = openRunDialog,
+                    runIsRunning = outputState.running,
+                    outputOpen = outputOpen,
+                    outputState = outputState,
+                    onOutputToggle = { outputOpen = !outputOpen },
+                    onOutputClose = { outputOpen = false },
+                    onOutputClear = { outputState.clear() },
+                    outputHeight = outputHeight,
+                    onOutputResizeDelta = { delta ->
+                        outputHeight = (outputHeight + delta).coerceIn(120.dp, 600.dp)
+                    },
                     referencesState = referencesState,
                     onRequestReferences = requestReferences,
                     onReferencesClose = { referencesState = null },
@@ -1397,6 +1474,18 @@ fun main() = application {
                 documentSymbolOpen = false
                 frameRef.value?.requestFocus()
             },
+        )
+    }
+
+    if (runDialogOpen) {
+        RunConfigDialog(
+            state = runState,
+            workspaceRoot = rootDir,
+            onSave = { saved ->
+                runState = saved
+                runDialogOpen = false
+            },
+            onDismiss = { runDialogOpen = false },
         )
     }
 
@@ -1496,8 +1585,8 @@ private fun isKotlinSource(path: Path): Boolean {
 
 @androidx.compose.runtime.Composable
 private fun lspStatusLineText(lsp: LspController): String? = when (lsp.status.value) {
-    LspController.Status.MISSING -> "LSP · kotlin-language-server 누락"
-    LspController.Status.FAILED -> "LSP · 시작 실패"
+    LspController.Status.MISSING -> "LSP · kotlin-language-server missing"
+    LspController.Status.FAILED -> "LSP · failed to start"
     else -> null
 }
 
@@ -1560,6 +1649,19 @@ private fun Shell(
     onTerminalClose: () -> Unit,
     terminalHeight: Dp,
     onTerminalResizeDelta: (Dp) -> Unit,
+    runState: RunConfigsState,
+    onSelectRunConfig: (String) -> Unit,
+    onStartRun: () -> Unit,
+    onStopRun: () -> Unit,
+    onOpenRunDialog: () -> Unit,
+    runIsRunning: Boolean,
+    outputOpen: Boolean,
+    outputState: OutputPanelState,
+    onOutputToggle: () -> Unit,
+    onOutputClose: () -> Unit,
+    onOutputClear: () -> Unit,
+    outputHeight: Dp,
+    onOutputResizeDelta: (Dp) -> Unit,
     referencesState: ReferencesQueryState?,
     onRequestReferences: (Path, Int, Int, String) -> Unit,
     onReferencesClose: () -> Unit,
@@ -1584,6 +1686,15 @@ private fun Shell(
             path = paneFor(focusedPane, primary, secondary).book.active?.path,
             terminalOpen = terminalOpen,
             onTerminalToggle = onTerminalToggle,
+            runState = runState,
+            activeFilePath = paneFor(focusedPane, primary, secondary).book.active?.path,
+            onSelectRunConfig = onSelectRunConfig,
+            runIsRunning = runIsRunning,
+            onStartRun = onStartRun,
+            onStopRun = onStopRun,
+            onOpenRunDialog = onOpenRunDialog,
+            outputOpen = outputOpen,
+            onOutputToggle = onOutputToggle,
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             FileTreePanel(
@@ -1768,6 +1879,16 @@ private fun Shell(
                 onPanelClose = onTerminalClose,
                 height = terminalHeight,
                 onResizeDelta = onTerminalResizeDelta,
+            )
+        }
+        if (outputOpen) {
+            OutputPanel(
+                state = outputState,
+                onClose = onOutputClose,
+                onClear = onOutputClear,
+                onStop = onStopRun,
+                height = outputHeight,
+                onResizeDelta = onOutputResizeDelta,
             )
         }
     }
@@ -1955,6 +2076,15 @@ private fun TitleBar(
     path: Path?,
     terminalOpen: Boolean,
     onTerminalToggle: () -> Unit,
+    runState: RunConfigsState,
+    activeFilePath: Path?,
+    onSelectRunConfig: (String) -> Unit,
+    runIsRunning: Boolean,
+    onStartRun: () -> Unit,
+    onStopRun: () -> Unit,
+    onOpenRunDialog: () -> Unit,
+    outputOpen: Boolean,
+    onOutputToggle: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(36.dp),
@@ -1982,12 +2112,153 @@ private fun TitleBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.weight(1f))
+            val currentFileTemplate = activeFilePath?.let { LanguageRunDefaults.forFile(it) }
+            RunDropdown(
+                state = runState,
+                activeFilePath = activeFilePath,
+                currentFileTemplate = currentFileTemplate,
+                onSelect = onSelectRunConfig,
+                onEdit = onOpenRunDialog,
+            )
+            Spacer(Modifier.width(4.dp))
+            val canStart = !runIsRunning && when {
+                runState.isCurrentFileActive -> currentFileTemplate != null
+                else -> runState.active != null
+            }
+            TitleBarAction(
+                label = "Run",
+                enabled = canStart,
+                onClick = onStartRun,
+            )
+            TitleBarAction(
+                label = "Stop",
+                enabled = runIsRunning,
+                onClick = onStopRun,
+            )
+            Spacer(Modifier.width(8.dp))
             TitleBarToggle(
-                label = "터미널",
+                label = "Output",
+                selected = outputOpen,
+                onClick = onOutputToggle,
+            )
+            TitleBarToggle(
+                label = "Terminal",
                 selected = terminalOpen,
                 onClick = onTerminalToggle,
             )
         }
+    }
+}
+
+@Composable
+private fun RunDropdown(
+    state: RunConfigsState,
+    activeFilePath: Path?,
+    currentFileTemplate: LanguageRunTemplate?,
+    onSelect: (String) -> Unit,
+    onEdit: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val active = state.active
+    val activeFileName = activeFilePath?.fileName?.toString()
+    val label = when {
+        state.isCurrentFileActive -> activeFileName?.let { "Current file · $it" } ?: "Current file"
+        active != null -> active.name.takeIf { it.isNotBlank() } ?: "Run config"
+        else -> "Run config"
+    }
+    Box {
+        Surface(
+            color = Color.Transparent,
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 2.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "▾",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                )
+            }
+        }
+        CompactDropdown(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            val currentFileLabel = when {
+                activeFileName == null -> "Current file (no file open)"
+                currentFileTemplate == null -> "Current file (${activeFileName} — unsupported)"
+                else -> "Current file · $activeFileName"
+            }
+            CompactMenuItem(
+                label = currentFileLabel,
+                onClick = {
+                    expanded = false
+                    onSelect(CURRENT_FILE_ID)
+                },
+            )
+            if (state.configs.isNotEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant),
+                    )
+                }
+                for (cfg in state.configs) {
+                    CompactMenuItem(
+                        label = cfg.name.ifBlank { cfg.command },
+                        onClick = {
+                            expanded = false
+                            onSelect(cfg.id)
+                        },
+                    )
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant),
+                )
+            }
+            CompactMenuItem(
+                label = "Edit configurations…",
+                onClick = { expanded = false; onEdit() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TitleBarAction(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val fg = if (enabled) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    Surface(
+        color = Color.Transparent,
+        shape = RoundedCornerShape(4.dp),
+        modifier = Modifier
+            .padding(horizontal = 2.dp)
+            .let { if (enabled) it.clickable { onClick() } else it },
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = fg,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }
 

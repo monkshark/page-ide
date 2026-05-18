@@ -249,7 +249,7 @@ internal fun FindInFilesDialog(
                                             ),
                                         )
                                         replaceBusy = false
-                                        replaceMessage = "${outcome.replacements}건 치환 · 파일 ${outcome.filesChanged}개"
+                                        replaceMessage = "${outcome.replacements} replaced · ${outcome.filesChanged} files"
                                         if (outcome.replacements > 0) refreshTick += 1
                                     }
                                 },
@@ -359,7 +359,7 @@ private fun Header(
             )
             if (query.isEmpty()) {
                 Text(
-                    text = "프로젝트에서 찾을 텍스트…",
+                    text = "Search across project…",
                     style = LocalTextStyle.current.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         fontFamily = FontFamily.Monospace,
@@ -447,7 +447,7 @@ private fun ReplaceBar(
             )
             if (replacement.isEmpty()) {
                 Text(
-                    text = "치환할 텍스트…",
+                    text = "Replacement text…",
                     style = LocalTextStyle.current.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         fontFamily = FontFamily.Monospace,
@@ -476,7 +476,7 @@ private fun ReplaceBar(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = if (busy) "치환 중…" else "전체 치환",
+                text = if (busy) "Replacing…" else "Replace all",
                 style = LocalTextStyle.current.copy(
                     color = fg,
                     fontSize = 12.sp,
@@ -507,14 +507,14 @@ private fun StatusLabel(
     patternInvalid: Boolean,
 ) {
     val text = when {
-        patternInvalid -> "패턴 오류"
-        busy -> "검색 중…"
+        patternInvalid -> "Pattern error"
+        busy -> "Searching…"
         !hasQuery -> ""
         stats == null -> ""
-        stats.hits == 0 -> "결과 없음"
+        stats.hits == 0 -> "No results"
         else -> {
             val plus = if (stats.truncated) "+" else ""
-            "${stats.hits}${plus}건 · ${stats.files}파일"
+            "${stats.hits}${plus} hits · ${stats.files} files"
         }
     }
     val color = when {
@@ -547,11 +547,11 @@ private fun Body(
     idle: Boolean,
 ) {
     if (idle) {
-        EmptyHint("검색어를 입력하세요")
+        EmptyHint("Enter a search term")
         return
     }
     if (empty) {
-        EmptyHint("결과 없음")
+        EmptyHint("No results")
         return
     }
     val selectedRowIdx = hitRowIndices.getOrNull(selected)

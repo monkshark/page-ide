@@ -16,7 +16,7 @@ class TerminalTab(
 
     fun rename(newName: String) {
         val trimmed = newName.trim()
-        name = if (trimmed.isEmpty()) "터미널" else trimmed
+        name = if (trimmed.isEmpty()) "Terminal" else trimmed
     }
 }
 
@@ -39,7 +39,7 @@ class TerminalManager(
     fun newTab(name: String? = null, autoStart: Boolean = true): TerminalTab {
         val seq = nextSeq++
         val id = "term-$seq"
-        val displayName = name?.trim().takeUnless { it.isNullOrEmpty() } ?: "터미널 $seq"
+        val displayName = name?.trim().takeUnless { it.isNullOrEmpty() } ?: "Terminal $seq"
         val controller = TerminalController(workspaceRoot, scope)
         val tab = TerminalTab(id, displayName, controller)
         tabs = tabs + tab

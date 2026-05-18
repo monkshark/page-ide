@@ -33,13 +33,13 @@ import androidx.compose.ui.window.DialogWindowScope
 import androidx.compose.ui.window.rememberDialogState
 import page.ui.GlassTheme
 
-private const val TITLE = "저장되지 않은 변경 사항"
-private const val SAVE = "저장"
-private const val DISCARD = "저장 안 함"
-private const val CANCEL = "취소"
-private const val TAB_QUESTION_PREFIX = "다음 파일에 저장되지 않은 변경 사항이 있습니다."
-private const val TAB_QUESTION_SUFFIX = "저장하시겠습니까?"
-private const val APP_QUESTION_SUFFIX = "저장하지 않고 종료하시겠습니까?"
+private const val TITLE = "Unsaved changes"
+private const val SAVE = "Save"
+private const val DISCARD = "Don't save"
+private const val CANCEL = "Cancel"
+private const val TAB_QUESTION_PREFIX = "The following files have unsaved changes."
+private const val TAB_QUESTION_SUFFIX = "Save them?"
+private const val APP_QUESTION_SUFFIX = "Quit without saving?"
 
 @Composable
 internal fun UnsavedChangesDialog(
