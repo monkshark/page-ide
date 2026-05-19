@@ -103,6 +103,7 @@ fun main() = application {
     var focusedPane: PaneSide by remember { mutableStateOf(PaneSide.PRIMARY) }
     var rootDir: Path? by remember { mutableStateOf(null) }
     var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
+    var treeSelection: Set<Path> by remember { mutableStateOf(emptySet()) }
     var treeRevision by remember { mutableStateOf(0) }
     var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
@@ -690,7 +691,13 @@ fun main() = application {
         renameDialog = RenameEntryDialogState(path)
     }
     val onDeleteEntry: (Path) -> Unit = { path ->
-        deleteDialog = DeleteEntryDialogState(path)
+        deleteDialog = DeleteEntryDialogState(listOf(path))
+    }
+    val onDeleteEntries: (Set<Path>) -> Unit = { paths ->
+        val pruned = FileTreeActions.pruneRedundantDescendants(paths)
+        if (pruned.isNotEmpty()) {
+            deleteDialog = DeleteEntryDialogState(pruned)
+        }
     }
     val remapTabsAfterRename: (Path, Path) -> Unit = { old, new ->
         listOf(PaneSide.PRIMARY, PaneSide.SECONDARY).forEach { side ->
@@ -1425,6 +1432,8 @@ fun main() = application {
                     onMoveTabAcross = moveTabAcross,
                     rootDir = rootDir,
                     expanded = expanded,
+                    treeSelection = treeSelection,
+                    onTreeSelectionChange = { treeSelection = it },
                     treeRevision = treeRevision,
                     sidebarWidth = sidebarWidth,
                     onSidebarResize = { delta ->
@@ -1436,6 +1445,7 @@ fun main() = application {
                     onCreateFolderIn = onCreateFolderIn,
                     onRenameEntry = onRenameEntry,
                     onDeleteEntry = onDeleteEntry,
+                    onDeleteEntries = onDeleteEntries,
                     onRevealInFiles = onRevealInFiles,
                     onCopyPath = onCopyPath,
                     onCopyRelativePath = onCopyRelativePath,
@@ -1641,7 +1651,7 @@ fun main() = application {
             scope = impactScope,
         )
     }
-    val impactTarget: Path? = activeRenameDialog?.path ?: deleteDialog?.path
+    val impactTarget: Path? = activeRenameDialog?.path ?: deleteDialog?.primary
     val impactState: ImpactScanState = produceState<ImpactScanState>(ImpactScanState.Idle, impactTarget) {
         val t = impactTarget
         if (t == null) {
@@ -1803,34 +1813,44 @@ fun main() = application {
 
     val activeDeleteDialog = deleteDialog
     if (activeDeleteDialog != null) {
-        val displayName = activeDeleteDialog.path.fileName?.toString() ?: activeDeleteDialog.path.toString()
-        val isDir = java.nio.file.Files.isDirectory(activeDeleteDialog.path)
-        val rel = FileTreeActions.relativeTo(rootDir, activeDeleteDialog.path)
+        val multi = activeDeleteDialog.isMulti
+        val first = activeDeleteDialog.primary
+        val displayName = first.fileName?.toString() ?: first.toString()
+        val isDir = java.nio.file.Files.isDirectory(first)
+        val rel = FileTreeActions.relativeTo(rootDir, first)
+        val message = if (multi) {
+            "Delete ${activeDeleteDialog.paths.size} items?"
+        } else {
+            "Delete ${if (isDir) "folder" else "file"} '$displayName'?"
+        }
+        val detail = if (multi) {
+            val preview = activeDeleteDialog.paths.take(4)
+                .joinToString("\n") { FileTreeActions.relativeTo(rootDir, it) }
+            if (activeDeleteDialog.paths.size > 4) "$preview\n…" else preview
+        } else if (rel.isEmpty()) null else rel
         ConfirmDialog(
             title = "Delete",
-            message = "Delete ${if (isDir) "folder" else "file"} '$displayName'?",
-            detail = if (rel.isEmpty()) null else rel,
-            impact = impactState,
+            message = message,
+            detail = detail,
+            impact = if (multi) ImpactScanState.Idle else impactState,
             rootDir = rootDir,
             onJumpToHit = { hit ->
                 deleteDialog = null
                 jumpToProblem(hit.file, hit.line, hit.column)
             },
-            confirmLabel = "Delete",
+            confirmLabel = if (multi) "Delete all" else "Delete",
             danger = true,
             onConfirm = {
-                val target = activeDeleteDialog.path
-                when (val result = FileTreeActions.delete(target)) {
-                    is FileTreeActions.DeleteResult.Ok -> {
-                        closeTabsUnderPath(target)
-                        treeRevision++
-                        deleteDialog = null
-                    }
-                    is FileTreeActions.DeleteResult.Err -> {
-                        println("[filetree] delete failed: ${result.message}")
-                        deleteDialog = null
+                val outcome = FileTreeActions.deleteBatch(activeDeleteDialog.paths)
+                outcome.results.forEach { (path, result) ->
+                    if (result is FileTreeActions.DeleteResult.Ok) {
+                        closeTabsUnderPath(path)
+                    } else if (result is FileTreeActions.DeleteResult.Err) {
+                        println("[filetree] delete failed for $path: ${result.message}")
                     }
                 }
+                if (outcome.successCount > 0) treeRevision++
+                deleteDialog = null
             },
             onDismiss = { deleteDialog = null },
         )
@@ -1914,8 +1934,11 @@ private data class RenameEntryDialogState(
 )
 
 private data class DeleteEntryDialogState(
-    val path: Path,
-)
+    val paths: List<Path>,
+) {
+    val primary: Path get() = paths.first()
+    val isMulti: Boolean get() = paths.size > 1
+}
 
 private fun windowTitle(path: Path?): String {
     val name = path?.fileName?.toString() ?: "untitled"
@@ -1968,6 +1991,8 @@ private fun Shell(
     onMoveTabAcross: ((PaneSide, Int) -> Unit)?,
     rootDir: Path?,
     expanded: Set<Path>,
+    treeSelection: Set<Path>,
+    onTreeSelectionChange: (Set<Path>) -> Unit,
     treeRevision: Int,
     sidebarWidth: Dp,
     onSidebarResize: (Dp) -> Unit,
@@ -1977,6 +2002,7 @@ private fun Shell(
     onCreateFolderIn: (Path) -> Unit,
     onRenameEntry: (Path) -> Unit,
     onDeleteEntry: (Path) -> Unit,
+    onDeleteEntries: (Set<Path>) -> Unit,
     onRevealInFiles: (Path) -> Unit,
     onCopyPath: (Path) -> Unit,
     onCopyRelativePath: (Path) -> Unit,
@@ -2071,13 +2097,15 @@ private fun Shell(
             FileTreePanel(
                 root = rootDir,
                 expanded = expanded,
-                selectedFile = paneFor(focusedPane, primary, secondary).book.active?.path,
+                selection = treeSelection,
                 onToggle = onToggle,
+                onSelectionChange = onTreeSelectionChange,
                 onOpenFile = onOpenFile,
                 onCreateFile = onCreateFileIn,
                 onCreateFolder = onCreateFolderIn,
                 onRename = onRenameEntry,
-                onDelete = onDeleteEntry,
+                onDeleteOne = onDeleteEntry,
+                onDeleteMany = onDeleteEntries,
                 onReveal = onRevealInFiles,
                 onCopyPath = onCopyPath,
                 onCopyRelativePath = onCopyRelativePath,

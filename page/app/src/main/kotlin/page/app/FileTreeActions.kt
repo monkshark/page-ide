@@ -78,6 +78,35 @@ object FileTreeActions {
         }.getOrElse { e -> DeleteResult.Err(e.message ?: "Failed to delete") }
     }
 
+    fun pruneRedundantDescendants(paths: Collection<Path>): List<Path> {
+        if (paths.isEmpty()) return emptyList()
+        val sorted = paths.toSet().toList().sortedBy { it.toAbsolutePath().normalize().toString() }
+        val kept = mutableListOf<Path>()
+        for (p in sorted) {
+            val abs = p.toAbsolutePath().normalize()
+            val covered = kept.any { existing ->
+                val e = existing.toAbsolutePath().normalize()
+                abs.startsWith(e) && abs != e
+            }
+            if (!covered) kept.add(p)
+        }
+        return kept
+    }
+
+    data class BatchDeleteOutcome(
+        val results: List<Pair<Path, DeleteResult>>,
+    ) {
+        val successCount: Int get() = results.count { it.second is DeleteResult.Ok }
+        val failureCount: Int get() = results.count { it.second is DeleteResult.Err }
+        val allOk: Boolean get() = failureCount == 0
+    }
+
+    fun deleteBatch(paths: Collection<Path>): BatchDeleteOutcome {
+        val pruned = pruneRedundantDescendants(paths)
+        val results = pruned.map { it to delete(it) }
+        return BatchDeleteOutcome(results)
+    }
+
     fun parentDirOf(path: Path): Path? = when {
         Files.isDirectory(path) -> path
         else -> path.parent

@@ -204,4 +204,76 @@ class FileTreeActionsTest {
         assertIs<FileTreeActions.DeleteResult.Err>(result)
         assertTrue(result.message.contains("not exist"))
     }
+
+    @Test
+    fun `pruneRedundantDescendants drops paths covered by an ancestor`() {
+        val root = newDir()
+        val sub = Files.createDirectories(root.resolve("sub"))
+        val inner = Files.createFile(sub.resolve("inner.kt"))
+        val sibling = Files.createFile(root.resolve("sibling.kt"))
+
+        val pruned = FileTreeActions.pruneRedundantDescendants(listOf(inner, sub, sibling))
+        val absolute = pruned.map { it.toAbsolutePath().normalize() }.toSet()
+        assertTrue(sub.toAbsolutePath().normalize() in absolute)
+        assertTrue(sibling.toAbsolutePath().normalize() in absolute)
+        assertTrue(inner.toAbsolutePath().normalize() !in absolute)
+    }
+
+    @Test
+    fun `pruneRedundantDescendants keeps unrelated paths`() {
+        val root = newDir()
+        val a = Files.createFile(root.resolve("a.kt"))
+        val b = Files.createFile(root.resolve("b.kt"))
+        val pruned = FileTreeActions.pruneRedundantDescendants(listOf(a, b))
+        assertEquals(2, pruned.size)
+    }
+
+    @Test
+    fun `pruneRedundantDescendants removes exact duplicates`() {
+        val root = newDir()
+        val a = Files.createFile(root.resolve("a.kt"))
+        val pruned = FileTreeActions.pruneRedundantDescendants(listOf(a, a, a))
+        assertEquals(1, pruned.size)
+    }
+
+    @Test
+    fun `deleteBatch removes multiple files and reports per-path results`() {
+        val root = newDir()
+        val a = Files.createFile(root.resolve("a.kt"))
+        val b = Files.createFile(root.resolve("b.kt"))
+        val outcome = FileTreeActions.deleteBatch(listOf(a, b))
+        assertEquals(2, outcome.results.size)
+        assertEquals(2, outcome.successCount)
+        assertEquals(0, outcome.failureCount)
+        assertTrue(outcome.allOk)
+        assertTrue(!Files.exists(a))
+        assertTrue(!Files.exists(b))
+    }
+
+    @Test
+    fun `deleteBatch skips children when parent is already in the batch`() {
+        val root = newDir()
+        val sub = Files.createDirectories(root.resolve("sub"))
+        val inner = Files.createFile(sub.resolve("inner.kt"))
+        val outcome = FileTreeActions.deleteBatch(listOf(inner, sub))
+        assertEquals(1, outcome.results.size)
+        assertEquals(sub.toAbsolutePath().normalize(), outcome.results.single().first.toAbsolutePath().normalize())
+        assertTrue(outcome.allOk)
+        assertTrue(!Files.exists(sub))
+    }
+
+    @Test
+    fun `deleteBatch reports per-path failure without short-circuiting`() {
+        val root = newDir()
+        val a = Files.createFile(root.resolve("a.kt"))
+        val missing = root.resolve("missing.kt")
+        val b = Files.createFile(root.resolve("b.kt"))
+        val outcome = FileTreeActions.deleteBatch(listOf(a, missing, b))
+        assertEquals(3, outcome.results.size)
+        assertEquals(2, outcome.successCount)
+        assertEquals(1, outcome.failureCount)
+        assertTrue(!outcome.allOk)
+        assertTrue(!Files.exists(a))
+        assertTrue(!Files.exists(b))
+    }
 }
