@@ -59,3 +59,5 @@ desktop.ini
 
 # 로컬 KLS dev zip 캐시 (env 로컬 빌드용)
 .kls-cache/
+
+.page-ide/

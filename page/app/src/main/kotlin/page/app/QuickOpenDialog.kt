@@ -48,6 +48,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import page.editor.IndexedFile
 import page.editor.QuickOpen
@@ -68,7 +69,11 @@ internal fun QuickOpenDialog(
         if (selected >= results.size) selected = if (results.isEmpty()) 0 else results.size - 1
     }
 
-    val state = rememberDialogState(width = 640.dp, height = 420.dp)
+    val state = rememberDialogState(
+        position = WindowPosition.Aligned(Alignment.Center),
+        width = 640.dp,
+        height = 420.dp,
+    )
     val queryFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
 

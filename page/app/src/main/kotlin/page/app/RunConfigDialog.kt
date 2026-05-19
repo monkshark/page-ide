@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.DialogWindowScope
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import java.nio.file.Path
 import page.ui.GlassTheme
@@ -56,7 +57,11 @@ fun RunConfigDialog(
     onSave: (RunConfigsState) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val dialogState = rememberDialogState(width = 760.dp, height = 480.dp)
+    val dialogState = rememberDialogState(
+        position = WindowPosition.Aligned(Alignment.Center),
+        width = 760.dp,
+        height = 480.dp,
+    )
     var draft by remember(state) { mutableStateOf(state) }
     var selected by remember(state) { mutableStateOf(state.activeId ?: state.configs.firstOrNull()?.id) }
 

@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.DialogWindowScope
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import page.ui.GlassTheme
 
@@ -49,7 +53,11 @@ internal fun UnsavedChangesDialog(
     onDiscard: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    val state = rememberDialogState(width = 460.dp, height = 220.dp)
+    val state = rememberDialogState(
+        position = WindowPosition.Aligned(Alignment.Center),
+        width = 460.dp,
+        height = 320.dp,
+    )
     DialogWindow(
         onCloseRequest = onCancel,
         state = state,
@@ -136,11 +144,14 @@ private fun DialogWindowScope.DialogContent(
 
 @Composable
 private fun FileList(names: List<String>) {
+    val scroll = rememberScrollState()
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = 140.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .verticalScroll(scroll)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {

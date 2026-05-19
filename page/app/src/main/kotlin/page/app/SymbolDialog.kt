@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import kotlinx.coroutines.delay
 import org.eclipse.lsp4j.SymbolKind
@@ -196,7 +197,11 @@ private fun SymbolDialogShell(
         onHover: (Int) -> Unit,
     ) -> Unit,
 ) {
-    val state = rememberDialogState(width = 720.dp, height = 460.dp)
+    val state = rememberDialogState(
+        position = WindowPosition.Aligned(Alignment.Center),
+        width = 720.dp,
+        height = 460.dp,
+    )
     val queryFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
 

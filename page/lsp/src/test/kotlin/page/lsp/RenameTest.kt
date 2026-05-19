@@ -149,4 +149,51 @@ class RenameTest {
         val p = RenamePrepare.fromLsp(null)
         assertNull(p)
     }
+
+    @Test
+    fun `documentChanges merges multiple edits for same URI into one file change`() {
+        val we = WorkspaceEdit().apply {
+            documentChanges = mutableListOf(
+                Either.forLeft<TextDocumentEdit, ResourceOperation>(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier("file:///A.kt", 1),
+                        mutableListOf(TextEdit(Range(Position(5, 0), Position(5, 3)), "New")),
+                    )
+                ),
+                Either.forLeft<TextDocumentEdit, ResourceOperation>(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier("file:///A.kt", 1),
+                        mutableListOf(TextEdit(Range(Position(2, 4), Position(2, 7)), "New")),
+                    )
+                ),
+                Either.forLeft<TextDocumentEdit, ResourceOperation>(
+                    TextDocumentEdit(
+                        VersionedTextDocumentIdentifier("file:///B.kt", 1),
+                        mutableListOf(TextEdit(Range(Position(0, 0), Position(0, 3)), "New")),
+                    )
+                ),
+            )
+        }
+        val r = RenameWorkspaceEdit.fromLsp(we)
+        assertEquals(2, r.changes.size)
+        assertEquals(3, r.totalEditCount)
+        val a = r.changes.first { it.uri == "file:///A.kt" }
+        assertEquals(2, a.edits.size)
+        assertEquals(5, a.edits.first().startLine)
+        assertEquals(2, a.edits.last().startLine)
+    }
+
+    @Test
+    fun `changes map with duplicate URI keys merges edits`() {
+        val we = WorkspaceEdit().apply {
+            val map = LinkedHashMap<String, MutableList<TextEdit>>()
+            map["file:///A.kt"] = mutableListOf(
+                TextEdit(Range(Position(0, 0), Position(0, 3)), "New"),
+            )
+            changes = map
+        }
+        val r = RenameWorkspaceEdit.fromLsp(we)
+        assertEquals(1, r.changes.size)
+        assertEquals(1, r.totalEditCount)
+    }
 }

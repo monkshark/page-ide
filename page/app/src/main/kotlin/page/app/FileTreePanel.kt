@@ -1,5 +1,8 @@
 package page.app
 
+import androidx.compose.foundation.ContextMenuArea
+import androidx.compose.foundation.ContextMenuItem
+import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import page.editor.FileTree
 import page.editor.TreeNode
+import page.ui.CompactContextMenuRepresentation
+import java.nio.file.Files
 import java.nio.file.Path
 
 private val RowHeight = 22.dp
@@ -53,29 +59,55 @@ fun FileTreePanel(
     selectedFile: Path?,
     onToggle: (Path) -> Unit,
     onOpenFile: (Path) -> Unit,
+    onCreateFile: (Path) -> Unit = {},
+    onCreateFolder: (Path) -> Unit = {},
+    onRename: (Path) -> Unit = {},
+    onDelete: (Path) -> Unit = {},
+    onReveal: (Path) -> Unit = {},
+    onCopyPath: (Path) -> Unit = {},
+    onCopyRelativePath: (Path) -> Unit = {},
     revision: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            SectionHeader()
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                thickness = 1.dp,
-            )
-            if (root == null) {
-                EmptyTreeHint()
-            } else {
-                val nodes = remember(root, expanded, revision) { FileTree.listTree(root, expanded) }
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)) {
-                    items(nodes, key = { it.path.toString() }) { node ->
-                        TreeRow(
-                            node = node,
-                            isExpanded = node.path in expanded,
-                            isSelected = node.path == selectedFile,
-                            onToggle = onToggle,
-                            onOpenFile = onOpenFile,
-                        )
+        CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                SectionHeader()
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    thickness = 1.dp,
+                )
+                if (root == null) {
+                    EmptyTreeHint()
+                } else {
+                    val nodes = remember(root, expanded, revision) { FileTree.listTree(root, expanded) }
+                    ContextMenuArea(
+                        items = {
+                            listOf(
+                                ContextMenuItem("New file…") { onCreateFile(root) },
+                                ContextMenuItem("New folder…") { onCreateFolder(root) },
+                            )
+                        },
+                    ) {
+                        LazyColumn(modifier = Modifier.fillMaxSize().padding(vertical = 4.dp)) {
+                            items(nodes, key = { it.path.toString() }) { node ->
+                                TreeRow(
+                                    node = node,
+                                    isExpanded = node.path in expanded,
+                                    isSelected = node.path == selectedFile,
+                                    isRoot = node.path == root,
+                                    onToggle = onToggle,
+                                    onOpenFile = onOpenFile,
+                                    onCreateFile = onCreateFile,
+                                    onCreateFolder = onCreateFolder,
+                                    onRename = onRename,
+                                    onDelete = onDelete,
+                                    onReveal = onReveal,
+                                    onCopyPath = onCopyPath,
+                                    onCopyRelativePath = onCopyRelativePath,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -104,8 +136,16 @@ private fun TreeRow(
     node: TreeNode,
     isExpanded: Boolean,
     isSelected: Boolean,
+    isRoot: Boolean,
     onToggle: (Path) -> Unit,
     onOpenFile: (Path) -> Unit,
+    onCreateFile: (Path) -> Unit,
+    onCreateFolder: (Path) -> Unit,
+    onRename: (Path) -> Unit,
+    onDelete: (Path) -> Unit,
+    onReveal: (Path) -> Unit,
+    onCopyPath: (Path) -> Unit,
+    onCopyRelativePath: (Path) -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
@@ -117,6 +157,24 @@ private fun TreeRow(
         else -> Color.Transparent
     }
 
+    val createParent = if (node.isDirectory) node.path else node.path.parent
+    ContextMenuArea(
+        items = {
+            buildList {
+                if (createParent != null && Files.isDirectory(createParent)) {
+                    add(ContextMenuItem("New file…") { onCreateFile(createParent) })
+                    add(ContextMenuItem("New folder…") { onCreateFolder(createParent) })
+                }
+                if (!isRoot) {
+                    add(ContextMenuItem("Rename…") { onRename(node.path) })
+                    add(ContextMenuItem("Delete…") { onDelete(node.path) })
+                }
+                add(ContextMenuItem("Reveal in file manager") { onReveal(node.path) })
+                add(ContextMenuItem("Copy path") { onCopyPath(node.path) })
+                add(ContextMenuItem("Copy relative path") { onCopyRelativePath(node.path) })
+            }
+        },
+    ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,6 +222,7 @@ private fun TreeRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
     }
 }
 

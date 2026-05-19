@@ -35,56 +35,63 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberDialogState
 import page.ui.GlassTheme
-
-data class RenameRequestState(
-    val line: Int,
-    val character: Int,
-    val placeholder: String,
-)
+import java.nio.file.Path
 
 @Composable
-internal fun RenameDialog(
-    request: RenameRequestState,
-    inProgress: Boolean,
+internal fun NameInputDialog(
+    title: String,
+    label: String,
+    initial: String = "",
     error: String?,
+    impact: ImpactScanState? = null,
+    rootDir: Path? = null,
+    onJumpToHit: ((ReferenceHit) -> Unit)? = null,
     onSubmit: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var value by remember(request) {
-        mutableStateOf(TextFieldValue(request.placeholder, TextRange(0, request.placeholder.length)))
+    var value by remember(title) {
+        mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length)))
     }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
+    val hasHits = (impact as? ImpactScanState.Done)?.hits?.isNotEmpty() == true
+    val showHits = hasHits && onJumpToHit != null
+    val targetWidth = if (showHits) 520.dp else 360.dp
+    val targetHeight = when {
+        showHits -> 340.dp
+        impact == null || impact is ImpactScanState.Idle -> 140.dp
+        else -> 168.dp
+    }
     val state = rememberDialogState(
         position = WindowPosition.Aligned(Alignment.Center),
-        width = 360.dp,
-        height = 140.dp,
+        width = targetWidth,
+        height = targetHeight,
     )
+    LaunchedEffect(targetWidth, targetHeight) {
+        state.size = DpSize(targetWidth, targetHeight)
+    }
 
     DialogWindow(
         onCloseRequest = onDismiss,
         state = state,
-        title = "Rename",
+        title = title,
         resizable = false,
         undecorated = true,
         onPreviewKeyEvent = { event ->
             if (event.type != KeyEventType.KeyDown) false
             else when (event.key) {
-                Key.Escape -> { if (!inProgress) onDismiss(); true }
+                Key.Escape -> { onDismiss(); true }
                 Key.Enter, Key.NumPadEnter -> {
                     val name = value.text.trim()
-                    if (!inProgress && name.isNotEmpty() && name != request.placeholder) {
-                        onSubmit(name)
-                    } else if (name == request.placeholder) {
-                        onDismiss()
-                    }
+                    if (name.isNotEmpty()) onSubmit(name)
                     true
                 }
                 else -> false
@@ -100,7 +107,7 @@ internal fun RenameDialog(
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
                     Text(
-                        text = "New name",
+                        text = label,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.sp,
                     )
@@ -129,19 +136,29 @@ internal fun RenameDialog(
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val status = when {
-                            inProgress -> "Applying…"
-                            error != null -> error
-                            else -> "Enter to apply · Esc to cancel"
-                        }
-                        val color = when {
-                            error != null -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        val status = error
+                            ?: if (showHits) "Click a row to jump  ·  Enter to rename  ·  Esc to cancel"
+                            else "Enter to create · Esc to cancel"
+                        val color = if (error != null) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                         Text(
                             text = status,
                             color = color,
                             style = LocalTextStyle.current.copy(fontSize = 11.sp),
+                        )
+                    }
+                    if (impact != null && impact !is ImpactScanState.Idle) {
+                        Spacer(Modifier.height(4.dp))
+                        ImpactStatusLine(impact)
+                    }
+                    if (showHits) {
+                        Spacer(Modifier.height(6.dp))
+                        val hits = (impact as ImpactScanState.Done).hits
+                        ReferenceHitsList(
+                            hits = hits,
+                            rootDir = rootDir,
+                            onJumpToHit = onJumpToHit!!,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }

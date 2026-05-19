@@ -44,24 +44,32 @@ data class RenameWorkspaceEdit(
         private fun fromDocumentChanges(
             docs: List<Either<TextDocumentEdit, ResourceOperation>>,
         ): List<RenameFileChange> {
-            val out = mutableListOf<RenameFileChange>()
+            val merged = LinkedHashMap<String, MutableList<RenameEdit>>()
             for (entry in docs) {
                 if (!entry.isLeft) continue
                 val tde = entry.left ?: continue
                 val uri = tde.textDocument?.uri ?: continue
-                val edits = tde.edits.orEmpty().mapNotNull(::fromTextEdit).sortedDescending()
-                if (edits.isNotEmpty()) out += RenameFileChange(uri, edits)
+                val edits = tde.edits.orEmpty().mapNotNull(::fromTextEdit)
+                if (edits.isEmpty()) continue
+                merged.getOrPut(uri) { mutableListOf() }.addAll(edits)
             }
-            return out
+            return merged.entries.mapNotNull { (uri, edits) ->
+                val sorted = edits.sortedDescending()
+                if (sorted.isEmpty()) null else RenameFileChange(uri, sorted)
+            }
         }
 
         private fun fromChangesMap(map: Map<String, List<TextEdit>>): List<RenameFileChange> {
-            val out = mutableListOf<RenameFileChange>()
+            val merged = LinkedHashMap<String, MutableList<RenameEdit>>()
             for ((uri, edits) in map) {
-                val mapped = edits.orEmpty().mapNotNull(::fromTextEdit).sortedDescending()
-                if (mapped.isNotEmpty()) out += RenameFileChange(uri, mapped)
+                val mapped = edits.orEmpty().mapNotNull(::fromTextEdit)
+                if (mapped.isEmpty()) continue
+                merged.getOrPut(uri) { mutableListOf() }.addAll(mapped)
             }
-            return out
+            return merged.entries.mapNotNull { (uri, edits) ->
+                val sorted = edits.sortedDescending()
+                if (sorted.isEmpty()) null else RenameFileChange(uri, sorted)
+            }
         }
 
         private fun fromTextEdit(edit: TextEdit?): RenameEdit? {

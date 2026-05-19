@@ -116,6 +116,7 @@ class LspController(
     fun ensureStarted() {
         if (startAttempted) return
         startAttempted = true
+        startActivityJanitor()
         println("[lsp] resolving kotlin-language-server (workspace=$workspaceRoot)")
         val resolution = KotlinLsp.resolveExecutable()
         if (resolution !is KotlinLsp.Resolution.Found) {
@@ -141,6 +142,7 @@ class LspController(
             c.start().whenComplete { result, throwable ->
                 endActivity(STARTUP_KIND)
                 if (throwable != null) {
+                    clearActivities("initialize failed")
                     status.value = Status.FAILED
                     statusDetail.value = throwable.message ?: throwable.toString()
                     println("[lsp] FAILED on initialize: ${throwable.message}")
@@ -159,6 +161,7 @@ class LspController(
             workspace = LspWorkspace(c)
         } catch (t: Throwable) {
             endActivity(STARTUP_KIND)
+            clearActivities("spawn failed")
             status.value = Status.FAILED
             statusDetail.value = t.message ?: t.toString()
             println("[lsp] FAILED on spawn: ${t.message}")
@@ -167,11 +170,12 @@ class LspController(
     }
 
     private fun startActivity(kind: String, label: String) {
+        val now = System.currentTimeMillis()
         val existing = activities[kind]
         if (existing == null) {
-            activities[kind] = Activity(kind, label, System.currentTimeMillis())
-        } else if (existing.label != label) {
-            activities[kind] = existing.copy(label = label)
+            activities[kind] = Activity(kind, label, now)
+        } else {
+            activities[kind] = existing.copy(label = label, startedAtMs = now)
         }
     }
 
@@ -185,6 +189,33 @@ class LspController(
             is KlsActivity.Start -> startActivity(event.kind, event.label)
             is KlsActivity.End -> endActivity(event.kind)
         }
+    }
+
+    private fun activityTimeoutMs(kind: String): Long = when (kind) {
+        STARTUP_KIND -> 120_000L
+        GRADLE_DEPS_KIND, GRADLE_SCRIPT_DEPS_KIND -> 600_000L
+        SYMBOL_INDEX_KIND -> 180_000L
+        LINTING_KIND -> 30_000L
+        else -> 60_000L
+    }
+
+    private fun pruneStaleActivities() {
+        if (activities.isEmpty()) return
+        val now = System.currentTimeMillis()
+        val expired = activities.entries.filter { (kind, act) ->
+            now - act.startedAtMs > activityTimeoutMs(kind)
+        }.map { it.key }
+        if (expired.isNotEmpty()) {
+            println("[lsp] pruning stale activities (no End received): $expired")
+            expired.forEach { activities.remove(it) }
+        }
+    }
+
+    private fun clearActivities(reason: String) {
+        if (activities.isEmpty()) return
+        val kinds = activities.keys.toList()
+        println("[lsp] clearing activities ($reason): $kinds")
+        activities.clear()
     }
 
     fun didOpen(path: Path, languageId: String, text: String) {
@@ -202,6 +233,12 @@ class LspController(
             println("[lsp] didOpen $uri (lang=$languageId, ${text.length} chars)")
             ws.didOpen(uri, languageId, text)
         }
+    }
+
+    fun isOpenAt(path: Path): Boolean {
+        if (status.value != Status.READY) return false
+        val ws = workspace ?: return false
+        return ws.isOpen(path.toUri().toString())
     }
 
     fun didChange(path: Path, text: String, debounceMs: Long = 250L) {
@@ -1445,8 +1482,18 @@ class LspController(
     fun shutdown() {
         pendingChanges.values.forEach { it.cancel() }
         pendingChanges.clear()
+        clearActivities("shutdown")
         client?.shutdown()
         scope.cancel()
+    }
+
+    private fun startActivityJanitor() {
+        scope.launch {
+            while (true) {
+                delay(5_000L)
+                pruneStaleActivities()
+            }
+        }
     }
 
     companion object {

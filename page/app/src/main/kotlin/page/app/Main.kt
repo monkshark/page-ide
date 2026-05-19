@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -72,6 +73,7 @@ import page.editor.SyntaxLexers
 import page.editor.TabBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.lsp.CodeActionEntry
 import page.lsp.DocumentSymbolEntry
@@ -86,11 +88,16 @@ import page.ui.GlassPalette
 import page.ui.GlassTheme
 import page.ui.GlassTooltip
 import page.ui.SplitPane
+import page.ui.glassTokensFor
 import java.awt.Cursor
 import java.nio.file.Path
 
 fun main() = application {
-    val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
+    val windowState = rememberWindowState(
+        placement = androidx.compose.ui.window.WindowPlacement.Maximized,
+        width = 1280.dp,
+        height = 800.dp,
+    )
     var primaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
     var secondaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
     var focusedPane: PaneSide by remember { mutableStateOf(PaneSide.PRIMARY) }
@@ -138,6 +145,9 @@ fun main() = application {
     }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
     var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
+    var createDialog: CreateEntryDialogState? by remember { mutableStateOf(null) }
+    var renameDialog: RenameEntryDialogState? by remember { mutableStateOf(null) }
+    var deleteDialog: DeleteEntryDialogState? by remember { mutableStateOf(null) }
     var palette: GlassPalette by remember { mutableStateOf(AppSettings.loadPalette()) }
     var paletteToastUntil: Long by remember { mutableStateOf(0L) }
     var documentSymbolOpen by remember { mutableStateOf(false) }
@@ -652,6 +662,83 @@ fun main() = application {
             openInTab(target)
         }
     }
+    val copyToClipboard: (String) -> Unit = { text ->
+        runCatching {
+            val selection = java.awt.datatransfer.StringSelection(text)
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
+        }
+    }
+    val onCreateFileIn: (Path) -> Unit = { parent ->
+        createDialog = CreateEntryDialogState(parent, CreateEntryKind.FILE)
+    }
+    val onCreateFolderIn: (Path) -> Unit = { parent ->
+        createDialog = CreateEntryDialogState(parent, CreateEntryKind.FOLDER)
+    }
+    val onRevealInFiles: (Path) -> Unit = { path ->
+        val target = if (java.nio.file.Files.isDirectory(path)) path else path.parent
+        if (target != null) {
+            runCatching { java.awt.Desktop.getDesktop().open(target.toFile()) }
+        }
+    }
+    val onCopyPath: (Path) -> Unit = { path ->
+        copyToClipboard(path.toAbsolutePath().toString())
+    }
+    val onCopyRelativePath: (Path) -> Unit = { path ->
+        copyToClipboard(FileTreeActions.relativeTo(rootDir, path))
+    }
+    val onRenameEntry: (Path) -> Unit = { path ->
+        renameDialog = RenameEntryDialogState(path)
+    }
+    val onDeleteEntry: (Path) -> Unit = { path ->
+        deleteDialog = DeleteEntryDialogState(path)
+    }
+    val remapTabsAfterRename: (Path, Path) -> Unit = { old, new ->
+        listOf(PaneSide.PRIMARY, PaneSide.SECONDARY).forEach { side ->
+            mutatePane(side) { pane ->
+                val mapped = pane.book.tabs.map { tab ->
+                    val newPath = when {
+                        tab.path == old -> new
+                        tab.path.startsWith(old) -> new.resolve(old.relativize(tab.path))
+                        else -> null
+                    }
+                    if (newPath != null) tab.copy(path = newPath) else tab
+                }
+                if (mapped == pane.book.tabs) pane
+                else pane.copy(book = pane.book.copy(tabs = mapped))
+            }
+        }
+        val affectedOldPaths = mutableListOf<Path>()
+        val affectedNewPaths = mutableListOf<Pair<Path, String>>()
+        listOf(primaryPane, secondaryPane).forEach { pane ->
+            pane.book.tabs.forEach { tab ->
+                if (tab.path == new || tab.path.startsWith(new)) {
+                    val origin = if (tab.path == new) old else old.resolve(new.relativize(tab.path))
+                    if (isKotlinSource(origin)) affectedOldPaths.add(origin)
+                    if (isKotlinSource(tab.path)) affectedNewPaths.add(tab.path to tab.text)
+                }
+            }
+        }
+        affectedOldPaths.distinct().forEach { lsp.didClose(it) }
+        affectedNewPaths.distinctBy { it.first }.forEach { (p, text) -> lsp.didOpen(p, "kotlin", text) }
+    }
+    val closeTabsUnderPath: (Path) -> Unit = { path ->
+        listOf(PaneSide.PRIMARY, PaneSide.SECONDARY).forEach { side ->
+            val pane = paneOf(side)
+            val victims = pane.book.tabs.withIndex()
+                .filter { (_, tab) -> tab.path == path || tab.path.startsWith(path) }
+                .map { it.index }
+            val closedPaths = victims.map { pane.book.tabs[it].path }
+            if (victims.isNotEmpty()) {
+                val newBook = victims.sortedDescending().fold(pane.book) { acc, idx -> acc.close(idx) }
+                mutatePane(side) { it.copy(book = newBook) }
+            }
+            closedPaths.filter(::isKotlinSource).forEach { p ->
+                val stillOpenAnywhere = primaryPane.book.tabs.any { it.path == p } ||
+                    secondaryPane.book.tabs.any { it.path == p }
+                if (!stillOpenAnywhere) lsp.didClose(p)
+            }
+        }
+    }
     val toggleExpanded: (Path) -> Unit = { p ->
         expanded = if (p in expanded) {
             expanded - setOf(p)
@@ -1154,6 +1241,16 @@ fun main() = application {
         onKeyEvent = handleShortcut,
     ) {
         LaunchedEffect(Unit) { frameRef.value = window }
+        LaunchedEffect(palette) {
+            val c = glassTokensFor(palette).color.background
+            val awt = java.awt.Color(
+                (c.red * 255).toInt().coerceIn(0, 255),
+                (c.green * 255).toInt().coerceIn(0, 255),
+                (c.blue * 255).toInt().coerceIn(0, 255),
+            )
+            window.background = awt
+            window.contentPane.background = awt
+        }
         val openWsRef = rememberUpdatedState(openWorkspaceSymbol)
         val openDocRef = rememberUpdatedState(openDocumentSymbol)
         val triggerFormatRef = rememberUpdatedState(triggerFormat)
@@ -1335,6 +1432,13 @@ fun main() = application {
                     },
                     onToggle = toggleExpanded,
                     onOpenFile = openInTab,
+                    onCreateFileIn = onCreateFileIn,
+                    onCreateFolderIn = onCreateFolderIn,
+                    onRenameEntry = onRenameEntry,
+                    onDeleteEntry = onDeleteEntry,
+                    onRevealInFiles = onRevealInFiles,
+                    onCopyPath = onCopyPath,
+                    onCopyRelativePath = onCopyRelativePath,
                     onQueryChange = onQueryChange,
                     onReplaceChange = onReplaceChange,
                     onToggleCase = onToggleCase,
@@ -1490,6 +1594,248 @@ fun main() = application {
         )
     }
 
+    val activeCreateDialog = createDialog
+    if (activeCreateDialog != null) {
+        val isFile = activeCreateDialog.kind == CreateEntryKind.FILE
+        val rel = FileTreeActions.relativeTo(rootDir, activeCreateDialog.parent)
+        val parentLabel = if (rel.isEmpty() || rel == ".") "/" else rel
+        NameInputDialog(
+            title = if (isFile) "New file" else "New folder",
+            label = "$parentLabel  /  name",
+            error = activeCreateDialog.error,
+            onSubmit = { name ->
+                val result = if (isFile) {
+                    FileTreeActions.createFile(activeCreateDialog.parent, name)
+                } else {
+                    FileTreeActions.createFolder(activeCreateDialog.parent, name)
+                }
+                when (result) {
+                    is FileTreeActions.CreateResult.Ok -> {
+                        treeRevision++
+                        expanded = expanded + activeCreateDialog.parent
+                        if (isFile) openInTab(result.path)
+                        createDialog = null
+                    }
+                    is FileTreeActions.CreateResult.Err -> {
+                        createDialog = activeCreateDialog.copy(error = result.message)
+                    }
+                }
+            },
+            onDismiss = { createDialog = null },
+        )
+    }
+
+    val activeRenameDialog = renameDialog
+    val impactScope = rememberCoroutineScope()
+    val impactScanner = remember(currentLsp) {
+        ReferenceScanner(
+            documentSymbols = { p -> currentLsp.documentSymbols(p) },
+            references = { p, l, c -> currentLsp.references(p, l, c, includeDeclaration = false) },
+            ensureOpen = { p ->
+                val name = p.fileName?.toString().orEmpty()
+                if (name.endsWith(".kt") || name.endsWith(".kts")) {
+                    val text = runCatching { java.nio.file.Files.readString(p) }.getOrNull()
+                    if (text != null) currentLsp.didOpen(p, "kotlin", text)
+                }
+            },
+            scope = impactScope,
+        )
+    }
+    val impactTarget: Path? = activeRenameDialog?.path ?: deleteDialog?.path
+    val impactState: ImpactScanState = produceState<ImpactScanState>(ImpactScanState.Idle, impactTarget) {
+        val t = impactTarget
+        if (t == null) {
+            value = ImpactScanState.Idle
+            return@produceState
+        }
+        value = ImpactScanState.Scanning(0, 1)
+        val (flow, job) = impactScanner.scan(t)
+        try {
+            flow.collect { value = it }
+        } finally {
+            job.cancel()
+        }
+    }.value
+
+    if (activeRenameDialog != null) {
+        val currentName = activeRenameDialog.path.fileName?.toString() ?: ""
+        val parentRel = activeRenameDialog.path.parent?.let { FileTreeActions.relativeTo(rootDir, it) } ?: ""
+        val parentLabel = if (parentRel.isEmpty() || parentRel == ".") "/" else parentRel
+        NameInputDialog(
+            title = "Rename",
+            label = "$parentLabel  /  name (current: $currentName)",
+            initial = currentName,
+            error = activeRenameDialog.error,
+            impact = impactState,
+            rootDir = rootDir,
+            onJumpToHit = { hit ->
+                renameDialog = null
+                jumpToProblem(hit.file, hit.line, hit.column)
+            },
+            onSubmit = { newName ->
+                val oldPath = activeRenameDialog.path
+                val oldName = oldPath.fileName?.toString().orEmpty()
+                val oldStem = FileSymbolRename.stripKotlinExtension(oldName)
+                val newStem = FileSymbolRename.stripKotlinExtension(newName)
+                val shouldRenameSymbol = oldStem != null && newStem != null &&
+                    oldStem != newStem &&
+                    FileSymbolRename.isValidKotlinIdentifier(newStem)
+
+                fun finishFileRename() {
+                    when (val result = FileTreeActions.rename(oldPath, newName)) {
+                        is FileTreeActions.RenameResult.Ok -> {
+                            remapTabsAfterRename(oldPath, result.path)
+                            treeRevision++
+                            renameDialog = null
+                        }
+                        is FileTreeActions.RenameResult.Err -> {
+                            renameDialog = activeRenameDialog.copy(error = result.message)
+                        }
+                    }
+                }
+
+                if (shouldRenameSymbol) {
+                    impactScope.launch {
+                        val syms = runCatching {
+                            currentLsp.documentSymbols(oldPath).await()
+                        }.getOrDefault(emptyList())
+                        val pick = FileSymbolRename.findRenamableTopLevelSymbol(oldStem!!, syms)
+                        if (pick != null) {
+                            val openText = paneOf(PaneSide.PRIMARY).book.tabs.firstOrNull { it.path == oldPath }?.text
+                                ?: paneOf(PaneSide.SECONDARY).book.tabs.firstOrNull { it.path == oldPath }?.text
+                            val fileText = openText ?: runCatching {
+                                java.nio.file.Files.readString(oldPath)
+                            }.getOrNull()
+                            if (fileText != null) {
+                                if (!currentLsp.isOpenAt(oldPath)) {
+                                    runCatching { currentLsp.didOpen(oldPath, "kotlin", fileText) }
+                                }
+                                val candidatePaths = mutableListOf<java.nio.file.Path>()
+                                rootDir?.let { root ->
+                                    runCatching {
+                                        java.nio.file.Files.walk(root).use { stream ->
+                                            stream
+                                                .filter { p -> java.nio.file.Files.isRegularFile(p) }
+                                                .filter { p ->
+                                                    val name = p.fileName?.toString().orEmpty()
+                                                    name.endsWith(".kt") || name.endsWith(".kts")
+                                                }
+                                                .forEach { p ->
+                                                    val norm = p.toAbsolutePath().normalize()
+                                                    if (norm == oldPath.toAbsolutePath().normalize()) return@forEach
+                                                    val text = runCatching {
+                                                        java.nio.file.Files.readString(norm)
+                                                    }.getOrNull() ?: return@forEach
+                                                    if (!text.contains(oldStem)) return@forEach
+                                                    candidatePaths.add(norm)
+                                                    if (!currentLsp.isOpenAt(norm)) {
+                                                        runCatching { currentLsp.didOpen(norm, "kotlin", text) }
+                                                    }
+                                                }
+                                        }
+                                    }
+                                }
+                                val edit = runCatching {
+                                    currentLsp.rename(
+                                        oldPath,
+                                        fileText,
+                                        pick.selectionRange.startLine,
+                                        pick.selectionRange.startCharacter,
+                                        newStem!!,
+                                    ).await()
+                                }.getOrNull()
+                                val refs = runCatching {
+                                    currentLsp.references(
+                                        oldPath,
+                                        pick.selectionRange.startLine,
+                                        pick.selectionRange.startCharacter,
+                                        includeDeclaration = false,
+                                    ).await()
+                                }.getOrDefault(emptyList())
+                                val readText: (java.nio.file.Path) -> String? = { p ->
+                                    paneOf(PaneSide.PRIMARY).book.tabs.firstOrNull { it.path == p }?.text
+                                        ?: paneOf(PaneSide.SECONDARY).book.tabs.firstOrNull { it.path == p }?.text
+                                        ?: runCatching { java.nio.file.Files.readString(p) }.getOrNull()
+                                }
+                                val withRefs = page.lsp.RenameAugment.augment(
+                                    edit = edit ?: page.lsp.RenameWorkspaceEdit.EMPTY,
+                                    references = refs,
+                                    oldName = oldStem,
+                                    newName = newStem!!,
+                                    readFileText = readText,
+                                )
+                                val withTextual = page.lsp.RenameAugment.augmentTextually(
+                                    edit = withRefs,
+                                    oldName = oldStem,
+                                    newName = newStem,
+                                    readFileText = readText,
+                                )
+                                val withDecl = page.lsp.RenameAugment.augmentDeclarationFile(
+                                    edit = withTextual,
+                                    declarationPath = oldPath,
+                                    oldName = oldStem,
+                                    newName = newStem,
+                                    readFileText = readText,
+                                )
+                                val declarationPackage = FileSymbolRename.readPackageDeclaration(fileText)
+                                val augmented = page.lsp.RenameAugment.augmentImports(
+                                    edit = withDecl,
+                                    candidatePaths = candidatePaths,
+                                    oldName = oldStem,
+                                    newName = newStem,
+                                    readFileText = readText,
+                                    declarationPackage = declarationPackage,
+                                )
+                                if (augmented.changes.isNotEmpty()) {
+                                    applyRename(augmented)
+                                }
+                            }
+                        }
+                        finishFileRename()
+                    }
+                } else {
+                    finishFileRename()
+                }
+            },
+            onDismiss = { renameDialog = null },
+        )
+    }
+
+    val activeDeleteDialog = deleteDialog
+    if (activeDeleteDialog != null) {
+        val displayName = activeDeleteDialog.path.fileName?.toString() ?: activeDeleteDialog.path.toString()
+        val isDir = java.nio.file.Files.isDirectory(activeDeleteDialog.path)
+        val rel = FileTreeActions.relativeTo(rootDir, activeDeleteDialog.path)
+        ConfirmDialog(
+            title = "Delete",
+            message = "Delete ${if (isDir) "folder" else "file"} '$displayName'?",
+            detail = if (rel.isEmpty()) null else rel,
+            impact = impactState,
+            rootDir = rootDir,
+            onJumpToHit = { hit ->
+                deleteDialog = null
+                jumpToProblem(hit.file, hit.line, hit.column)
+            },
+            confirmLabel = "Delete",
+            danger = true,
+            onConfirm = {
+                val target = activeDeleteDialog.path
+                when (val result = FileTreeActions.delete(target)) {
+                    is FileTreeActions.DeleteResult.Ok -> {
+                        closeTabsUnderPath(target)
+                        treeRevision++
+                        deleteDialog = null
+                    }
+                    is FileTreeActions.DeleteResult.Err -> {
+                        println("[filetree] delete failed: ${result.message}")
+                        deleteDialog = null
+                    }
+                }
+            },
+            onDismiss = { deleteDialog = null },
+        )
+    }
+
     if (workspaceSymbolOpen) {
         WorkspaceSymbolDialog(
             queryFor = { q ->
@@ -1554,6 +1900,23 @@ fun main() = application {
     }
 }
 
+private enum class CreateEntryKind { FILE, FOLDER }
+
+private data class CreateEntryDialogState(
+    val parent: Path,
+    val kind: CreateEntryKind,
+    val error: String? = null,
+)
+
+private data class RenameEntryDialogState(
+    val path: Path,
+    val error: String? = null,
+)
+
+private data class DeleteEntryDialogState(
+    val path: Path,
+)
+
 private fun windowTitle(path: Path?): String {
     val name = path?.fileName?.toString() ?: "untitled"
     return "$name — ${PageIdentity.NAME}"
@@ -1610,6 +1973,13 @@ private fun Shell(
     onSidebarResize: (Dp) -> Unit,
     onToggle: (Path) -> Unit,
     onOpenFile: (Path) -> Unit,
+    onCreateFileIn: (Path) -> Unit,
+    onCreateFolderIn: (Path) -> Unit,
+    onRenameEntry: (Path) -> Unit,
+    onDeleteEntry: (Path) -> Unit,
+    onRevealInFiles: (Path) -> Unit,
+    onCopyPath: (Path) -> Unit,
+    onCopyRelativePath: (Path) -> Unit,
     onQueryChange: (PaneSide, String) -> Unit,
     onReplaceChange: (PaneSide, String) -> Unit,
     onToggleCase: (PaneSide) -> Unit,
@@ -1704,6 +2074,13 @@ private fun Shell(
                 selectedFile = paneFor(focusedPane, primary, secondary).book.active?.path,
                 onToggle = onToggle,
                 onOpenFile = onOpenFile,
+                onCreateFile = onCreateFileIn,
+                onCreateFolder = onCreateFolderIn,
+                onRename = onRenameEntry,
+                onDelete = onDeleteEntry,
+                onReveal = onRevealInFiles,
+                onCopyPath = onCopyPath,
+                onCopyRelativePath = onCopyRelativePath,
                 revision = treeRevision,
                 modifier = Modifier.width(sidebarWidth).fillMaxHeight(),
             )
