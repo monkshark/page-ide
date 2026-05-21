@@ -1,9 +1,20 @@
 package page.editor
 
 object FoldRegions {
-    data class Region(val startLine: Int, val endLine: Int)
+    data class Region(
+        val startLine: Int,
+        val endLine: Int,
+        val placeholderPrefix: String = "",
+    )
 
-    data class Segment(val origStart: Int, val origEnd: Int, val replacement: String)
+    data class Segment(
+        val origStart: Int,
+        val origEnd: Int,
+        val replacement: String,
+        val closerOrigStart: Int = origStart,
+        val closerInRepStart: Int = 0,
+        val closerLength: Int = 0,
+    )
 
     fun detect(text: String): List<Region> {
         val regions = mutableListOf<Region>()
@@ -44,7 +55,7 @@ object FoldRegions {
                 c == '{' -> { stack.addLast(line); i++ }
                 c == '}' -> {
                     val openLine = stack.removeLastOrNull()
-                    if (openLine != null && openLine < line) {
+                    if (openLine != null && openLine < line && !hasTrailingContent(text, i + 1)) {
                         regions.add(Region(openLine, line))
                     }
                     i++
@@ -53,6 +64,15 @@ object FoldRegions {
             }
         }
         return regions.sortedBy { it.startLine }
+    }
+
+    private fun hasTrailingContent(text: String, afterCloser: Int): Boolean {
+        var k = afterCloser
+        while (k < text.length && text[k] != '\n') {
+            if (!text[k].isWhitespace()) return true
+            k++
+        }
+        return false
     }
 
     fun segmentsFor(text: String, foldedRegions: Collection<Region>): List<Segment> {
@@ -69,15 +89,48 @@ object FoldRegions {
         var lastConsumedEnd = -1
         for (r in sorted) {
             if (r.startLine < 0 || r.endLine >= totalLines || r.endLine <= r.startLine) continue
-            val origStart = lineEndIndex(r.startLine)
+            val hasPrefix = r.placeholderPrefix.isNotEmpty()
+            val origStart = if (hasPrefix) lineStarts[r.startLine] else lineEndIndex(r.startLine)
             val hasTrailingNewline = r.endLine + 1 < totalLines
             val origEnd = if (hasTrailingNewline) lineStarts[r.endLine + 1] else text.length
-            val replacement = if (hasTrailingNewline) " ... }\n" else " ... }"
+            val closer = if (hasPrefix) "" else computeCloser(text, lineStarts[r.endLine], lineEndIndex(r.endLine))
+            val core = when {
+                hasPrefix -> "${r.placeholderPrefix} ..."
+                closer.isEmpty() -> " ..."
+                else -> " ... $closer"
+            }
+            val replacement = if (hasTrailingNewline) "$core\n" else core
+            val closerOrigStart = if (closer.isEmpty()) origStart else {
+                var end = lineEndIndex(r.endLine)
+                while (end > lineStarts[r.endLine] && text[end - 1].isWhitespace()) end--
+                end - closer.length
+            }
+            val closerInRepStart = if (closer.isEmpty()) 0 else core.length - closer.length
             if (origStart < lastConsumedEnd) continue
-            out.add(Segment(origStart, origEnd, replacement))
+            out.add(
+                Segment(
+                    origStart = origStart,
+                    origEnd = origEnd,
+                    replacement = replacement,
+                    closerOrigStart = closerOrigStart,
+                    closerInRepStart = closerInRepStart,
+                    closerLength = closer.length,
+                )
+            )
             lastConsumedEnd = origEnd
         }
         return out
+    }
+
+    private fun computeCloser(text: String, lineStart: Int, lineEndExclusive: Int): String {
+        var end = lineEndExclusive
+        while (end > lineStart && text[end - 1].isWhitespace()) end--
+        if (end <= lineStart) return ""
+        if (end - lineStart >= 2 && text[end - 2] == '*' && text[end - 1] == '/') return "*/"
+        return when (text[end - 1]) {
+            '}', ')', ']' -> text[end - 1].toString()
+            else -> ""
+        }
     }
 
     fun originalToTransformed(segments: List<Segment>, original: Int): Int {
@@ -85,7 +138,14 @@ object FoldRegions {
         var savings = 0
         for (seg in segments) {
             if (original < seg.origStart) return original - savings
-            if (original < seg.origEnd) return seg.origStart - savings
+            if (original < seg.origEnd) {
+                val closerOrigEnd = seg.closerOrigStart + seg.closerLength
+                return if (seg.closerLength > 0 && original in seg.closerOrigStart..closerOrigEnd) {
+                    seg.origStart - savings + seg.closerInRepStart + (original - seg.closerOrigStart)
+                } else {
+                    seg.origStart - savings
+                }
+            }
             savings += (seg.origEnd - seg.origStart) - seg.replacement.length
         }
         return original - savings
@@ -99,8 +159,13 @@ object FoldRegions {
             val transEnd = transStart + seg.replacement.length
             if (transformed < transStart) return transformed + savings
             if (transformed < transEnd) {
-                val mid = transStart + seg.replacement.length / 2
-                return if (transformed < mid) seg.origStart else seg.origEnd
+                val relativeOff = transformed - transStart
+                val closerInRepEnd = seg.closerInRepStart + seg.closerLength
+                return if (seg.closerLength > 0 && relativeOff in seg.closerInRepStart..closerInRepEnd) {
+                    seg.closerOrigStart + (relativeOff - seg.closerInRepStart)
+                } else {
+                    seg.origStart
+                }
             }
             savings += (seg.origEnd - seg.origStart) - seg.replacement.length
         }
@@ -125,9 +190,9 @@ object FoldRegions {
                 savings += (seg.origEnd - seg.origStart) - seg.replacement.length
                 continue
             }
-            val dotsStart = transStart + dotsOffset
-            val dotsEnd = dotsStart + 3
-            if (transformedOffset < dotsStart) return null
+            val dotsEnd = transStart + dotsOffset + 3
+            val hitStart = if (seg.replacement.startsWith(' ')) transStart + dotsOffset else transStart
+            if (transformedOffset < hitStart) return null
             if (transformedOffset < dotsEnd) { hit = seg; break }
             savings += (seg.origEnd - seg.origStart) - seg.replacement.length
         }
@@ -141,7 +206,10 @@ object FoldRegions {
             r.startLine in 0 until totalLines &&
                 r.endLine in 0 until totalLines &&
                 r.endLine > r.startLine &&
-                lineEndIndex(r.startLine) == target.origStart
+                (
+                    if (r.placeholderPrefix.isNotEmpty()) lineStarts[r.startLine] == target.origStart
+                    else lineEndIndex(r.startLine) == target.origStart
+                )
         }
     }
 }

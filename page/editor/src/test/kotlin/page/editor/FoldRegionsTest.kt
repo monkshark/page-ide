@@ -126,16 +126,40 @@ class FoldRegionsTest {
     }
 
     @Test
-    fun transformedToOriginalRightHalfMapsToFoldEnd() {
+    fun transformedToOriginalCloserMapsToCloserChars() {
         val text = "function foo() {\n  body\n}\nrest"
         val segs = FoldRegions.segmentsFor(text, listOf(FoldRegions.Region(0, 2)))
-        val transStart = segs[0].origStart
-        val mid = transStart + segs[0].replacement.length / 2
-        val transEnd = transStart + segs[0].replacement.length
-        for (off in mid until transEnd) {
-            assertEquals(segs[0].origEnd, FoldRegions.transformedToOriginal(segs, off),
-                "right-half offset $off should map to origEnd")
-        }
+        val seg = segs[0]
+        val closerStart = seg.origStart + seg.closerInRepStart
+        val closerEnd = closerStart + seg.closerLength
+        assertEquals(seg.closerOrigStart, FoldRegions.transformedToOriginal(segs, closerStart),
+            "click before closer should map to closer start in original")
+        assertEquals(seg.closerOrigStart + seg.closerLength, FoldRegions.transformedToOriginal(segs, closerEnd),
+            "click after closer should map to position after closer in original")
+    }
+
+    @Test
+    fun originalToTransformedCloserCharsLandOnVisibleCloser() {
+        val text = "function foo() {\n  body\n}\nrest"
+        val segs = FoldRegions.segmentsFor(text, listOf(FoldRegions.Region(0, 2)))
+        val seg = segs[0]
+        val closerStart = seg.origStart + seg.closerInRepStart
+        val closerEnd = closerStart + seg.closerLength
+        assertEquals(closerStart, FoldRegions.originalToTransformed(segs, seg.closerOrigStart),
+            "original closer-start should land before visible closer")
+        assertEquals(closerEnd, FoldRegions.originalToTransformed(segs, seg.closerOrigStart + seg.closerLength),
+            "original closer-end should land after visible closer")
+    }
+
+    @Test
+    fun closerCaretRoundTrip() {
+        val text = "function foo() {\n  body\n}\nrest"
+        val segs = FoldRegions.segmentsFor(text, listOf(FoldRegions.Region(0, 2)))
+        val seg = segs[0]
+        val closerEnd = seg.origStart + seg.closerInRepStart + seg.closerLength
+        val orig = FoldRegions.transformedToOriginal(segs, closerEnd)
+        assertEquals(closerEnd, FoldRegions.originalToTransformed(segs, orig),
+            "clicking on closer must round-trip back to the same visible offset")
     }
 
     @Test
@@ -173,6 +197,75 @@ class FoldRegionsTest {
         for (off in listOf(leadingSpace, trailingSpace, brace)) {
             val hit = FoldRegions.foldedRegionAt(text, listOf(region), off)
             assertEquals(null, hit, "expected miss at offset $off")
+        }
+    }
+
+    @Test
+    fun chainedBraceDoesNotFold() {
+        val text = "fun f() {\n  list.map {\n    it + 1\n  }.sum()\n}\n"
+        val regions = FoldRegions.detect(text)
+        assertTrue(regions.any { it.startLine == 0 && it.endLine == 4 }, "outer block should fold: $regions")
+        assertTrue(regions.none { it.startLine == 1 && it.endLine == 3 }, "chained lambda block should not fold: $regions")
+    }
+
+    @Test
+    fun segmentForMultilineCommentUsesStarSlashCloser() {
+        val text = "/*\n line\n*/\nrest"
+        val region = FoldRegions.Region(0, 2)
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        assertEquals(1, segs.size)
+        assertEquals(" ... */\n", segs[0].replacement)
+    }
+
+    @Test
+    fun segmentForImportListUsesNoCloser() {
+        val text = "import a.A\nimport b.B\nimport c.C\nrest"
+        val region = FoldRegions.Region(0, 2)
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        assertEquals(1, segs.size)
+        assertEquals(" ...\n", segs[0].replacement)
+    }
+
+    @Test
+    fun segmentForParenListUsesParenCloser() {
+        val text = "foo(\n  a,\n  b,\n)\nrest"
+        val region = FoldRegions.Region(0, 3)
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        assertEquals(1, segs.size)
+        assertEquals(" ... )\n", segs[0].replacement)
+    }
+
+    @Test
+    fun segmentForImportPrefixReplacesWholeLine() {
+        val text = "import a.A\nimport b.B\nrest"
+        val region = FoldRegions.Region(0, 1, placeholderPrefix = "import")
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        assertEquals(1, segs.size)
+        assertEquals("import ...\n", segs[0].replacement)
+        assertEquals(0, segs[0].origStart)
+        assertEquals(0, segs[0].closerLength)
+    }
+
+    @Test
+    fun originalToTransformedAfterImportPrefixShifts() {
+        val text = "import a.A\nimport b.B\nrest"
+        val region = FoldRegions.Region(0, 1, placeholderPrefix = "import")
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        val origRest = text.indexOf("rest")
+        val t = FoldRegions.originalToTransformed(segs, origRest)
+        assertEquals("import ...\n".length, t)
+    }
+
+    @Test
+    fun foldedRegionAtImportPrefixHitsOverPrefixAndDots() {
+        val text = "import a.A\nimport b.B\nrest"
+        val region = FoldRegions.Region(0, 1, placeholderPrefix = "import")
+        val segs = FoldRegions.segmentsFor(text, listOf(region))
+        val rep = segs[0].replacement
+        val dotsStart = segs[0].origStart + rep.indexOf("...")
+        for (off in dotsStart until dotsStart + 3) {
+            val hit = FoldRegions.foldedRegionAt(text, listOf(region), off)
+            assertEquals(region, hit, "expected hit at offset $off")
         }
     }
 
