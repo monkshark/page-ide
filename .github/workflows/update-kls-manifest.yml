@@ -51,6 +51,7 @@ jobs:
             fs.writeFileSync(target, JSON.stringify(manifest, null, 2) + '\n');
 
       - name: Create pull request
+        id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
           branch: chore/kls-manifest-refresh
@@ -64,3 +65,9 @@ jobs:
           labels: |
             automation
             lsp
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash --delete-branch "${{ steps.cpr.outputs.pull-request-number }}"
