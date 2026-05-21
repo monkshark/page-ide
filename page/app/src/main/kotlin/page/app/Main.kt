@@ -87,6 +87,9 @@ import page.lsp.RenameApply
 import page.lsp.RenameFileChange
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.pickSingleOtherReference
+import page.perf.PerfRegistry
+import page.perf.StartupKind
+import page.perf.StartupPhases
 import page.ui.CompactDropdown
 import page.ui.CompactMenuItem
 import page.ui.Glass
@@ -98,7 +101,15 @@ import page.ui.glassTokensFor
 import java.awt.Cursor
 import java.nio.file.Path
 
-fun main() = application {
+fun main() {
+    PerfRegistry.start(StartupKind.COLD).begin(StartupPhases.COMPOSE_INIT)
+    application {
+        AppContent()
+    }
+}
+
+@Composable
+private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val windowState = rememberWindowState(
         placement = androidx.compose.ui.window.WindowPlacement.Maximized,
         width = 1280.dp,
@@ -727,13 +738,17 @@ fun main() = application {
     }
     val openFolder: (java.awt.Frame) -> Unit = { parent ->
         FileDialogs.openDirectory(parent)?.let { picked ->
+            PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
             rootDir = picked
             expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
+            PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
         }
     }
     val openFolderPath: (Path) -> Unit = { picked ->
+        PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
         rootDir = picked
         expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
+        PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
     }
     val newFile: (java.awt.Frame) -> Unit = { parent ->
         val target = FileDialogs.saveAs(parent)
@@ -1697,7 +1712,18 @@ fun main() = application {
         onPreviewKeyEvent = handleShortcut,
         onKeyEvent = handleShortcut,
     ) {
-        LaunchedEffect(Unit) { frameRef.value = window }
+        LaunchedEffect(Unit) {
+            frameRef.value = window
+            val perf = PerfRegistry.instance
+            perf?.end(StartupPhases.COMPOSE_INIT)
+            perf?.begin(StartupPhases.WINDOW_SHOWN)
+            androidx.compose.runtime.withFrameNanos { }
+            perf?.end(StartupPhases.WINDOW_SHOWN)
+            perf?.begin(StartupPhases.FIRST_FRAME)
+            androidx.compose.runtime.withFrameNanos { }
+            perf?.end(StartupPhases.FIRST_FRAME)
+            println(perf?.summary())
+        }
         LaunchedEffect(palette) {
             val c = glassTokensFor(palette).color.background
             val awt = java.awt.Color(

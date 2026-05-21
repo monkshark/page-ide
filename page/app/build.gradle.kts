@@ -10,6 +10,7 @@ plugins {
 
 dependencies {
     implementation(project(":page:core"))
+    implementation(project(":page:perf"))
     implementation(project(":page:ui"))
     implementation(project(":page:editor"))
     implementation(project(":page:lsp"))

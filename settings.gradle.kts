@@ -23,6 +23,7 @@ dependencyResolutionManagement {
 }
 
 include(":page:core")
+include(":page:perf")
 include(":page:ui")
 include(":page:editor")
 include(":page:lsp")
