@@ -30,7 +30,8 @@ import page.lsp.KLS_GRADLE_SCRIPT_DEPS_KIND
 import page.lsp.KLS_LINTING_KIND
 import page.lsp.KLS_SYMBOL_INDEX_KIND
 import page.lsp.KlsActivity
-import page.lsp.KotlinLsp
+import page.lsp.LanguageBackend
+import page.lsp.LspBackends
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
@@ -119,12 +120,19 @@ class LspController(
         if (startAttempted) return
         startAttempted = true
         startActivityJanitor()
-        println("[lsp] resolving kotlin-language-server (workspace=$workspaceRoot)")
-        val resolution = KotlinLsp.resolveExecutable()
-        if (resolution !is KotlinLsp.Resolution.Found) {
-            val attempted = (resolution as KotlinLsp.Resolution.NotFound).attempted.joinToString("\n  ")
+        val backend = LspBackends.forExtension("kt")
+        if (backend == null) {
             status.value = Status.MISSING
-            statusDetail.value = "kotlin-language-server not found. Tried:\n  $attempted"
+            statusDetail.value = "no LanguageBackend registered for .kt"
+            println("[lsp] MISSING — no LanguageBackend for .kt")
+            return
+        }
+        println("[lsp] resolving ${backend.displayName} (workspace=$workspaceRoot)")
+        val resolution = backend.resolveExecutable()
+        if (resolution !is LanguageBackend.Resolution.Found) {
+            val attempted = (resolution as LanguageBackend.Resolution.NotFound).attempted.joinToString("\n  ")
+            status.value = Status.MISSING
+            statusDetail.value = "${backend.displayName} not found. Tried:\n  $attempted"
             println("[lsp] MISSING — attempted:\n  $attempted")
             return
         }
@@ -134,7 +142,7 @@ class LspController(
         println("[lsp] STARTING — ${resolution.origin}: ${resolution.executable}")
         val myGeneration = ++clientGeneration
         try {
-            val c = KotlinLsp.spawn(resolution.executable, workspaceRoot, onStderrLine = ::onLspStderr)
+            val c = backend.spawn(resolution.executable, workspaceRoot, onStderrLine = ::onLspStderr)
             c.onDiagnostics { params -> if (myGeneration == clientGeneration) onDiagnostics(params) }
             c.onLogMessage { mp ->
                 val rendered = if (mp.type == org.eclipse.lsp4j.MessageType.Error) condenseStackTrace(mp.message ?: "") else mp.message
@@ -152,7 +160,7 @@ class LspController(
                     throwable.printStackTrace()
                 } else {
                     status.value = Status.READY
-                    statusDetail.value = "kotlin-language-server ready (capabilities=${result.capabilities != null})"
+                    statusDetail.value = "${backend.displayName} ready (capabilities=${result.capabilities != null})"
                     println("[lsp] READY — capabilities=${result.capabilities != null}")
                     prepareRenameSupported = detectPrepareRenameSupport(result.capabilities)
                     println("[lsp] prepareRename support = $prepareRenameSupported")
