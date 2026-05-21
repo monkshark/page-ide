@@ -1,0 +1,425 @@
+{
+  "schemaVersion": 1,
+  "languages": [
+    {
+      "id": "kotlin",
+      "displayName": "Kotlin",
+      "extensions": ["kt", "kts"],
+      "lspBinaries": ["kotlin-language-server"],
+      "lspWindowsBinaries": ["kotlin-language-server.bat"],
+      "installGuideUrl": "https://github.com/fwcd/kotlin-language-server",
+      "install": {
+        "macos": "brew install kotlin-language-server",
+        "linux": "Download release zip from https://github.com/fwcd/kotlin-language-server/releases and add `bin/` to PATH",
+        "windows": "Download release zip from https://github.com/fwcd/kotlin-language-server/releases and add `bin\\` to PATH"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "java",
+      "displayName": "Java",
+      "extensions": ["java"],
+      "lspBinaries": ["jdtls"],
+      "lspWindowsBinaries": ["jdtls.bat"],
+      "installGuideUrl": "https://github.com/eclipse-jdtls/eclipse.jdt.ls",
+      "install": {
+        "macos": "brew install jdtls",
+        "linux": "Download tarball from https://download.eclipse.org/jdtls/snapshots/?d and put on PATH",
+        "windows": "Download tarball from https://download.eclipse.org/jdtls/snapshots/?d and put on PATH"
+      },
+      "runCommand": "java"
+    },
+    {
+      "id": "python",
+      "displayName": "Python",
+      "extensions": ["py", "pyi"],
+      "lspBinaries": ["pyright-langserver"],
+      "lspWindowsBinaries": ["pyright-langserver.cmd"],
+      "installGuideUrl": "https://github.com/microsoft/pyright",
+      "install": {
+        "macos": "npm install -g pyright",
+        "linux": "npm install -g pyright",
+        "windows": "npm install -g pyright"
+      },
+      "runCommand": "python"
+    },
+    {
+      "id": "javascript",
+      "displayName": "JavaScript",
+      "extensions": ["js", "jsx", "mjs", "cjs"],
+      "lspBinaries": ["typescript-language-server"],
+      "lspWindowsBinaries": ["typescript-language-server.cmd"],
+      "installGuideUrl": "https://github.com/typescript-language-server/typescript-language-server",
+      "install": {
+        "macos": "npm install -g typescript-language-server typescript",
+        "linux": "npm install -g typescript-language-server typescript",
+        "windows": "npm install -g typescript-language-server typescript"
+      },
+      "runCommand": "node"
+    },
+    {
+      "id": "typescript",
+      "displayName": "TypeScript",
+      "extensions": ["ts", "tsx"],
+      "lspBinaries": ["typescript-language-server"],
+      "lspWindowsBinaries": ["typescript-language-server.cmd"],
+      "installGuideUrl": "https://github.com/typescript-language-server/typescript-language-server",
+      "install": {
+        "macos": "npm install -g typescript-language-server typescript",
+        "linux": "npm install -g typescript-language-server typescript",
+        "windows": "npm install -g typescript-language-server typescript"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "go",
+      "displayName": "Go",
+      "extensions": ["go"],
+      "lspBinaries": ["gopls"],
+      "lspWindowsBinaries": ["gopls.exe"],
+      "installGuideUrl": "https://github.com/golang/tools/tree/master/gopls",
+      "install": {
+        "macos": "go install golang.org/x/tools/gopls@latest",
+        "linux": "go install golang.org/x/tools/gopls@latest",
+        "windows": "go install golang.org/x/tools/gopls@latest"
+      },
+      "runCommand": "go run"
+    },
+    {
+      "id": "rust",
+      "displayName": "Rust",
+      "extensions": ["rs"],
+      "lspBinaries": ["rust-analyzer"],
+      "lspWindowsBinaries": ["rust-analyzer.exe"],
+      "installGuideUrl": "https://rust-analyzer.github.io/",
+      "install": {
+        "macos": "rustup component add rust-analyzer",
+        "linux": "rustup component add rust-analyzer",
+        "windows": "rustup component add rust-analyzer"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "c",
+      "displayName": "C",
+      "extensions": ["c", "h"],
+      "lspBinaries": ["clangd"],
+      "lspWindowsBinaries": ["clangd.exe"],
+      "installGuideUrl": "https://clangd.llvm.org/installation",
+      "install": {
+        "macos": "brew install llvm",
+        "linux": "Install via your distro package manager (e.g. `apt install clangd`)",
+        "windows": "Install LLVM from https://releases.llvm.org/ and add to PATH"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "cpp",
+      "displayName": "C++",
+      "extensions": ["cc", "cpp", "cxx", "hh", "hpp", "hxx"],
+      "lspBinaries": ["clangd"],
+      "lspWindowsBinaries": ["clangd.exe"],
+      "installGuideUrl": "https://clangd.llvm.org/installation",
+      "install": {
+        "macos": "brew install llvm",
+        "linux": "Install via your distro package manager (e.g. `apt install clangd`)",
+        "windows": "Install LLVM from https://releases.llvm.org/ and add to PATH"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "dart",
+      "displayName": "Dart",
+      "extensions": ["dart"],
+      "lspBinaries": ["dart"],
+      "lspWindowsBinaries": ["dart.bat"],
+      "installGuideUrl": "https://dart.dev/get-dart",
+      "install": {
+        "macos": "brew install dart",
+        "linux": "Follow https://dart.dev/get-dart",
+        "windows": "Follow https://dart.dev/get-dart"
+      },
+      "runCommand": "dart run"
+    },
+    {
+      "id": "bash",
+      "displayName": "Bash",
+      "extensions": ["sh", "bash"],
+      "lspBinaries": ["bash-language-server"],
+      "lspWindowsBinaries": ["bash-language-server.cmd"],
+      "installGuideUrl": "https://github.com/bash-lsp/bash-language-server",
+      "install": {
+        "macos": "npm install -g bash-language-server",
+        "linux": "npm install -g bash-language-server",
+        "windows": "npm install -g bash-language-server"
+      },
+      "runCommand": "bash"
+    },
+    {
+      "id": "ruby",
+      "displayName": "Ruby",
+      "extensions": ["rb"],
+      "lspBinaries": ["solargraph"],
+      "lspWindowsBinaries": ["solargraph.bat"],
+      "installGuideUrl": "https://github.com/castwide/solargraph",
+      "install": {
+        "macos": "gem install solargraph",
+        "linux": "gem install solargraph",
+        "windows": "gem install solargraph"
+      },
+      "runCommand": "ruby"
+    },
+    {
+      "id": "php",
+      "displayName": "PHP",
+      "extensions": ["php"],
+      "lspBinaries": ["intelephense"],
+      "lspWindowsBinaries": ["intelephense.cmd"],
+      "installGuideUrl": "https://intelephense.com/",
+      "install": {
+        "macos": "npm install -g intelephense",
+        "linux": "npm install -g intelephense",
+        "windows": "npm install -g intelephense"
+      },
+      "runCommand": "php"
+    },
+    {
+      "id": "swift",
+      "displayName": "Swift",
+      "extensions": ["swift"],
+      "lspBinaries": ["sourcekit-lsp"],
+      "lspWindowsBinaries": ["sourcekit-lsp.exe"],
+      "installGuideUrl": "https://github.com/apple/sourcekit-lsp",
+      "install": {
+        "macos": "Bundled with Xcode toolchain",
+        "linux": "Install Swift toolchain from https://swift.org/download/",
+        "windows": "Install Swift toolchain from https://swift.org/download/"
+      },
+      "runCommand": "swift"
+    },
+    {
+      "id": "scala",
+      "displayName": "Scala",
+      "extensions": ["scala", "sc"],
+      "lspBinaries": ["metals"],
+      "lspWindowsBinaries": ["metals.bat"],
+      "installGuideUrl": "https://scalameta.org/metals/",
+      "install": {
+        "macos": "brew install coursier/formulas/coursier && cs install metals",
+        "linux": "Install coursier then `cs install metals`",
+        "windows": "Install coursier then `cs install metals`"
+      },
+      "runCommand": "scala"
+    },
+    {
+      "id": "haskell",
+      "displayName": "Haskell",
+      "extensions": ["hs", "lhs"],
+      "lspBinaries": ["haskell-language-server-wrapper"],
+      "lspWindowsBinaries": ["haskell-language-server-wrapper.exe"],
+      "installGuideUrl": "https://haskell-language-server.readthedocs.io/",
+      "install": {
+        "macos": "ghcup install hls",
+        "linux": "ghcup install hls",
+        "windows": "ghcup install hls"
+      },
+      "runCommand": "runhaskell"
+    },
+    {
+      "id": "lua",
+      "displayName": "Lua",
+      "extensions": ["lua"],
+      "lspBinaries": ["lua-language-server"],
+      "lspWindowsBinaries": ["lua-language-server.exe"],
+      "installGuideUrl": "https://luals.github.io/",
+      "install": {
+        "macos": "brew install lua-language-server",
+        "linux": "Download from https://github.com/LuaLS/lua-language-server/releases",
+        "windows": "Download from https://github.com/LuaLS/lua-language-server/releases"
+      },
+      "runCommand": "lua"
+    },
+    {
+      "id": "json",
+      "displayName": "JSON",
+      "extensions": ["json", "jsonc"],
+      "lspBinaries": ["vscode-json-language-server"],
+      "lspWindowsBinaries": ["vscode-json-language-server.cmd"],
+      "installGuideUrl": "https://www.npmjs.com/package/vscode-langservers-extracted",
+      "install": {
+        "macos": "npm install -g vscode-langservers-extracted",
+        "linux": "npm install -g vscode-langservers-extracted",
+        "windows": "npm install -g vscode-langservers-extracted"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "yaml",
+      "displayName": "YAML",
+      "extensions": ["yaml", "yml"],
+      "lspBinaries": ["yaml-language-server"],
+      "lspWindowsBinaries": ["yaml-language-server.cmd"],
+      "installGuideUrl": "https://github.com/redhat-developer/yaml-language-server",
+      "install": {
+        "macos": "npm install -g yaml-language-server",
+        "linux": "npm install -g yaml-language-server",
+        "windows": "npm install -g yaml-language-server"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "html",
+      "displayName": "HTML",
+      "extensions": ["html", "htm"],
+      "lspBinaries": ["vscode-html-language-server"],
+      "lspWindowsBinaries": ["vscode-html-language-server.cmd"],
+      "installGuideUrl": "https://www.npmjs.com/package/vscode-langservers-extracted",
+      "install": {
+        "macos": "npm install -g vscode-langservers-extracted",
+        "linux": "npm install -g vscode-langservers-extracted",
+        "windows": "npm install -g vscode-langservers-extracted"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "css",
+      "displayName": "CSS",
+      "extensions": ["css", "scss", "less"],
+      "lspBinaries": ["vscode-css-language-server"],
+      "lspWindowsBinaries": ["vscode-css-language-server.cmd"],
+      "installGuideUrl": "https://www.npmjs.com/package/vscode-langservers-extracted",
+      "install": {
+        "macos": "npm install -g vscode-langservers-extracted",
+        "linux": "npm install -g vscode-langservers-extracted",
+        "windows": "npm install -g vscode-langservers-extracted"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "markdown",
+      "displayName": "Markdown",
+      "extensions": ["md", "markdown"],
+      "lspBinaries": ["marksman"],
+      "lspWindowsBinaries": ["marksman.exe"],
+      "installGuideUrl": "https://github.com/artempyanykh/marksman",
+      "install": {
+        "macos": "brew install marksman",
+        "linux": "Download from https://github.com/artempyanykh/marksman/releases",
+        "windows": "Download from https://github.com/artempyanykh/marksman/releases"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "sql",
+      "displayName": "SQL",
+      "extensions": ["sql"],
+      "lspBinaries": ["sql-language-server"],
+      "lspWindowsBinaries": ["sql-language-server.cmd"],
+      "installGuideUrl": "https://github.com/joe-re/sql-language-server",
+      "install": {
+        "macos": "npm install -g sql-language-server",
+        "linux": "npm install -g sql-language-server",
+        "windows": "npm install -g sql-language-server"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "r",
+      "displayName": "R",
+      "extensions": ["r", "R"],
+      "lspBinaries": ["R"],
+      "lspWindowsBinaries": ["R.exe"],
+      "installGuideUrl": "https://github.com/REditorSupport/languageserver",
+      "install": {
+        "macos": "Rscript -e 'install.packages(\"languageserver\")'",
+        "linux": "Rscript -e 'install.packages(\"languageserver\")'",
+        "windows": "Rscript -e 'install.packages(\"languageserver\")'"
+      },
+      "runCommand": "Rscript"
+    },
+    {
+      "id": "perl",
+      "displayName": "Perl",
+      "extensions": ["pl", "pm"],
+      "lspBinaries": ["perl"],
+      "lspWindowsBinaries": ["perl.exe"],
+      "installGuideUrl": "https://github.com/richterger/Perl-LanguageServer",
+      "install": {
+        "macos": "cpan Perl::LanguageServer",
+        "linux": "cpan Perl::LanguageServer",
+        "windows": "cpan Perl::LanguageServer"
+      },
+      "runCommand": "perl"
+    },
+    {
+      "id": "elixir",
+      "displayName": "Elixir",
+      "extensions": ["ex", "exs"],
+      "lspBinaries": ["elixir-ls"],
+      "lspWindowsBinaries": ["elixir-ls.bat"],
+      "installGuideUrl": "https://github.com/elixir-lsp/elixir-ls",
+      "install": {
+        "macos": "brew install elixir-ls",
+        "linux": "Download from https://github.com/elixir-lsp/elixir-ls/releases",
+        "windows": "Download from https://github.com/elixir-lsp/elixir-ls/releases"
+      },
+      "runCommand": "elixir"
+    },
+    {
+      "id": "clojure",
+      "displayName": "Clojure",
+      "extensions": ["clj", "cljs", "cljc"],
+      "lspBinaries": ["clojure-lsp"],
+      "lspWindowsBinaries": ["clojure-lsp.exe"],
+      "installGuideUrl": "https://clojure-lsp.io/",
+      "install": {
+        "macos": "brew install clojure-lsp/brew/clojure-lsp-native",
+        "linux": "Download from https://github.com/clojure-lsp/clojure-lsp/releases",
+        "windows": "Download from https://github.com/clojure-lsp/clojure-lsp/releases"
+      },
+      "runCommand": null
+    },
+    {
+      "id": "fsharp",
+      "displayName": "F#",
+      "extensions": ["fs", "fsx", "fsi"],
+      "lspBinaries": ["fsautocomplete"],
+      "lspWindowsBinaries": ["fsautocomplete.exe"],
+      "installGuideUrl": "https://github.com/fsharp/FsAutoComplete",
+      "install": {
+        "macos": "dotnet tool install -g fsautocomplete",
+        "linux": "dotnet tool install -g fsautocomplete",
+        "windows": "dotnet tool install -g fsautocomplete"
+      },
+      "runCommand": "dotnet fsi"
+    },
+    {
+      "id": "ocaml",
+      "displayName": "OCaml",
+      "extensions": ["ml", "mli"],
+      "lspBinaries": ["ocamllsp"],
+      "lspWindowsBinaries": ["ocamllsp.exe"],
+      "installGuideUrl": "https://github.com/ocaml/ocaml-lsp",
+      "install": {
+        "macos": "opam install ocaml-lsp-server",
+        "linux": "opam install ocaml-lsp-server",
+        "windows": "opam install ocaml-lsp-server"
+      },
+      "runCommand": "ocaml"
+    },
+    {
+      "id": "zig",
+      "displayName": "Zig",
+      "extensions": ["zig"],
+      "lspBinaries": ["zls"],
+      "lspWindowsBinaries": ["zls.exe"],
+      "installGuideUrl": "https://github.com/zigtools/zls",
+      "install": {
+        "macos": "Download from https://github.com/zigtools/zls/releases",
+        "linux": "Download from https://github.com/zigtools/zls/releases",
+        "windows": "Download from https://github.com/zigtools/zls/releases"
+      },
+      "runCommand": "zig run"
+    }
+  ]
+}
