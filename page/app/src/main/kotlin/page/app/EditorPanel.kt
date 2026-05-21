@@ -69,6 +69,7 @@ import kotlinx.coroutines.delay
 import page.editor.BracketMatch
 import page.editor.FoldRegions
 import page.editor.Indent
+import page.editor.LanguageFolders
 import page.editor.LineComment
 import page.editor.MarkdownFence
 import page.editor.SearchState
@@ -300,7 +301,12 @@ fun EditorPanel(
         }
     }
 
-    val foldRegions = remember(value.text) { FoldRegions.detect(value.text) }
+    val foldExtension = remember(activePath) {
+        activePath?.fileName?.toString()?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
+    }
+    val foldRegions = remember(value.text, foldExtension) {
+        LanguageFolders.forExtension(foldExtension).detect(value.text)
+    }
     var foldedRegions by remember(activePath) { mutableStateOf<Set<FoldRegions.Region>>(emptySet()) }
     var initialFoldApplied by remember(activePath) { mutableStateOf(false) }
     LaunchedEffect(activePath, foldRegions) {
@@ -410,6 +416,12 @@ fun EditorPanel(
                 foldPlaceholderStyle = SpanStyle(
                     color = foldPlaceholderColor,
                     background = foldPlaceholderBg,
+                ),
+                foldCloserStyle = SpanStyle(
+                    color = palette.comment,
+                ),
+                foldPrefixStyle = SpanStyle(
+                    color = palette.keyword,
                 ),
                 inlayHints = inlayHintDisplays,
                 inlayHintStyle = SpanStyle(
@@ -1378,6 +1390,8 @@ private class CombinedHighlightTransformation(
     private val bracketBg: androidx.compose.ui.graphics.Color,
     private val foldSegments: List<FoldRegions.Segment>,
     private val foldPlaceholderStyle: SpanStyle,
+    private val foldCloserStyle: SpanStyle,
+    private val foldPrefixStyle: SpanStyle = SpanStyle(),
     private val inlayHints: List<InlayHintDisplay> = emptyList(),
     private val inlayHintStyle: SpanStyle = SpanStyle(),
 ) : VisualTransformation {
@@ -1401,7 +1415,42 @@ private class CombinedHighlightTransformation(
                 if (dotsOffset >= 0) {
                     val dotsStart = placeholderStart + dotsOffset
                     val dotsEnd = dotsStart + 3
+                    if (!seg.replacement.startsWith(' ')) {
+                        var prefixLen = dotsOffset
+                        while (prefixLen > 0 && seg.replacement[prefixLen - 1] == ' ') prefixLen--
+                        if (prefixLen > 0) {
+                            foldBuilder.addStyle(foldPrefixStyle, placeholderStart, placeholderStart + prefixLen)
+                        }
+                    }
                     foldBuilder.addStyle(foldPlaceholderStyle, dotsStart, dotsEnd)
+                    val visibleEnd = if (seg.replacement.endsWith("\n")) {
+                        placeholderStart + seg.replacement.length - 1
+                    } else {
+                        placeholderStart + seg.replacement.length
+                    }
+                    val trimmedReplacement = if (seg.replacement.endsWith("\n")) {
+                        seg.replacement.dropLast(1)
+                    } else {
+                        seg.replacement
+                    }
+                    if (visibleEnd > dotsEnd && trimmedReplacement.endsWith("*/")) {
+                        foldBuilder.addStyle(foldCloserStyle, dotsEnd, visibleEnd)
+                    }
+                    if (bracketMatch != null && seg.closerLength > 0) {
+                        val closerOrigEnd = seg.closerOrigStart + seg.closerLength
+                        val touchesCloser =
+                            bracketMatch.first in seg.closerOrigStart until closerOrigEnd ||
+                                bracketMatch.second in seg.closerOrigStart until closerOrigEnd
+                        if (touchesCloser) {
+                            val closerVisStart = placeholderStart + seg.closerInRepStart
+                            val closerVisEnd = closerVisStart + seg.closerLength
+                            foldBuilder.addStyle(
+                                SpanStyle(background = bracketBg),
+                                closerVisStart,
+                                closerVisEnd,
+                            )
+                        }
+                    }
                 }
                 cursor = seg.origEnd
             }
