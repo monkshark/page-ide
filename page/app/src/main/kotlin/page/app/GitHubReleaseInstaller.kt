@@ -6,6 +6,10 @@ import java.nio.file.Path
 
 class GitHubReleaseInstaller(
     val descriptor: GitHubReleaseDescriptor,
+    private val manifestFetcher: (String) -> List<String>? = { slug -> LspStaticManifest.fetchReleaseTags(slug) },
+    private val apiFetcher: (String, String) -> List<String> = { owner, repo ->
+        GitHubReleases.listReleases(owner, repo).map { it.tagName }
+    },
 ) : LspInstaller {
 
     override val languageId: String = descriptor.languageId
@@ -26,9 +30,11 @@ class GitHubReleaseInstaller(
 
     override fun installedVersion(): String? = currentInstalledVersion()
 
-    override fun availableVersions(): List<String> = runCatching {
-        GitHubReleases.listReleases(descriptor.owner, descriptor.repo).map { it.tagName }
-    }.getOrDefault(emptyList())
+    override fun availableVersions(): List<String> {
+        val manifest = manifestFetcher(descriptor.languageId)
+        if (!manifest.isNullOrEmpty()) return manifest
+        return runCatching { apiFetcher(descriptor.owner, descriptor.repo) }.getOrDefault(emptyList())
+    }
 
     override fun install(version: String?, onProgress: (LspInstaller.Progress) -> Unit) {
         try {

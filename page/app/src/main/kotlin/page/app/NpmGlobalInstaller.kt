@@ -11,6 +11,7 @@ class NpmGlobalInstaller(
     val descriptor: NpmPackageDescriptor,
     private val npmFinder: () -> Path? = ::findNpmOnPath,
     private val processRunner: ProcessRunner = DefaultProcessRunner,
+    private val manifestFetcher: (String) -> List<String>? = { slug -> LspStaticManifest.fetchNpmVersions(slug) },
 ) : LspInstaller {
 
     override val languageId: String = descriptor.languageId
@@ -30,11 +31,15 @@ class NpmGlobalInstaller(
 
     override fun installedVersion(): String? = currentInstalledVersion()
 
-    override fun availableVersions(): List<String> = runCatching {
-        val npm = npmFinder() ?: return@runCatching emptyList<String>()
-        val raw = processRunner.captureOutput(listOf(npm.toString(), "view", descriptor.packageName, "versions", "--json"))
-        NpmVersionParser.parseVersions(raw)
-    }.getOrDefault(emptyList())
+    override fun availableVersions(): List<String> {
+        val manifest = manifestFetcher(descriptor.installKey)
+        if (!manifest.isNullOrEmpty()) return manifest
+        return runCatching {
+            val npm = npmFinder() ?: return@runCatching emptyList<String>()
+            val raw = processRunner.captureOutput(listOf(npm.toString(), "view", descriptor.packageName, "versions", "--json"))
+            NpmVersionParser.parseVersions(raw)
+        }.getOrDefault(emptyList())
+    }
 
     override fun install(version: String?, onProgress: (LspInstaller.Progress) -> Unit) {
         try {

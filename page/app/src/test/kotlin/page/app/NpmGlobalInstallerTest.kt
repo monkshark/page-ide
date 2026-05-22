@@ -234,4 +234,80 @@ class NpmGlobalInstallerTest {
         assertEquals(emptyList(), NpmVersionParser.parseVersions(""))
         assertEquals(emptyList(), NpmVersionParser.parseVersions("[]"))
     }
+
+    @Test
+    fun availableVersionsPrefersManifestOverNpmView() {
+        val runner = object : ProcessRunner {
+            override fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int = 0
+            override fun captureOutput(command: List<String>): String {
+                error("npm view should not be called when manifest hits")
+            }
+        }
+        val installer = NpmGlobalInstaller(
+            NpmPackageDescriptor(
+                languageId = "typescript",
+                displayName = "ts",
+                packageName = "typescript-language-server",
+                binaryName = "typescript-language-server",
+            ),
+            npmFinder = { Path.of("/usr/bin/npm") },
+            processRunner = runner,
+            manifestFetcher = { slug ->
+                assertEquals("typescript-language-server", slug)
+                listOf("4.4.0", "4.3.4", "4.3.3")
+            },
+        )
+        assertEquals(listOf("4.4.0", "4.3.4", "4.3.3"), installer.availableVersions())
+    }
+
+    @Test
+    fun availableVersionsFallsBackToNpmViewWhenManifestNull() {
+        val captured = mutableListOf<List<String>>()
+        val runner = object : ProcessRunner {
+            override fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int = 0
+            override fun captureOutput(command: List<String>): String {
+                captured += command
+                return """["1.0.0", "1.1.0"]"""
+            }
+        }
+        val installer = NpmGlobalInstaller(
+            NpmPackageDescriptor("yaml", "yaml", "yaml-language-server", "yaml-language-server"),
+            npmFinder = { Path.of("/usr/bin/npm") },
+            processRunner = runner,
+            manifestFetcher = { null },
+        )
+        assertEquals(listOf("1.1.0", "1.0.0"), installer.availableVersions())
+        assertEquals(1, captured.size)
+        assertTrue(captured[0].contains("view"))
+    }
+
+    @Test
+    fun availableVersionsFallsBackToNpmViewWhenManifestEmpty() {
+        val runner = object : ProcessRunner {
+            override fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int = 0
+            override fun captureOutput(command: List<String>): String = """["2.0.0"]"""
+        }
+        val installer = NpmGlobalInstaller(
+            NpmPackageDescriptor("yaml", "yaml", "yaml-language-server", "yaml-language-server"),
+            npmFinder = { Path.of("/usr/bin/npm") },
+            processRunner = runner,
+            manifestFetcher = { emptyList() },
+        )
+        assertEquals(listOf("2.0.0"), installer.availableVersions())
+    }
+
+    @Test
+    fun availableVersionsManifestUsesInstallKeyForScopedPackage() {
+        val seenSlugs = mutableListOf<String>()
+        val installer = NpmGlobalInstaller(
+            NpmPackageDescriptor("vue", "vue", "@vue/language-server", "vue-language-server"),
+            npmFinder = { Path.of("/usr/bin/npm") },
+            manifestFetcher = { slug ->
+                seenSlugs += slug
+                listOf("2.1.0")
+            },
+        )
+        assertEquals(listOf("2.1.0"), installer.availableVersions())
+        assertEquals(listOf("vue-language-server"), seenSlugs)
+    }
 }
