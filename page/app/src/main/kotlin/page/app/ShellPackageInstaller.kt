@@ -15,6 +15,7 @@ class ShellPackageInstaller(
     override val languageId: String = descriptor.languageId
     override val displayName: String = descriptor.displayName
     override val precheck: LspInstaller.Precheck = computePrecheck()
+    override val heavyInstall: LspInstaller.HeavyInstallEstimate? = descriptor.heavyInstall
 
     override fun isInstalled(): Boolean = executable() != null
 
@@ -122,6 +123,7 @@ data class ShellPackageDescriptor(
     val binaryName: String,
     val packageName: String,
     val defaultVersion: String? = null,
+    val heavyInstall: LspInstaller.HeavyInstallEstimate? = null,
     val buildInstallCommand: (manager: String, pkg: String, version: String) -> List<String>,
 )
 

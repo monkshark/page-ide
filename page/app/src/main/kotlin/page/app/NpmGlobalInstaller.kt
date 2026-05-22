@@ -134,13 +134,19 @@ data class NpmPackageDescriptor(
 
 interface ProcessRunner {
     fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int
+    fun runStreaming(command: List<String>, env: Map<String, String>, onLine: (String) -> Unit): Int =
+        runStreaming(command, onLine)
     fun captureOutput(command: List<String>): String
 }
 
 object DefaultProcessRunner : ProcessRunner {
 
-    override fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int {
+    override fun runStreaming(command: List<String>, onLine: (String) -> Unit): Int =
+        runStreaming(command, emptyMap(), onLine)
+
+    override fun runStreaming(command: List<String>, env: Map<String, String>, onLine: (String) -> Unit): Int {
         val pb = ProcessBuilder(command).redirectErrorStream(true)
+        if (env.isNotEmpty()) pb.environment().putAll(env)
         val process = pb.start()
         BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8)).use { reader ->
             while (true) {

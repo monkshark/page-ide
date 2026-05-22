@@ -345,6 +345,11 @@ object LspInstallers {
             managerInstallUrl = "https://www.ruby-lang.org/en/downloads/",
             binaryName = "solargraph",
             packageName = "solargraph",
+            heavyInstall = LspInstaller.HeavyInstallEstimate(
+                sizeEstimate = "약 80 MB",
+                durationEstimate = "약 30초 ~ 2분",
+                notes = "gem 이 solargraph 와 의존성을 다운로드합니다. 네트워크 상태에 따라 시간이 달라질 수 있어요.",
+            ),
             buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", "--no-document", pkg) },
         ),
     )
@@ -357,21 +362,16 @@ object LspInstallers {
             managerInstallUrl = "https://opam.ocaml.org/doc/Install.html",
             binaryName = "ocamllsp",
             packageName = "ocaml-lsp-server",
+            heavyInstall = LspInstaller.HeavyInstallEstimate(
+                sizeEstimate = "약 120 MB",
+                durationEstimate = "약 2분 ~ 30분",
+                notes = "opam 이 ocaml-lsp-server 와 의존성을 빌드합니다. 첫 사용 시 컴파일러까지 함께 받으면 오래 걸릴 수 있어요.",
+            ),
             buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", "-y", pkg) },
         ),
     )
 
-    private fun fsharpInstaller(): LspInstaller = ShellPackageInstaller(
-        ShellPackageDescriptor(
-            languageId = "fsharp",
-            displayName = "fsautocomplete",
-            managerName = "dotnet",
-            managerInstallUrl = "https://dotnet.microsoft.com/download",
-            binaryName = "fsautocomplete",
-            packageName = "fsautocomplete",
-            buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "tool", "install", "-g", pkg) },
-        ),
-    )
+    private fun fsharpInstaller(): LspInstaller = FsAutocompleteInstaller()
 
     private fun perlInstaller(): LspInstaller = ShellPackageInstaller(
         ShellPackageDescriptor(
@@ -381,6 +381,11 @@ object LspInstallers {
             managerInstallUrl = "https://www.perl.org/get.html",
             binaryName = "perl",
             packageName = "Perl::LanguageServer",
+            heavyInstall = LspInstaller.HeavyInstallEstimate(
+                sizeEstimate = "약 50 MB",
+                durationEstimate = "약 5분 ~ 15분",
+                notes = "cpan 이 Perl::LanguageServer 와 XS 의존성을 빌드합니다. 첫 빌드는 길어질 수 있어요.",
+            ),
             buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "-T", pkg) },
         ),
     )
@@ -399,48 +404,13 @@ object LspInstallers {
         ),
     )
 
-    private fun haskellInstaller(): LspInstaller = ShellPackageInstaller(
-        ShellPackageDescriptor(
-            languageId = "haskell",
-            displayName = "haskell-language-server",
-            managerName = "ghcup",
-            managerInstallUrl = "https://www.haskell.org/ghcup/",
-            binaryName = "haskell-language-server-wrapper",
-            packageName = "hls",
-            buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", pkg) },
-        ),
-    )
+    private fun haskellInstaller(): LspInstaller = HaskellHlsInstaller()
 
-    private fun goInstaller(): LspInstaller = ShellPackageInstaller(
-        ShellPackageDescriptor(
-            languageId = "go",
-            displayName = "gopls",
-            managerName = "go",
-            managerInstallUrl = "https://go.dev/dl/",
-            binaryName = "gopls",
-            packageName = "golang.org/x/tools/gopls@latest",
-            buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", pkg) },
-        ),
-    )
+    private fun goInstaller(): LspInstaller = GoplsInstaller()
 
-    private fun scalaInstaller(): LspInstaller = ShellPackageInstaller(
-        ShellPackageDescriptor(
-            languageId = "scala",
-            displayName = "metals",
-            managerName = "cs",
-            managerInstallUrl = "https://get-coursier.io/docs/cli-installation",
-            binaryName = "metals",
-            packageName = "metals",
-            buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", pkg) },
-        ),
-    )
+    private fun scalaInstaller(): LspInstaller = MetalsInstaller()
 
-    private fun dartInstaller(): LspInstaller = ToolchainDetectInstaller(
-        languageId = "dart",
-        displayName = "Dart SDK (analysis server)",
-        managerName = "dart",
-        managerInstallUrl = "https://dart.dev/get-dart",
-    )
+    private fun dartInstaller(): LspInstaller = DartSdkInstaller()
 
     private fun swiftInstaller(): LspInstaller = ToolchainDetectInstaller(
         languageId = "swift",

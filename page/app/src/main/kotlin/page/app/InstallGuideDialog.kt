@@ -68,6 +68,10 @@ internal fun InstallGuideDialog(
     var availableVersions by remember(installer) { mutableStateOf<List<String>>(emptyList()) }
     var versionsLoading by remember(installer) { mutableStateOf(true) }
     var showUpstream by remember(installer) { mutableStateOf(false) }
+    var showHeavyConfirm by remember(installer) { mutableStateOf(false) }
+    var heavyConfirmAccepted by remember(installer) { mutableStateOf(false) }
+    var outputLines by remember(installer) { mutableStateOf<List<String>>(emptyList()) }
+    var outputExpanded by remember(installer) { mutableStateOf(false) }
     val kls = installer as? KlsLspInstaller
     val installedVersion = remember(installer, installProgress) { installer?.installedVersion() }
     val installedVersions = remember(installer, installProgress) {
@@ -95,15 +99,34 @@ internal fun InstallGuideDialog(
         }
     }
 
-    fun startInstall() {
+    fun startInstallInternal() {
         val active = installer ?: return
         if (installing) return
         installProgress = LspInstaller.Progress.Downloading(0, -1)
+        outputLines = emptyList()
         scope.launch {
             withContext(Dispatchers.IO) {
-                active.install(selectedVersion) { p -> installProgress = p }
+                active.install(selectedVersion) { p ->
+                    installProgress = p
+                    if (p is LspInstaller.Progress.CommandOutput) {
+                        outputLines = (outputLines + p.line).takeLast(200)
+                    }
+                    if (p is LspInstaller.Progress.Failed) {
+                        outputExpanded = true
+                    }
+                }
             }
         }
+    }
+
+    fun startInstall() {
+        val active = installer ?: return
+        if (installing) return
+        if (active.heavyInstall != null && !heavyConfirmAccepted) {
+            showHeavyConfirm = true
+            return
+        }
+        startInstallInternal()
     }
 
     fun applySelected() {
@@ -124,9 +147,18 @@ internal fun InstallGuideDialog(
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) false
                     else when (event.key) {
-                        Key.Escape -> { if (!installing) { onDismiss(); true } else true }
+                        Key.Escape -> {
+                            if (showHeavyConfirm) { showHeavyConfirm = false; true }
+                            else if (!installing) { onDismiss(); true }
+                            else true
+                        }
                         Key.Enter, Key.NumPadEnter -> {
-                            if (installing) true
+                            if (showHeavyConfirm) {
+                                showHeavyConfirm = false
+                                heavyConfirmAccepted = true
+                                startInstallInternal()
+                                true
+                            } else if (installing) true
                             else if (canInAppInstall && installProgress == null) { startInstall(); true }
                             else { onDismiss(); true }
                         }
@@ -170,6 +202,11 @@ internal fun InstallGuideDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = LocalTextStyle.current.copy(fontSize = 11.sp),
                     )
+                    val heavyEstimate = installer?.heavyInstall
+                    if (heavyEstimate != null && installProgress == null && precheck is LspInstaller.Precheck.Ok) {
+                        Spacer(Modifier.height(8.dp))
+                        HeavyEstimateBanner(estimate = heavyEstimate)
+                    }
                     Spacer(Modifier.height(10.dp))
                     val precheckBlocked = precheck is LspInstaller.Precheck.MissingTool
                     val showManualSteps = !canInAppInstall ||
@@ -337,6 +374,18 @@ internal fun InstallGuideDialog(
                         style = LocalTextStyle.current.copy(fontSize = 10.sp),
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (outputLines.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        OutputToggle(
+                            expanded = outputExpanded,
+                            lineCount = outputLines.size,
+                            onClick = { outputExpanded = !outputExpanded },
+                        )
+                        if (outputExpanded) {
+                            Spacer(Modifier.height(4.dp))
+                            OutputLogBox(lines = outputLines)
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -385,6 +434,20 @@ internal fun InstallGuideDialog(
                         }
                     }
                 }
+            }
+            val activeHeavy = installer?.heavyInstall
+            if (showHeavyConfirm && activeHeavy != null) {
+                HeavyConfirmOverlay(
+                    displayName = definition.displayName,
+                    estimate = activeHeavy,
+                    onCancel = { showHeavyConfirm = false },
+                    onOpenGuide = { onOpenGuide(definition.installGuideUrl) },
+                    onContinue = {
+                        showHeavyConfirm = false
+                        heavyConfirmAccepted = true
+                        startInstallInternal()
+                    },
+                )
             }
         }
     }
@@ -656,4 +719,166 @@ private fun ButtonLabel(text: String, color: Color) {
             ),
         ),
     )
+}
+
+@Composable
+private fun HeavyEstimateBanner(estimate: LspInstaller.HeavyInstallEstimate) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Column {
+            Text(
+                text = "${estimate.sizeEstimate} · ${estimate.durationEstimate}",
+                color = MaterialTheme.colorScheme.primary,
+                style = LocalTextStyle.current.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = estimate.notes,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = LocalTextStyle.current.copy(fontSize = 10.sp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OutputToggle(expanded: Boolean, lineCount: Int, onClick: () -> Unit) {
+    val chevron = if (expanded) "▼" else "▶"
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = chevron,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = LocalTextStyle.current.copy(fontSize = 9.sp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = if (expanded) "출력 숨기기" else "자세히 보기 ($lineCount 줄)",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = LocalTextStyle.current.copy(fontSize = 10.sp),
+        )
+    }
+}
+
+@Composable
+private fun OutputLogBox(lines: List<String>) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(lines.size) {
+        runCatching { scroll.scrollTo(scroll.maxValue) }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+            for (line in lines) {
+                Text(
+                    text = line,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = LocalTextStyle.current.copy(
+                        fontSize = 10.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeavyConfirmOverlay(
+    displayName: String,
+    estimate: LspInstaller.HeavyInstallEstimate,
+    onCancel: () -> Unit,
+    onContinue: () -> Unit,
+    onOpenGuide: () -> Unit,
+) {
+    val scrimInteraction = remember { MutableInteractionSource() }
+    val cardInteraction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(
+                interactionSource = scrimInteraction,
+                indication = null,
+            ) { onCancel() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(440.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                .clickable(
+                    interactionSource = cardInteraction,
+                    indication = null,
+                ) { },
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(
+                    text = "$displayName 설치 확인",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 13.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "${estimate.sizeEstimate} · ${estimate.durationEstimate}",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = LocalTextStyle.current.copy(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = estimate.notes,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = LocalTextStyle.current.copy(fontSize = 11.sp),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "설치 도중에 다이얼로그를 닫아도 백그라운드 작업이 계속 진행될 수 있어요.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = LocalTextStyle.current.copy(fontSize = 10.sp),
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    InstallGuideButton(
+                        label = "취소",
+                        primary = false,
+                        enabled = true,
+                        onClick = onCancel,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    InstallGuideButton(
+                        label = "매니저 가이드",
+                        primary = false,
+                        enabled = true,
+                        onClick = onOpenGuide,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    InstallGuideButton(
+                        label = "계속 설치",
+                        primary = true,
+                        enabled = true,
+                        onClick = onContinue,
+                    )
+                }
+            }
+        }
+    }
 }

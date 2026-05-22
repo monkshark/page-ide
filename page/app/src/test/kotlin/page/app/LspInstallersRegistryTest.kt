@@ -128,12 +128,8 @@ class LspInstallersRegistryTest {
         val shellIds = mapOf(
             "ruby" to "gem",
             "ocaml" to "opam",
-            "fsharp" to "dotnet",
             "perl" to "cpan",
             "r" to "Rscript",
-            "haskell" to "ghcup",
-            "go" to "go",
-            "scala" to "cs",
         )
         for ((id, manager) in shellIds) {
             assertTrue(LspInstallers.supports(id), "expected support for $id")
@@ -145,12 +141,76 @@ class LspInstallersRegistryTest {
     }
 
     @Test
-    fun supportsToolchainDetectorLanguages() {
-        for (id in listOf("dart", "swift")) {
+    fun heavyInstallSetForRubyOcamlPerl() {
+        for (id in listOf("ruby", "ocaml", "perl")) {
             val installer = LspInstallers.forId(id)
             assertNotNull(installer, "expected installer for $id")
-            assertTrue(installer is ToolchainDetectInstaller, "$id should be ToolchainDetectInstaller, got ${installer::class}")
+            val heavy = installer.heavyInstall
+            assertNotNull(heavy, "$id should expose heavy install estimate")
+            assertTrue(heavy.sizeEstimate.isNotBlank(), "$id heavy.sizeEstimate blank")
+            assertTrue(heavy.durationEstimate.isNotBlank(), "$id heavy.durationEstimate blank")
+            assertTrue(heavy.notes.isNotBlank(), "$id heavy.notes blank")
         }
+    }
+
+    @Test
+    fun heavyInstallNullForLightInstallers() {
+        for (id in listOf("r", "typescript", "rust", "go", "scala", "haskell", "dart")) {
+            val installer = LspInstallers.forId(id)
+            assertNotNull(installer, "expected installer for $id")
+            assertNull(installer.heavyInstall, "$id should not flag heavy install")
+        }
+    }
+
+    @Test
+    fun goUsesGoplsInstallerNotShellPackage() {
+        assertTrue(LspInstallers.supports("go"))
+        val installer = LspInstallers.forId("go")
+        assertNotNull(installer)
+        assertTrue(installer is GoplsInstaller, "go should be GoplsInstaller, got ${installer::class}")
+        assertEquals("gopls", installer.displayName)
+    }
+
+    @Test
+    fun scalaUsesMetalsInstallerNotShellPackage() {
+        assertTrue(LspInstallers.supports("scala"))
+        val installer = LspInstallers.forId("scala")
+        assertNotNull(installer)
+        assertTrue(installer is MetalsInstaller, "scala should be MetalsInstaller, got ${installer::class}")
+        assertEquals("metals", installer.displayName)
+    }
+
+    @Test
+    fun fsharpUsesFsAutocompleteInstallerNotShellPackage() {
+        assertTrue(LspInstallers.supports("fsharp"))
+        val installer = LspInstallers.forId("fsharp")
+        assertNotNull(installer)
+        assertTrue(installer is FsAutocompleteInstaller, "fsharp should be FsAutocompleteInstaller, got ${installer::class}")
+        assertEquals("fsautocomplete", installer.displayName)
+    }
+
+    @Test
+    fun supportsToolchainDetectorLanguages() {
+        val installer = LspInstallers.forId("swift")
+        assertNotNull(installer, "expected installer for swift")
+        assertTrue(installer is ToolchainDetectInstaller, "swift should be ToolchainDetectInstaller, got ${installer::class}")
+    }
+
+    @Test
+    fun haskellUsesHaskellHlsInstallerNotShellPackage() {
+        assertTrue(LspInstallers.supports("haskell"))
+        val installer = LspInstallers.forId("haskell")
+        assertNotNull(installer)
+        assertTrue(installer is HaskellHlsInstaller, "haskell should be HaskellHlsInstaller, got ${installer::class}")
+        assertEquals("haskell-language-server", installer.displayName)
+    }
+
+    @Test
+    fun dartUsesDartSdkInstallerNotToolchainDetect() {
+        assertTrue(LspInstallers.supports("dart"))
+        val installer = LspInstallers.forId("dart")
+        assertNotNull(installer)
+        assertTrue(installer is DartSdkInstaller, "dart should be DartSdkInstaller, got ${installer::class}")
     }
 
     @Test

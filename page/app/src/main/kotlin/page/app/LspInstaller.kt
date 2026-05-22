@@ -7,6 +7,7 @@ interface LspInstaller {
     val languageId: String
     val displayName: String
     val precheck: Precheck
+    val heavyInstall: HeavyInstallEstimate? get() = null
 
     fun isInstalled(): Boolean
     fun executable(): Path?
@@ -27,6 +28,12 @@ interface LspInstaller {
         object Ok : Precheck()
         data class MissingTool(val tool: String, val installUrl: String, val message: String) : Precheck()
     }
+
+    data class HeavyInstallEstimate(
+        val sizeEstimate: String,
+        val durationEstimate: String,
+        val notes: String,
+    )
 
     companion object {
         fun osKey(osName: String = System.getProperty("os.name") ?: ""): String {

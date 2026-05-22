@@ -53,6 +53,36 @@ class ShellPackageInstallerTest {
     )
 
     @Test
+    fun heavyInstallEstimateFlowsFromDescriptor() {
+        val heavy = LspInstaller.HeavyInstallEstimate(
+            sizeEstimate = "약 12 MB",
+            durationEstimate = "약 5분",
+            notes = "테스트용 견적",
+        )
+        val installer = ShellPackageInstaller(
+            ShellPackageDescriptor(
+                languageId = "ruby",
+                displayName = "solargraph",
+                managerName = "gem",
+                managerInstallUrl = "https://example.invalid/",
+                binaryName = "solargraph",
+                packageName = "solargraph",
+                heavyInstall = heavy,
+                buildInstallCommand = { mgr, pkg, _ -> listOf(mgr, "install", pkg) },
+            ),
+            managerFinder = { Path.of("/usr/bin/gem") },
+            binaryFinder = { null },
+            processRunner = NoopRunner,
+        )
+        assertEquals(heavy, installer.heavyInstall)
+    }
+
+    @Test
+    fun heavyInstallNullByDefault() {
+        assertNull(gemSolargraph().heavyInstall)
+    }
+
+    @Test
     fun precheckMissingWhenManagerNotFound() {
         val precheck = gemSolargraph(managerFinder = { null }).precheck
         assertTrue(precheck is LspInstaller.Precheck.MissingTool)
