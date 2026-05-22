@@ -1,0 +1,102 @@
+name: Update npm release manifests
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate manifests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const packages = [
+              { slug: 'typescript-language-server',         pkg: 'typescript-language-server' },
+              { slug: 'vscode-langservers-extracted',       pkg: 'vscode-langservers-extracted' },
+              { slug: 'yaml-language-server',               pkg: 'yaml-language-server' },
+              { slug: 'bash-language-server',               pkg: 'bash-language-server' },
+              { slug: 'pyright',                            pkg: 'pyright' },
+              { slug: 'dockerfile-language-server-nodejs',  pkg: 'dockerfile-language-server-nodejs' },
+              { slug: 'vue-language-server',                pkg: '@vue/language-server' },
+              { slug: 'svelte-language-server',             pkg: 'svelte-language-server' },
+              { slug: 'intelephense',                       pkg: 'intelephense' },
+              { slug: 'sql-language-server',                pkg: 'sql-language-server' },
+            ];
+
+            async function fetchPackument(pkg) {
+              const url = `https://registry.npmjs.org/${pkg.replace('/', '%2F')}`;
+              const res = await fetch(url, {
+                headers: { 'accept': 'application/vnd.npm.install-v1+json' },
+              });
+              if (!res.ok) throw new Error(`${pkg}: HTTP ${res.status}`);
+              return res.json();
+            }
+
+            function toVersionList(packument) {
+              const time = packument.time ?? {};
+              const versions = Object.keys(packument.versions ?? {});
+              return versions
+                .map(v => ({ version: v, publishedAt: time[v] ?? null }))
+                .filter(v => v.publishedAt)
+                .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''));
+            }
+
+            const failed = [];
+            for (const target of packages) {
+              try {
+                const packument = await fetchPackument(target.pkg);
+                const versions = toVersionList(packument);
+                const manifest = {
+                  updatedAt: new Date().toISOString(),
+                  packageName: target.pkg,
+                  latest: packument['dist-tags']?.latest ?? versions[0]?.version ?? null,
+                  versions,
+                };
+                const file = path.join('docs', 'lsp', `${target.slug}.json`);
+                fs.mkdirSync(path.dirname(file), { recursive: true });
+                fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+                core.info(`wrote ${file} (${versions.length} versions, latest=${manifest.latest})`);
+              } catch (err) {
+                failed.push(`${target.pkg}: ${err.message}`);
+                core.warning(`failed ${target.pkg}: ${err.message}`);
+              }
+            }
+            if (failed.length === packages.length) {
+              core.setFailed('all npm fetches failed:\n' + failed.join('\n'));
+            }
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.MANIFEST_BOT_PAT }}
+          branch: chore/npm-manifest-refresh
+          delete-branch: true
+          commit-message: "docs(lsp): npm registry manifest 자동 갱신"
+          title: "docs(lsp): npm registry manifest 자동 갱신"
+          body: |
+            10 개 npm 패키지 (typescript-language-server, vscode-langservers-extracted, yaml-language-server, bash-language-server, pyright, dockerfile-language-server-nodejs, @vue/language-server, svelte-language-server, intelephense, sql-language-server) 의 latest + version 목록을 `docs/lsp/*.json` 에 반영합니다.
+
+            매일 npm registry manifest GitHub Action 이 자동으로 생성/갱신합니다.
+          labels: |
+            automation
+            lsp
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash --delete-branch "${{ steps.cpr.outputs.pull-request-number }}"

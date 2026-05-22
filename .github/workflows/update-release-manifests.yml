@@ -1,0 +1,98 @@
+name: Update GitHub release manifests
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate manifests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const targets = [
+              { id: 'rust',     owner: 'rust-lang',     repo: 'rust-analyzer' },
+              { id: 'clangd',   owner: 'clangd',        repo: 'clangd', aliases: ['c', 'cpp'] },
+              { id: 'lua',      owner: 'LuaLS',         repo: 'lua-language-server' },
+              { id: 'markdown', owner: 'artempyanykh',  repo: 'marksman' },
+              { id: 'zig',      owner: 'zigtools',      repo: 'zls' },
+              { id: 'elixir',   owner: 'elixir-lsp',    repo: 'elixir-ls' },
+              { id: 'clojure',  owner: 'clojure-lsp',   repo: 'clojure-lsp' },
+            ];
+
+            async function fetchReleases(owner, repo) {
+              const response = await github.rest.repos.listReleases({
+                owner,
+                repo,
+                per_page: 50,
+              });
+              return response.data
+                .filter(r => !r.draft)
+                .map(r => ({
+                  tag: r.tag_name,
+                  publishedAt: r.published_at,
+                }));
+            }
+
+            const failed = [];
+            for (const target of targets) {
+              try {
+                const releases = await fetchReleases(target.owner, target.repo);
+                const manifest = {
+                  updatedAt: new Date().toISOString(),
+                  owner: target.owner,
+                  repo: target.repo,
+                  releases,
+                };
+                const body = JSON.stringify(manifest, null, 2) + '\n';
+                const ids = [target.id, ...(target.aliases ?? [])];
+                for (const id of ids) {
+                  const file = path.join('docs', 'lsp', `${id}.json`);
+                  fs.mkdirSync(path.dirname(file), { recursive: true });
+                  fs.writeFileSync(file, body);
+                  core.info(`wrote ${file} (${releases.length} releases)`);
+                }
+              } catch (err) {
+                failed.push(`${target.owner}/${target.repo}: ${err.message}`);
+                core.warning(`failed ${target.owner}/${target.repo}: ${err.message}`);
+              }
+            }
+            if (failed.length === targets.length) {
+              core.setFailed('all release fetches failed:\n' + failed.join('\n'));
+            }
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.MANIFEST_BOT_PAT }}
+          branch: chore/release-manifest-refresh
+          delete-branch: true
+          commit-message: "docs(lsp): GitHub release manifest 자동 갱신"
+          title: "docs(lsp): GitHub release manifest 자동 갱신"
+          body: |
+            rust/clangd(c·cpp)/lua/markdown/zig/elixir/clojure 의 최신 release 목록을 `docs/lsp/*.json` 에 반영합니다.
+
+            매일 GitHub release manifest GitHub Action 이 자동으로 생성/갱신합니다.
+          labels: |
+            automation
+            lsp
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash --delete-branch "${{ steps.cpr.outputs.pull-request-number }}"
