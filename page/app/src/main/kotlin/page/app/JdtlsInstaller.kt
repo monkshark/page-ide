@@ -39,10 +39,50 @@ class JdtlsInstaller(
 
     override fun installedVersion(): String? = currentInstalledVersion()
 
-    override fun availableVersions(): List<String> = runCatching {
-        val milestones = versionsFetcher(baseUrl)
-        listOf("snapshot-latest") + milestones
-    }.getOrDefault(listOf("snapshot-latest"))
+    override fun installedVersions(): List<String> {
+        val root = LspInstaller.lspHome().resolve(languageId)
+        if (!Files.isDirectory(root)) return emptyList()
+        return runCatching {
+            Files.list(root).use { stream ->
+                stream
+                    .filter { Files.isDirectory(it) && it.fileName.toString() != "CURRENT" }
+                    .filter { Files.exists(it.resolve(launcherName())) }
+                    .map { it.fileName.toString() }
+                    .toList()
+                    .sortedWith(installedVersionComparator())
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    override fun activeVersion(): String? = currentInstalledVersion()
+
+    override fun applyVersion(version: String): Boolean {
+        val launcher = installRoot(version).resolve(launcherName())
+        if (!Files.exists(launcher)) return false
+        writePointer(version)
+        return true
+    }
+
+    override fun availableVersions(): List<String> {
+        val discovered = runCatching {
+            val milestones = versionsFetcher(baseUrl)
+            listOf("snapshot-latest") + milestones
+        }.getOrDefault(listOf("snapshot-latest"))
+        val installed = installedVersions()
+        val merged = mutableListOf<String>()
+        merged.addAll(discovered)
+        for (v in installed) if (v !in merged) merged.add(v)
+        return merged
+    }
+
+    private fun installedVersionComparator(): Comparator<String> = Comparator { a, b ->
+        when {
+            a == b -> 0
+            a == "snapshot-latest" -> -1
+            b == "snapshot-latest" -> 1
+            else -> VERSION_DESC.compare(a, b)
+        }
+    }
 
     override fun install(version: String?, onProgress: (LspInstaller.Progress) -> Unit) {
         try {
