@@ -31,6 +31,7 @@ jobs:
               { id: 'zig',      owner: 'zigtools',      repo: 'zls' },
               { id: 'elixir',   owner: 'elixir-lsp',    repo: 'elixir-ls' },
               { id: 'clojure',  owner: 'clojure-lsp',   repo: 'clojure-lsp' },
+              { id: 'haskell',  owner: 'haskell',       repo: 'haskell-language-server' },
             ];
 
             async function fetchReleases(owner, repo) {
@@ -84,7 +85,7 @@ jobs:
           commit-message: "docs(lsp): GitHub release manifest 자동 갱신"
           title: "docs(lsp): GitHub release manifest 자동 갱신"
           body: |
-            rust/clangd(c·cpp)/lua/markdown/zig/elixir/clojure 의 최신 release 목록을 `docs/lsp/*.json` 에 반영합니다.
+            rust/clangd(c·cpp)/lua/markdown/zig/elixir/clojure/haskell 의 최신 release 목록을 `docs/lsp/*.json` 에 반영합니다.
 
             매일 GitHub release manifest GitHub Action 이 자동으로 생성/갱신합니다.
           labels: |

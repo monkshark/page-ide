@@ -11,7 +11,7 @@ class HaskellHlsInstaller(
     private val isWindows: Boolean = LspInstaller.isWindows(),
     private val downloader: (url: String, target: Path, onProgress: (Long, Long) -> Unit) -> Unit = InstallerHttp::download,
     private val versionsFetcher: () -> List<String> = {
-        LspStaticManifest.fetchReleaseTags("haskell-language-server") ?: emptyList()
+        LspStaticManifest.fetchReleaseTags("haskell") ?: emptyList()
     },
     private val ghcupVersion: String = DEFAULT_GHCUP_VERSION,
     private val defaultHlsVersion: String = "latest",
