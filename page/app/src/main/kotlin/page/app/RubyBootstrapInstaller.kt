@@ -55,13 +55,37 @@ class RubyBootstrapInstaller(
 
     override fun installedVersion(): String? = currentInstalledVersion()
 
+    override fun installedVersions(): List<String> {
+        val base = rubyBase()
+        if (!Files.isDirectory(base)) return emptyList()
+        return runCatching {
+            Files.list(base).use { stream ->
+                stream
+                    .filter { Files.isDirectory(it) && it.fileName.toString() != "CURRENT" }
+                    .map { it.fileName.toString() }
+                    .filter { findInstalledSolargraph(it) != null }
+                    .toList()
+                    .sortedWith(VERSION_DESC)
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    override fun activeVersion(): String? = currentInstalledVersion()
+
+    override fun applyVersion(version: String): Boolean {
+        if (findInstalledSolargraph(version) == null) return false
+        writePointer(version)
+        return true
+    }
+
     override fun availableVersions(): List<String> {
         val discovered = when (osKey) {
             "windows" -> discoverWindowsBundleVersions()
             "macos" -> discoverMacPortableVersions()
             else -> emptyList()
         }
-        return (discovered + defaultRubyVersion).distinct().sortedWith(VERSION_DESC)
+        val installed = installedVersions()
+        return (discovered + defaultRubyVersion + installed).distinct().sortedWith(VERSION_DESC)
     }
 
     private fun discoverWindowsBundleVersions(): List<String> {

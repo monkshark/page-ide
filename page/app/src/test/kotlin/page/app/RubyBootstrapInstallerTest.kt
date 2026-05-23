@@ -202,12 +202,14 @@ class RubyBootstrapInstallerTest {
 
     @Test
     fun availableVersionsFallsBackToDefaultWhenFetcherEmpty() {
+        useTempHome()
         val installer = winInstaller(versionsFetcher = { _, _, _ -> emptyList() })
         assertEquals(listOf(RubyBootstrapInstaller.DEFAULT_RUBY_VERSION), installer.availableVersions())
     }
 
     @Test
     fun availableVersionsParsesWindowsAssetFilenames() {
+        useTempHome()
         val captured = mutableListOf<Triple<String, String, String>>()
         val installer = winInstaller(versionsFetcher = { owner, repo, tag ->
             captured += Triple(owner, repo, tag)
@@ -227,6 +229,7 @@ class RubyBootstrapInstallerTest {
 
     @Test
     fun availableVersionsParsesMacPortableTags() {
+        useTempHome()
         val installer = macInstaller(macVersionsFetcher = { listOf("3.4.6", "3.3.8", "3.3.7", "3.1.4") })
         val versions = installer.availableVersions()
         assertEquals(listOf("3.4.6", "3.3.8", "3.3.7", "3.1.4"), versions)
@@ -234,6 +237,7 @@ class RubyBootstrapInstallerTest {
 
     @Test
     fun availableVersionsIgnoresMalformedAssetNames() {
+        useTempHome()
         val installer = winInstaller(versionsFetcher = { _, _, _ ->
             listOf(
                 "page-ruby-solargraph-linux-x86_64-3.4.6.tar.gz",
@@ -581,5 +585,64 @@ class RubyBootstrapInstallerTest {
         }
         assertNotNull(failed)
         assertTrue(failed!!.message!!.contains("7"))
+    }
+
+    private fun seedWindowsInstall(installer: RubyBootstrapInstaller, version: String) {
+        val root = installer.rubyRoot(version)
+        Files.createDirectories(root.resolve("bin"))
+        Files.writeString(root.resolve("bin").resolve("ruby.exe"), "fake ruby")
+        Files.createDirectories(root.resolve("gemhome").resolve("bin"))
+        Files.writeString(root.resolve("gemhome").resolve("bin").resolve("solargraph.bat"), "fake solargraph")
+    }
+
+    @Test
+    fun installedVersionsListsRootsWithSolargraph() {
+        useTempHome()
+        val installer = winInstaller()
+        seedWindowsInstall(installer, "3.3.7")
+        seedWindowsInstall(installer, "3.4.6")
+        assertEquals(listOf("3.4.6", "3.3.7"), installer.installedVersions())
+    }
+
+    @Test
+    fun installedVersionsIgnoresRootsWithoutSolargraph() {
+        useTempHome()
+        val installer = winInstaller()
+        val orphanRoot = installer.rubyRoot("3.4.6")
+        Files.createDirectories(orphanRoot.resolve("bin"))
+        Files.writeString(orphanRoot.resolve("bin").resolve("ruby.exe"), "fake ruby")
+        assertTrue(installer.installedVersions().isEmpty())
+    }
+
+    @Test
+    fun applyVersionTogglesCurrentPointerWhenInstalled() {
+        useTempHome()
+        val installer = winInstaller()
+        seedWindowsInstall(installer, "3.3.7")
+        seedWindowsInstall(installer, "3.4.6")
+        assertTrue(installer.applyVersion("3.4.6"))
+        assertEquals("3.4.6", installer.activeVersion())
+        assertTrue(installer.applyVersion("3.3.7"))
+        assertEquals("3.3.7", installer.activeVersion())
+    }
+
+    @Test
+    fun applyVersionRejectsMissingInstall() {
+        useTempHome()
+        val installer = winInstaller()
+        seedWindowsInstall(installer, "3.4.6")
+        assertTrue(installer.applyVersion("3.4.6"))
+        assertFalse(installer.applyVersion("9.9.9"))
+        assertEquals("3.4.6", installer.activeVersion())
+    }
+
+    @Test
+    fun availableVersionsIncludesInstalledEvenWhenOffline() {
+        useTempHome()
+        val installer = winInstaller(versionsFetcher = { _, _, _ -> emptyList() })
+        seedWindowsInstall(installer, "3.3.7")
+        val versions = installer.availableVersions()
+        assertTrue("3.3.7" in versions, "installed root must remain visible offline: $versions")
+        assertTrue(RubyBootstrapInstaller.DEFAULT_RUBY_VERSION in versions, "default version always present: $versions")
     }
 }
