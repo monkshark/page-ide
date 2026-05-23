@@ -139,8 +139,13 @@ jobs:
         with:
           tag_name: ${{ inputs.release_tag }}
           name: PAGE Ruby + solargraph all-in-one bundle (${{ inputs.ruby_version }})
+          prerelease: true
+          make_latest: false
           body: |
+            Internal asset for PAGE IDE — not intended for direct download.
+
             PAGE 가 Windows 사용자 환경에서 Ruby 부트스트랩에 사용하는 all-in-one prebuilt zip.
+            RubyBootstrapInstaller 가 자동으로 다운로드/추출/검증하므로 사용자가 직접 받을 필요 없음.
 
             - Ruby: RubyInstaller-${{ inputs.ruby_version }}-1 (devkit 포함)
             - MSYS2 + MinGW UCRT64 toolchain (ridk install 1 3 결과)

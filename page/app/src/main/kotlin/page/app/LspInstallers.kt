@@ -183,17 +183,17 @@ object LspInstallers {
             repo = "elixir-ls",
             perOs = mapOf(
                 "macos" to OsAsset(
-                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{versionNoV}.zip",
+                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{tag}.zip",
                     executableRelative = "language_server.sh",
                     archiveType = ArchiveType.ZIP,
                 ),
                 "linux" to OsAsset(
-                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{versionNoV}.zip",
+                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{tag}.zip",
                     executableRelative = "language_server.sh",
                     archiveType = ArchiveType.ZIP,
                 ),
                 "windows" to OsAsset(
-                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{versionNoV}.zip",
+                    url = "https://github.com/elixir-lsp/elixir-ls/releases/download/{tag}/elixir-ls-{tag}.zip",
                     executableRelative = "language_server.bat",
                     archiveType = ArchiveType.ZIP,
                 ),
