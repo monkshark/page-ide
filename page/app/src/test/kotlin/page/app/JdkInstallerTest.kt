@@ -83,6 +83,7 @@ class JdkInstallerTest {
             onProgress(1, 1)
         },
         versionsFetcher = { _, _, _ -> versions },
+        manifestFetcher = { emptyList() },
     )
 
     private fun linuxInstaller(
@@ -96,6 +97,7 @@ class JdkInstallerTest {
             onProgress(1, 1)
         },
         versionsFetcher = { _, _, _ -> versions },
+        manifestFetcher = { emptyList() },
     )
 
     @Test
@@ -127,6 +129,7 @@ class JdkInstallerTest {
             osKey = "windows", archKey = "amd64", isWindows = true,
             downloader = { _, _, _ -> },
             versionsFetcher = { _, _, _ -> emptyList() },
+            manifestFetcher = { emptyList() },
         )
         assertNull(installer.executable())
         assertFalse(installer.isInstalled())
@@ -165,6 +168,7 @@ class JdkInstallerTest {
                 writeJdkZip(target)
             },
             versionsFetcher = { _, _, _ -> emptyList() },
+            manifestFetcher = { emptyList() },
         )
         installer.install("21.0.5+11") { }
         val firstDownloads = downloads
@@ -188,6 +192,7 @@ class JdkInstallerTest {
                     "noise-not-matching.tar.gz",
                 )
             },
+            manifestFetcher = { emptyList() },
         )
         val versions = installer.availableVersions()
         assertEquals(listOf("21.0.5-11", "17.0.13-11", "11.0.25-9"), versions)
@@ -205,6 +210,7 @@ class JdkInstallerTest {
                 writeJdkZip(target)
             },
             versionsFetcher = { _, _, _ -> emptyList() },
+            manifestFetcher = { emptyList() },
         )
         installer.install("17.0.13+11") { }
         installer.install("21.0.5+11") { }
@@ -251,6 +257,7 @@ class JdkInstallerTest {
             osKey = "windows", archKey = "amd64", isWindows = true,
             downloader = { _, _, _ -> },
             versionsFetcher = { _, _, _ -> emptyList() },
+            manifestFetcher = { emptyList() },
         )
         assertTrue("17.0.13-11" in offline.availableVersions(), "installed roots must survive offline fetch")
     }
@@ -266,5 +273,20 @@ class JdkInstallerTest {
         val mixed = listOf("11.0.25-9", "21.0.5-11", "8.0.452-9", "17.0.13-11")
         val sorted = mixed.sortedWith(JdkInstaller.VERSION_DESC)
         assertEquals(listOf("21.0.5-11", "17.0.13-11", "11.0.25-9", "8.0.452-9"), sorted)
+    }
+
+    @Test
+    fun availableVersionsIncludesManifestEntries() {
+        useTempHome()
+        val installer = JdkInstaller(
+            osKey = "linux", archKey = "amd64", isWindows = false,
+            downloader = { _, _, _ -> },
+            versionsFetcher = { _, _, _ -> emptyList() },
+            manifestFetcher = { listOf("21.0.7+6", "17.0.13+11", "8.0.492+9") },
+        )
+        val versions = installer.availableVersions()
+        assertTrue("21.0.7-6" in versions, "should contain 21.0.7-6, got: $versions")
+        assertTrue("17.0.13-11" in versions, "should contain 17.0.13-11, got: $versions")
+        assertTrue("8.0.492-9" in versions, "should contain 8.0.492-9, got: $versions")
     }
 }

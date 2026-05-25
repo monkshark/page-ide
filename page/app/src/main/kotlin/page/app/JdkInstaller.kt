@@ -1,6 +1,10 @@
 package page.app
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -17,6 +21,7 @@ class JdkInstaller(
     private val versionsFetcher: (String, String, String) -> List<String> = { owner, repo, tag ->
         GitHubReleases.listAssetNames(owner, repo, tag)
     },
+    private val manifestFetcher: () -> List<String> = { fetchManifestVersions() },
 ) : LspInstaller {
 
     override val languageId: String = "jdk"
@@ -65,9 +70,10 @@ class JdkInstaller(
     }
 
     override fun availableVersions(): List<String> {
-        val discovered = discoverBundleVersions()
+        val bundled = discoverBundleVersions()
+        val manifest = runCatching { manifestFetcher() }.getOrDefault(emptyList())
         val installed = installedVersions()
-        val combined = (discovered + sanitize(defaultJdkVersion) + installed).filter { it.isNotBlank() }
+        val combined = (manifest + bundled + sanitize(defaultJdkVersion) + installed).filter { it.isNotBlank() }
         return combined.map(::sanitize).distinct().sortedWith(VERSION_DESC)
     }
 
@@ -191,6 +197,10 @@ class JdkInstaller(
         const val DEFAULT_RELEASE_TAG = "jdk-bundle"
         const val DEFAULT_JDK_VERSION = "21.0.5+11"
 
+        const val MANIFEST_URL = "https://monkshark.github.io/page-ide/jdk/versions.json"
+
+        private val gson: Gson = GsonBuilder().disableHtmlEscaping().create()
+
         internal fun sanitize(version: String): String =
             version.replace('+', '-').replace(Regex("[\\\\/:*?\"<>|]"), "_")
 
@@ -210,5 +220,25 @@ class JdkInstaller(
             .mapNotNull { it.toIntOrNull() }
             .toIntArray()
             .let { if (it.isEmpty()) intArrayOf(-1) else it }
+
+        private data class JdkManifest(val versions: List<JdkManifestEntry>? = null)
+        private data class JdkManifestEntry(val semver: String? = null)
+
+        internal fun fetchManifestVersions(url: String = MANIFEST_URL): List<String> {
+            val conn = URI(url).toURL().openConnection() as HttpURLConnection
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 10_000
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", "PAGE-IDE/0.1 JdkInstaller")
+            try {
+                val code = conn.responseCode
+                if (code !in 200..299) return emptyList()
+                val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val doc = gson.fromJson(body, JdkManifest::class.java) ?: return emptyList()
+                return doc.versions?.mapNotNull { it.semver?.takeIf(String::isNotBlank) } ?: emptyList()
+            } finally {
+                conn.disconnect()
+            }
+        }
     }
 }

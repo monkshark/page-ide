@@ -69,6 +69,25 @@ jobs:
               core.setFailed('all asset fetches failed:\n' + failed.join('\n'));
             }
 
+      - name: Generate Adoptium JDK version manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/jdk
+          majors=(8 11 17 21 25)
+          versions='[]'
+          for m in "${majors[@]}"; do
+            next=$((m + 1))
+            url="https://api.adoptium.net/v3/info/release_versions?release_type=ga&page_size=10&heap_size=normal&image_type=jdk&jvm_impl=hotspot&vendor=eclipse&version=%5B${m}%2C${next}%29&sort_order=DESC"
+            resp=$(curl -sSfL --max-time 15 "$url" 2>/dev/null || echo '{"versions":[]}')
+            chunk=$(echo "$resp" | jq -c '[.versions[]? | {major: .major, semver: .semver, openjdk_version: .openjdk_version}]')
+            versions=$(echo "$versions" | jq --argjson c "$chunk" '. + $c')
+            echo "  major=$m → $(echo "$chunk" | jq 'length') versions"
+          done
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n --arg t "$now" --argjson v "$versions" '{updatedAt: $t, versions: $v}' > docs/jdk/versions.json
+          echo "wrote docs/jdk/versions.json ($(echo "$versions" | jq 'length') total)"
+
       - name: Create pull request
         id: cpr
         uses: peter-evans/create-pull-request@v6
@@ -76,10 +95,12 @@ jobs:
           token: ${{ secrets.MANIFEST_BOT_PAT }}
           branch: chore/asset-manifest-refresh
           delete-branch: true
-          commit-message: "docs(lsp): page-ide-assets 자산 매니페스트 자동 갱신"
-          title: "docs(lsp): page-ide-assets 자산 매니페스트 자동 갱신"
+          commit-message: "docs: page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
+          title: "docs: page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
           body: |
-            monkshark/page-ide-assets 의 metals/jdtls/dart/flutter/ruby 번들 release 자산 명을 `docs/lsp/*-bundle.json` 으로 정적 매니페스트화하여 GitHub API rate limit 우회.
+            monkshark/page-ide-assets 번들 자산 + Adoptium JDK 버전을 정적 매니페스트로 갱신.
+            - `docs/lsp/*-bundle.json` — metals/jdtls/dart/flutter/ruby 번들 자산명
+            - `docs/jdk/versions.json` — Adoptium Temurin LTS major별 GA 버전 (8/11/17/21/25)
 
             매일 PAGE asset manifest GitHub Action 이 자동 생성/갱신합니다.
           labels: |

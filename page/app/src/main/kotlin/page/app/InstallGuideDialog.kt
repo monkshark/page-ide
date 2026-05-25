@@ -319,7 +319,7 @@ internal fun InstallGuideDialog(
                                         style = LocalTextStyle.current.copy(fontSize = 10.sp),
                                     )
                                 } else {
-                                    forkVersions.take(20).forEach { v ->
+                                    forkVersions.take(50).forEach { v ->
                                         VersionRow(
                                             version = v,
                                             selected = v == selectedVersion,
@@ -353,7 +353,7 @@ internal fun InstallGuideDialog(
                                             style = LocalTextStyle.current.copy(fontSize = 10.sp),
                                         )
                                     } else {
-                                        upstreamVersions.take(20).forEach { v ->
+                                        upstreamVersions.take(50).forEach { v ->
                                             VersionRow(
                                                 version = v,
                                                 selected = v == selectedVersion,

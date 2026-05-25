@@ -37,6 +37,7 @@ object LspInstallers {
         "dart" to ::dartInstaller,
         "flutter" to ::flutterInstaller,
         "swift" to ::swiftInstaller,
+        "jdk" to { JdkInstaller() },
     )
 
     fun forId(languageId: String): LspInstaller? = registry[languageId]?.invoke()
