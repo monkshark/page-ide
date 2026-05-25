@@ -146,6 +146,8 @@ fun EditorPanel(
     initialVScroll: Int = 0,
     initialHScroll: Int = 0,
     onScrollChange: (vertical: Int, horizontal: Int) -> Unit = { _, _ -> },
+    jdkVersion: String? = null,
+    onJdkVersionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -1199,6 +1201,8 @@ fun EditorPanel(
             onProblemsToggle = onProblemsToggle,
             todoCount = todoCount,
             onTodoToggle = onTodoToggle,
+            jdkVersion = jdkVersion,
+            onJdkVersionClick = onJdkVersionClick,
         )
     }
 
@@ -1659,6 +1663,8 @@ private fun EditorStatusBar(
     onProblemsToggle: (() -> Unit)? = null,
     todoCount: Int = 0,
     onTodoToggle: (() -> Unit)? = null,
+    jdkVersion: String? = null,
+    onJdkVersionClick: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(28.dp),
@@ -1691,12 +1697,16 @@ private fun EditorStatusBar(
             )
             val showLifecycle = !lspStatusText.isNullOrBlank()
             val showActivities = lspActivities.isNotEmpty()
-            if (showLifecycle || showActivities) {
+            val showJdk = !jdkVersion.isNullOrBlank()
+            if (showLifecycle || showActivities || showJdk) {
                 Box(modifier = Modifier.weight(1f))
                 if (showLifecycle) {
                     LspLifecycleItem(text = lspStatusText!!, onClick = onLspStatusClick)
-                } else {
+                } else if (showActivities) {
                     LspActivitiesItem(activities = lspActivities)
+                }
+                if (showJdk) {
+                    RuntimeVersionItem(label = "JDK $jdkVersion", onClick = onJdkVersionClick)
                 }
             }
         }
@@ -1710,6 +1720,18 @@ private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Text(
         text = text,
+        modifier = mod,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+    )
+}
+
+@Composable
+private fun RuntimeVersionItem(label: String, onClick: (() -> Unit)? = null) {
+    val color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+    Text(
+        text = label,
         modifier = mod,
         style = MaterialTheme.typography.labelSmall,
         color = color,

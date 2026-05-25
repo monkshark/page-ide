@@ -3056,6 +3056,14 @@ private fun Shell(
 ) {
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     val installGuideOpen by lsp.installGuideOpen.collectAsState()
+    var jdkDialogOpen by remember { mutableStateOf(false) }
+    val jdkActiveVersion = remember { mutableStateOf<String?>(null) }
+    val jdkScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            jdkActiveVersion.value = runCatching { JdkInstaller().activeVersion() }.getOrNull()
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         TitleBar(
@@ -3145,6 +3153,8 @@ private fun Shell(
                                 editorScrollFor = editorScrollFor,
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
+                                jdkVersion = jdkActiveVersion.value,
+                                onJdkVersionClick = { jdkDialogOpen = true },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -3184,6 +3194,8 @@ private fun Shell(
                                 editorScrollFor = editorScrollFor,
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.SECONDARY),
+                                jdkVersion = jdkActiveVersion.value,
+                                onJdkVersionClick = { jdkDialogOpen = true },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -3222,6 +3234,8 @@ private fun Shell(
                         editorScrollFor = editorScrollFor,
                         onEditorScrollChange = onEditorScrollChange,
                         tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
+                        jdkVersion = jdkActiveVersion.value,
+                        onJdkVersionClick = { jdkDialogOpen = true },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -3311,6 +3325,30 @@ private fun Shell(
             lsp.closeInstallGuide()
         }
     }
+    if (jdkDialogOpen) {
+        val jdkDef = page.lsp.LanguageDefinition(
+            id = "jdk",
+            displayName = "Eclipse Temurin JDK",
+            extensions = listOf("java"),
+            lspBinaries = emptyList(),
+            lspWindowsBinaries = emptyList(),
+            installGuideUrl = "https://adoptium.net/",
+            install = emptyMap(),
+            runCommand = null,
+        )
+        InstallGuideDialog(
+            definition = jdkDef,
+            attempted = emptyList(),
+            onDismiss = { jdkDialogOpen = false },
+            onInstalled = {
+                jdkScope.launch {
+                    withContext(Dispatchers.IO) {
+                        jdkActiveVersion.value = runCatching { JdkInstaller().activeVersion() }.getOrNull()
+                    }
+                }
+            },
+        )
+    }
     }
 }
 
@@ -3353,11 +3391,17 @@ private fun PaneRegion(
     editorScrollFor: (Path) -> EditorScrollSnapshot? = { null },
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActions: TabContextActions? = null,
+    jdkVersion: String? = null,
+    onJdkVersionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
     val kind = active?.let { FileKinds.classify(it.path) }
     val activeLexer = active?.path?.let { SyntaxLexers.forPath(it) }
+    val isJavaFile = remember(active?.path) {
+        active?.path?.fileName?.toString()?.lowercase()?.endsWith(".java") == true
+    }
+    val effectiveJdkVersion = if (isJavaFile) jdkVersion else null
     Column(
         modifier = modifier.fillMaxSize()
             .pointerInput(side) {
@@ -3483,6 +3527,8 @@ private fun PaneRegion(
                     onScrollChange = { v, h ->
                         onEditorScrollChange(active.path, EditorScrollSnapshot(v, h))
                     },
+                    jdkVersion = jdkVersion,
+                    onJdkVersionClick = onJdkVersionClick,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
