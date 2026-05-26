@@ -149,6 +149,7 @@ class JdkInstaller(
             writePointer(sanitized)
             onProgress(LspInstaller.Progress.Done(java))
         } catch (t: Throwable) {
+            runCatching { ArchiveExtractors.deleteRecursively(jdkRoot(sanitize(version?.takeIf { it.isNotBlank() } ?: defaultJdkVersion))) }
             onProgress(LspInstaller.Progress.Failed(t))
         }
     }
