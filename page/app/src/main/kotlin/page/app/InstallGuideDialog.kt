@@ -430,16 +430,34 @@ internal fun InstallGuideDialog(
                                 )
                             }
                             (installProgress as? LspInstaller.Progress.Failed)?.let { failed ->
+                                val errMsg = failed.error.message ?: failed.error.toString()
                                 Spacer(Modifier.height(10.dp))
-                                SectionLabel("Install failed")
-                                Spacer(Modifier.height(4.dp))
-                                SelectionContainer {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    SectionLabel("Install failed")
+                                    var errCopied by remember { mutableStateOf(false) }
+                                    val errClipboard = LocalClipboardManager.current
                                     Text(
-                                        text = failed.error.message ?: failed.error.toString(),
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = LocalTextStyle.current.copy(fontSize = 11.sp),
+                                        text = if (errCopied) "Copied" else "Copy",
+                                        color = if (errCopied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = LocalTextStyle.current.copy(fontSize = 10.sp),
+                                        modifier = Modifier
+                                            .clickable {
+                                                errClipboard.setText(AnnotatedString(errMsg))
+                                                errCopied = true
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 2.dp),
                                     )
                                 }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = errMsg,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = LocalTextStyle.current.copy(fontSize = 11.sp),
+                                )
                             }
                         }
                     }
