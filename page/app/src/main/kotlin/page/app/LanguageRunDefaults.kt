@@ -71,6 +71,17 @@ object LanguageRunDefaults {
         return templates.firstOrNull { key in it.extensions }
     }
 
+    private fun resolveJdkEnv(template: LanguageRunTemplate): Pair<String, Map<String, String>>? {
+        if ("java" !in template.extensions) return null
+        val jdk = runCatching { JdkInstaller() }.getOrNull() ?: return null
+        val home = jdk.javaHome() ?: return null
+        val javaBin = home.resolve("bin").resolve(
+            if (LspInstaller.isWindows()) "java.exe" else "java",
+        )
+        if (!java.nio.file.Files.exists(javaBin)) return null
+        return javaBin.toAbsolutePath().toString() to mapOf("JAVA_HOME" to home.toAbsolutePath().toString())
+    }
+
     fun forFile(path: Path): LanguageRunTemplate? {
         val name = path.fileName?.toString() ?: return null
         val dot = name.lastIndexOf('.')
@@ -92,12 +103,14 @@ object LanguageRunDefaults {
         }
         val cwd = workspaceRoot?.toString() ?: path.parent?.toString()
         val id = "auto-${template.command}-${baseName}-${System.nanoTime()}"
+        val jdkEnv = resolveJdkEnv(template)
         return RunConfig(
             id = id,
             name = "${template.displayName} · $fileName",
-            command = template.command,
+            command = jdkEnv?.first ?: template.command,
             args = resolvedArgs,
             workingDir = cwd,
+            env = jdkEnv?.second ?: emptyMap(),
         )
     }
 }

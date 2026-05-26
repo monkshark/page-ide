@@ -173,6 +173,15 @@ class JdkInstaller(
         return Regex("^page-java-temurin-$osKey-$arch-(.+?)\\.$ext$")
     }
 
+    fun javaHome(): Path? {
+        val ver = currentInstalledVersion() ?: return null
+        val root = jdkRoot(ver)
+        val macHome = root.resolve("Contents").resolve("Home")
+        if (Files.isDirectory(macHome.resolve("bin"))) return macHome
+        if (Files.isDirectory(root.resolve("bin"))) return root
+        return null
+    }
+
     private fun buildDownloadDiagnostic(url: String, cause: Throwable): String =
         "Temurin JDK bundle download failed ($url): ${cause.javaClass.simpleName}: ${cause.message}\n" +
             "Recovery steps:\n" +
