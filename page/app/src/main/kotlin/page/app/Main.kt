@@ -3061,16 +3061,7 @@ private fun Shell(
     val runtimeScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val vers = mutableMapOf<String, String>()
-            val jdk = runCatching { JdkInstaller().activeVersion() }.getOrNull() ?: System.getProperty("java.version")
-            if (!jdk.isNullOrBlank()) vers["java"] = jdk
-            val node = runCatching { NodeInstaller().activeVersion() }.getOrNull()
-            if (!node.isNullOrBlank()) vers["js"] = node
-            val py = runCatching { PythonInstaller().activeVersion() }.getOrNull()
-            if (!py.isNullOrBlank()) vers["py"] = py
-            val go = runCatching { GoSdkInstaller().activeVersion() }.getOrNull()
-            if (!go.isNullOrBlank()) vers["go"] = go
-            runtimeVersions.value = vers
+            runtimeVersions.value = detectRuntimeVersions()
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -3350,18 +3341,7 @@ private fun Shell(
                 onDismiss = { runtimeDialogOpen = null },
                 onInstalled = {
                     runtimeScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val vers = mutableMapOf<String, String>()
-                            val jdk = runCatching { JdkInstaller().activeVersion() }.getOrNull() ?: System.getProperty("java.version")
-                            if (!jdk.isNullOrBlank()) vers["java"] = jdk
-                            val node = runCatching { NodeInstaller().activeVersion() }.getOrNull()
-                            if (!node.isNullOrBlank()) vers["js"] = node
-                            val py = runCatching { PythonInstaller().activeVersion() }.getOrNull()
-                            if (!py.isNullOrBlank()) vers["py"] = py
-                            val go = runCatching { GoSdkInstaller().activeVersion() }.getOrNull()
-                            if (!go.isNullOrBlank()) vers["go"] = go
-                            runtimeVersions.value = vers
-                        }
+                        withContext(Dispatchers.IO) { runtimeVersions.value = detectRuntimeVersions() }
                     }
                 },
             )
@@ -3370,6 +3350,29 @@ private fun Shell(
         }
     }
     }
+}
+
+private fun detectRuntimeVersions(): Map<String, String> {
+    val vers = mutableMapOf<String, String>()
+    val jdk = runCatching { JdkInstaller().activeVersion() }.getOrNull() ?: System.getProperty("java.version")
+    if (!jdk.isNullOrBlank()) vers["java"] = jdk
+    val node = runCatching { NodeInstaller().activeVersion() }.getOrNull()
+        ?: runCatching { captureVersion("node", "--version")?.removePrefix("v") }.getOrNull()
+    if (!node.isNullOrBlank()) vers["js"] = node
+    val py = runCatching { PythonInstaller().activeVersion() }.getOrNull()
+        ?: runCatching { captureVersion("python", "--version")?.substringAfter("Python ")?.trim() }.getOrNull()
+    if (!py.isNullOrBlank()) vers["py"] = py
+    val go = runCatching { GoSdkInstaller().activeVersion() }.getOrNull()
+        ?: runCatching { captureVersion("go", "version")?.let { Regex("go(\\d+\\.\\d+\\.\\d+)").find(it)?.groupValues?.get(1) } }.getOrNull()
+    if (!go.isNullOrBlank()) vers["go"] = go
+    return vers
+}
+
+private fun captureVersion(cmd: String, vararg args: String): String? {
+    val p = ProcessBuilder(cmd, *args).redirectErrorStream(true).start()
+    val out = p.inputStream.bufferedReader().use { it.readLine() }
+    p.waitFor()
+    return out?.trim()?.takeIf { it.isNotBlank() }
 }
 
 private fun paneFor(side: PaneSide, primary: EditorPaneState, secondary: EditorPaneState) =
@@ -3423,10 +3426,10 @@ private fun PaneRegion(
     }
     val runtimeInfo: Pair<String, String>? = remember(activeExt, runtimeVersions) {
         when (activeExt) {
-            "java" -> runtimeVersions["java"]?.let { "JDK $it" to "jdk" }
-            "js", "mjs", "cjs", "ts" -> runtimeVersions["js"]?.let { "Node $it" to "node" }
-            "py" -> runtimeVersions["py"]?.let { "Python $it" to "python-runtime" }
-            "go" -> runtimeVersions["go"]?.let { "Go $it" to "go-sdk" }
+            "java" -> "JDK ${runtimeVersions["java"] ?: "?"}" to "jdk"
+            "js", "mjs", "cjs", "ts" -> "Node ${runtimeVersions["js"] ?: "?"}" to "node"
+            "py" -> "Python ${runtimeVersions["py"] ?: "?"}" to "python-runtime"
+            "go" -> "Go ${runtimeVersions["go"] ?: "?"}" to "go-sdk"
             else -> null
         }
     }
