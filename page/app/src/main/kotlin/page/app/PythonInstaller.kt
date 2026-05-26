@@ -166,7 +166,7 @@ class PythonInstaller(
     }
 
     companion object {
-        const val DEFAULT_PYTHON_VERSION = "3.13.3"
+        const val DEFAULT_PYTHON_VERSION = "3.13.13"
         const val DEFAULT_ASSETS_REPO = "monkshark/page-ide-assets"
         const val DEFAULT_RELEASE_TAG = "python-bundle"
 
