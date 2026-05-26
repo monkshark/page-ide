@@ -12,7 +12,8 @@ class TerminalController(
     private val workspaceRoot: Path,
     private val scope: CoroutineScope,
 ) {
-    private val buffer = TerminalBuffer()
+    private val grid = TerminalGrid(cols = 120, rows = 40)
+    private val parser = AnsiParser()
     private var session: TerminalSession? = null
     private var wantsAlive: Boolean = false
     private val restartTimestamps: ArrayDeque<Long> = ArrayDeque()
@@ -25,7 +26,7 @@ class TerminalController(
     var elevated: Boolean by mutableStateOf(false)
         private set
 
-    var lines: List<TerminalLine> by mutableStateOf(buffer.snapshot)
+    var lines: List<TerminalLine> by mutableStateOf(grid.snapshot())
         private set
 
     var alive: Boolean by mutableStateOf(false)
@@ -34,7 +35,25 @@ class TerminalController(
     var lastExitCode: Int? by mutableStateOf(null)
         private set
 
-    fun start(cols: Int = 80, rows: Int = 24) {
+    var cursorRow: Int by mutableStateOf(0)
+        private set
+
+    var cursorCol: Int by mutableStateOf(0)
+        private set
+
+    var cursorVisible: Boolean by mutableStateOf(true)
+        private set
+
+    var gridRows: Int by mutableStateOf(grid.rows)
+        private set
+
+    var gridCols: Int by mutableStateOf(grid.cols)
+        private set
+
+    var scrollbackSize: Int by mutableStateOf(0)
+        private set
+
+    fun start(cols: Int = 120, rows: Int = 40) {
         if (session != null) return
         wantsAlive = true
         lastExitCode = null
@@ -45,8 +64,8 @@ class TerminalController(
         shell = shellOption
         elevated = elevatedMode
         stop()
-        buffer.clearScreen()
-        lines = buffer.snapshot
+        grid.eraseInDisplay(2)
+        syncState()
         start()
     }
 
@@ -60,7 +79,7 @@ class TerminalController(
         restartWith(shell, value)
     }
 
-    private fun launchSession(cols: Int = 80, rows: Int = 24) {
+    private fun launchSession(cols: Int = 120, rows: Int = 40) {
         try {
             session = TerminalSession.start(
                 workingDir = workspaceRoot,
@@ -70,8 +89,8 @@ class TerminalController(
                 shell = shell,
                 elevated = elevated,
                 onOutput = { chunk ->
-                    buffer.feed(chunk)
-                    lines = buffer.snapshot
+                    parser.parse(chunk, grid)
+                    syncState()
                 },
                 onClosed = { code ->
                     alive = false
@@ -82,14 +101,23 @@ class TerminalController(
             )
             alive = true
         } catch (e: Throwable) {
+            val msg = "${e.javaClass.simpleName}: ${e.message}\r\n"
             val hint = if (elevated) {
                 "Admin mode requires gsudo. Install via 'winget install gsudo' and try again.\r\n"
             } else ""
-            buffer.feed("${e.javaClass.simpleName}: ${e.message}\r\n$hint")
-            lines = buffer.snapshot
+            parser.parse(msg + hint, grid)
+            syncState()
             alive = false
             wantsAlive = false
         }
+    }
+
+    private fun syncState() {
+        lines = grid.snapshot()
+        cursorRow = grid.cursorRow
+        cursorCol = grid.cursorCol
+        cursorVisible = grid.cursorVisible
+        scrollbackSize = grid.scrollback.size
     }
 
     private fun tryAutoRestart() {
@@ -122,7 +150,10 @@ class TerminalController(
     }
 
     fun resize(cols: Int, rows: Int) {
+        if (cols <= 0 || rows <= 0) return
+        grid.resize(cols, rows)
         session?.resize(cols, rows)
+        syncState()
     }
 
     fun stop() {

@@ -107,7 +107,7 @@ class TerminalBuffer(private val maxLines: Int = 5000) {
         get() = lines.map { TerminalLine(it.toSpans()) }
 
     fun feed(chunk: String) {
-        parser.parse(chunk, this)
+        parser.parseLegacy(chunk, this)
     }
 
     internal fun applyStyle(style: TerminalStyle) {

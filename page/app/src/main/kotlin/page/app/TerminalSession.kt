@@ -140,7 +140,10 @@ class TerminalSession internal constructor(
             val base = arrayOf(shell.executable) + shell.args.toTypedArray()
             if (!elevated) return base
             val gsudo = findOnPath("gsudo") ?: findOnPath("gsudo.exe")
-            return if (gsudo != null) arrayOf(gsudo) + base else base
+                ?: throw IllegalStateException(
+                    "gsudo not found on PATH. Install via: winget install gerardog.gsudo"
+                )
+            return arrayOf(gsudo) + base
         }
 
         fun detectShells(): List<ShellOption> {

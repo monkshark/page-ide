@@ -121,6 +121,10 @@ fun TerminalPanel(
                     TerminalBody(
                         lines = active.controller.lines,
                         alive = active.controller.alive,
+                        cursorRow = active.controller.cursorRow,
+                        cursorCol = active.controller.cursorCol,
+                        cursorVisible = active.controller.cursorVisible,
+                        scrollbackSize = active.controller.scrollbackSize,
                         onRawInput = { active.controller.sendRaw(it) },
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
@@ -424,6 +428,10 @@ private fun TerminalTabChip(
 private fun TerminalBody(
     lines: List<TerminalLine>,
     alive: Boolean,
+    cursorRow: Int,
+    cursorCol: Int,
+    cursorVisible: Boolean,
+    scrollbackSize: Int,
     onRawInput: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -461,6 +469,10 @@ private fun TerminalBody(
     }
     val caretColor = MaterialTheme.colorScheme.onSurface
 
+    val cursorLineIndex by remember(cursorRow, scrollbackSize) {
+        derivedStateOf { scrollbackSize + cursorRow }
+    }
+
     Box(
         modifier = modifier.pointerInput(Unit) {
             detectTapGestures(onTap = { runCatching { focusRequester.requestFocus() } })
@@ -476,11 +488,14 @@ private fun TerminalBody(
                     .verticalScroll(scrollState)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                val lastIdx = lines.lastIndex
                 for ((idx, line) in lines.withIndex()) {
-                    val showCaret = idx == lastIdx && alive && focused && caretOn
+                    val showCaret = idx == cursorLineIndex && alive && focused && caretOn && cursorVisible
                     Text(
-                        text = line.toAnnotatedString(showCaret = showCaret, caretColor = caretColor),
+                        text = line.toAnnotatedString(
+                            showCaret = showCaret,
+                            caretColor = caretColor,
+                            caretCol = if (showCaret) cursorCol else -1,
+                        ),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -541,19 +556,39 @@ private fun TerminalBody(
 private fun TerminalLine.toAnnotatedString(
     showCaret: Boolean = false,
     caretColor: Color = Color.Unspecified,
+    caretCol: Int = -1,
 ): AnnotatedString = buildAnnotatedString {
+    var charIndex = 0
     for (span in spans) {
-        val style = SpanStyle(
+        val spanStyle = SpanStyle(
             color = span.style.fg ?: Color.Unspecified,
             background = span.style.bg ?: Color.Unspecified,
             fontWeight = if (span.style.bold) FontWeight.Bold else null,
             fontStyle = if (span.style.italic) FontStyle.Italic else null,
             textDecoration = if (span.style.underline) TextDecoration.Underline else null,
         )
-        withStyle(style) { append(span.text) }
+        if (showCaret && caretCol >= charIndex && caretCol < charIndex + span.text.length) {
+            val localPos = caretCol - charIndex
+            if (localPos > 0) {
+                withStyle(spanStyle) { append(span.text.substring(0, localPos)) }
+            }
+            withStyle(SpanStyle(color = Color.Black, background = caretColor)) {
+                append(span.text[localPos])
+            }
+            if (localPos + 1 < span.text.length) {
+                withStyle(spanStyle) { append(span.text.substring(localPos + 1)) }
+            }
+        } else {
+            withStyle(spanStyle) { append(span.text) }
+        }
+        charIndex += span.text.length
     }
-    if (showCaret) {
-        withStyle(SpanStyle(color = caretColor)) { append("█") }
+    if (showCaret && caretCol >= charIndex) {
+        while (charIndex < caretCol) {
+            append(' ')
+            charIndex++
+        }
+        withStyle(SpanStyle(color = Color.Black, background = caretColor)) { append(' ') }
     }
 }
 

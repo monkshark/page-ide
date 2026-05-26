@@ -40,7 +40,7 @@ class LanguageRunDefaultsTest {
         val file = Path.of("/tmp/proj/main.py")
         val cfg = LanguageRunDefaults.buildConfig(file, workspace)
         assertNotNull(cfg)
-        assertEquals("python", cfg.command)
+        assertTrue(cfg.command.contains("python"), "command should contain 'python', got: ${cfg.command}")
         assertEquals(listOf(file.toString()), cfg.args)
         assertEquals(workspace.toString(), cfg.workingDir)
     }

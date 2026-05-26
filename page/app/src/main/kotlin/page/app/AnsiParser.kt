@@ -10,7 +10,26 @@ private const val SI = 0x0F
 internal class AnsiParser {
     private var style: TerminalStyle = TerminalStyle.Default
 
-    fun parse(chunk: String, sink: TerminalBuffer) {
+    fun parse(chunk: String, sink: TerminalGrid) {
+        var i = 0
+        while (i < chunk.length) {
+            val code = chunk[i].code
+            when {
+                code == ESC -> {
+                    val consumed = handleEscape(chunk, i, sink)
+                    i += if (consumed == 0) 1 else consumed
+                }
+                chunk[i] == '\n' -> { sink.linefeed(); i += 1 }
+                chunk[i] == '\r' -> { sink.carriageReturn(); i += 1 }
+                chunk[i] == '\b' -> { sink.backspace(); i += 1 }
+                chunk[i] == '\t' -> { sink.tab(); i += 1 }
+                code == BEL || code == SO || code == SI -> i += 1
+                else -> { sink.putChar(chunk[i], style); i += 1 }
+            }
+        }
+    }
+
+    fun parseLegacy(chunk: String, sink: TerminalBuffer) {
         var i = 0
         val plain = StringBuilder()
         fun flush() {
@@ -25,7 +44,7 @@ internal class AnsiParser {
             when {
                 code == ESC -> {
                     flush()
-                    val consumed = handleEscape(chunk, i, sink)
+                    val consumed = handleEscapeLegacy(chunk, i, sink)
                     i += if (consumed == 0) 1 else consumed
                 }
                 chunk[i] == '\n' -> { flush(); sink.newline(); i += 1 }
@@ -38,11 +57,28 @@ internal class AnsiParser {
         flush()
     }
 
-    private fun handleEscape(chunk: String, start: Int, sink: TerminalBuffer): Int {
+    private fun handleEscape(chunk: String, start: Int, sink: TerminalGrid): Int {
         if (start + 1 >= chunk.length) return 0
         val next = chunk[start + 1]
         return when (next) {
             '[' -> handleCsi(chunk, start, sink)
+            ']' -> handleOsc(chunk, start)
+            '(' , ')' -> if (start + 2 < chunk.length) 3 else 0
+            '7' -> { sink.saveCursor(); 2 }
+            '8' -> { sink.restoreCursor(); 2 }
+            'M' -> { sink.scrollDown(); 2 }
+            'D' -> { sink.linefeed(); 2 }
+            'E' -> { sink.newline(); 2 }
+            '=', '>' -> 2
+            else -> 2
+        }
+    }
+
+    private fun handleEscapeLegacy(chunk: String, start: Int, sink: TerminalBuffer): Int {
+        if (start + 1 >= chunk.length) return 0
+        val next = chunk[start + 1]
+        return when (next) {
+            '[' -> handleCsiLegacy(chunk, start, sink)
             ']' -> handleOsc(chunk, start)
             '(', ')' -> if (start + 2 < chunk.length) 3 else 0
             '=', '>' -> 2
@@ -50,7 +86,86 @@ internal class AnsiParser {
         }
     }
 
-    private fun handleCsi(chunk: String, start: Int, sink: TerminalBuffer): Int {
+    private fun handleCsi(chunk: String, start: Int, sink: TerminalGrid): Int {
+        var i = start + 2
+        val params = StringBuilder()
+        while (i < chunk.length) {
+            val c = chunk[i]
+            if (c in '0'..'9' || c == ';' || c == '?' || c == '>') {
+                params.append(c)
+                i += 1
+            } else {
+                break
+            }
+        }
+        if (i >= chunk.length) return 0
+        val finalChar = chunk[i]
+        val consumed = i - start + 1
+        val raw = params.toString()
+        val isPrivate = raw.startsWith("?")
+        val cleaned = raw.removePrefix("?").removePrefix(">")
+        val parts = cleaned.split(';').map { it.toIntOrNull() }
+
+        when (finalChar) {
+            'm' -> applySgr(cleaned)
+            'A' -> sink.moveCursorUp((parts.getOrNull(0) ?: 1).coerceAtLeast(1))
+            'B' -> sink.moveCursorDown((parts.getOrNull(0) ?: 1).coerceAtLeast(1))
+            'C' -> sink.moveCursorRight((parts.getOrNull(0) ?: 1).coerceAtLeast(1))
+            'D' -> sink.moveCursorLeft((parts.getOrNull(0) ?: 1).coerceAtLeast(1))
+            'H', 'f' -> {
+                val row = ((parts.getOrNull(0) ?: 1) - 1).coerceAtLeast(0)
+                val col = ((parts.getOrNull(1) ?: 1) - 1).coerceAtLeast(0)
+                sink.setCursorPosition(row, col)
+            }
+            'J' -> sink.eraseInDisplay(parts.getOrNull(0) ?: 0)
+            'K' -> sink.eraseInLine(parts.getOrNull(0) ?: 0)
+            'G' -> sink.setCursorColumn(((parts.getOrNull(0) ?: 1) - 1).coerceAtLeast(0))
+            'd' -> sink.setCursorRow(((parts.getOrNull(0) ?: 1) - 1).coerceAtLeast(0))
+            's' -> sink.saveCursor()
+            'u' -> sink.restoreCursor()
+            'r' -> {
+                val top = ((parts.getOrNull(0) ?: 1) - 1).coerceAtLeast(0)
+                val bottom = ((parts.getOrNull(1) ?: sink.rows) - 1).coerceAtLeast(0)
+                sink.setScrollRegion(top, bottom)
+            }
+            'h' -> {
+                if (isPrivate) {
+                    when (parts.getOrNull(0)) {
+                        25 -> sink.cursorVisible = true
+                        7 -> sink.autoWrap = true
+                    }
+                }
+            }
+            'l' -> {
+                if (isPrivate) {
+                    when (parts.getOrNull(0)) {
+                        25 -> sink.cursorVisible = false
+                        7 -> sink.autoWrap = false
+                    }
+                }
+            }
+            'L' -> {
+                val n = (parts.getOrNull(0) ?: 1).coerceAtLeast(1)
+                repeat(n) { sink.scrollDown() }
+            }
+            'M' -> {
+                val n = (parts.getOrNull(0) ?: 1).coerceAtLeast(1)
+                repeat(n) { sink.scrollUp() }
+            }
+            'S' -> {
+                val n = (parts.getOrNull(0) ?: 1).coerceAtLeast(1)
+                repeat(n) { sink.scrollUp() }
+            }
+            'T' -> {
+                val n = (parts.getOrNull(0) ?: 1).coerceAtLeast(1)
+                repeat(n) { sink.scrollDown() }
+            }
+            else -> Unit
+        }
+        return consumed
+    }
+
+    private fun handleCsiLegacy(chunk: String, start: Int, sink: TerminalBuffer): Int {
         var i = start + 2
         val params = StringBuilder()
         while (i < chunk.length) {
@@ -66,7 +181,10 @@ internal class AnsiParser {
         val finalChar = chunk[i]
         val consumed = i - start + 1
         when (finalChar) {
-            'm' -> applySgr(params.toString(), sink)
+            'm' -> {
+                applySgr(params.toString().removePrefix("?").removePrefix(">"))
+                sink.applyStyle(style)
+            }
             'K' -> {
                 val mode = params.toString().toIntOrNull() ?: 0
                 when (mode) {
@@ -92,14 +210,13 @@ internal class AnsiParser {
         return 0
     }
 
-    private fun applySgr(raw: String, sink: TerminalBuffer) {
-        val cleaned = raw.removePrefix("?").removePrefix(">")
+    private fun applySgr(cleaned: String) {
         val parts = if (cleaned.isEmpty()) listOf("0") else cleaned.split(';')
         var idx = 0
         while (idx < parts.size) {
             val code = parts[idx].toIntOrNull() ?: 0
             when (code) {
-                0 -> { style = TerminalStyle.Default; sink.resetStyle() }
+                0 -> style = TerminalStyle.Default
                 1 -> style = style.copy(bold = true)
                 3 -> style = style.copy(italic = true)
                 4 -> style = style.copy(underline = true)
@@ -142,7 +259,6 @@ internal class AnsiParser {
             }
             idx += 1
         }
-        sink.applyStyle(style)
     }
 }
 
