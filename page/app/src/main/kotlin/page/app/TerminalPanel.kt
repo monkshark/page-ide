@@ -596,7 +596,8 @@ private fun TerminalLine.toAnnotatedString(
             append(' ')
             charIndex++
         }
-        withStyle(SpanStyle(color = caretColor)) { append('█') }
+        withStyle(SpanStyle(color = Color.Black, background = caretColor)) { append(' ') }
+        append('​')
     }
 }
 
