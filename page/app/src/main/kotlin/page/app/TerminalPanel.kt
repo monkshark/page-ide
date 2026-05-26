@@ -456,15 +456,15 @@ private fun TerminalBody(
     var focused by remember { mutableStateOf(false) }
 
     var caretOn by remember { mutableStateOf(true) }
-    LaunchedEffect(alive, focused) {
-        if (!alive || !focused) {
+    LaunchedEffect(alive) {
+        if (!alive) {
             caretOn = false
             return@LaunchedEffect
         }
         caretOn = true
         while (true) {
             delay(530)
-            caretOn = !caretOn
+            caretOn = if (focused) !caretOn else true
         }
     }
     val caretColor = MaterialTheme.colorScheme.onSurface
@@ -489,7 +489,7 @@ private fun TerminalBody(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 for ((idx, line) in lines.withIndex()) {
-                    val showCaret = idx == cursorLineIndex && alive && focused && caretOn && cursorVisible
+                    val showCaret = idx == cursorLineIndex && alive && cursorVisible
                     Text(
                         text = line.toAnnotatedString(
                             showCaret = showCaret,
