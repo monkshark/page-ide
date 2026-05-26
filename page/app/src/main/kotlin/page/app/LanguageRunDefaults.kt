@@ -72,14 +72,31 @@ object LanguageRunDefaults {
     }
 
     private fun resolveJdkEnv(template: LanguageRunTemplate): Pair<String, Map<String, String>>? {
-        if ("java" !in template.extensions) return null
-        val jdk = runCatching { JdkInstaller() }.getOrNull() ?: return null
-        val home = jdk.javaHome() ?: return null
-        val javaBin = home.resolve("bin").resolve(
-            if (LspInstaller.isWindows()) "java.exe" else "java",
-        )
-        if (!java.nio.file.Files.exists(javaBin)) return null
-        return javaBin.toAbsolutePath().toString() to mapOf("JAVA_HOME" to home.toAbsolutePath().toString())
+        if ("java" in template.extensions) {
+            val jdk = runCatching { JdkInstaller() }.getOrNull() ?: return null
+            val home = jdk.javaHome() ?: return null
+            val javaBin = home.resolve("bin").resolve(if (LspInstaller.isWindows()) "java.exe" else "java")
+            if (!java.nio.file.Files.exists(javaBin)) return null
+            return javaBin.toAbsolutePath().toString() to mapOf("JAVA_HOME" to home.toAbsolutePath().toString())
+        }
+        if ("js" in template.extensions || "mjs" in template.extensions) {
+            val node = runCatching { NodeInstaller() }.getOrNull() ?: return null
+            val home = node.nodeHome() ?: return null
+            val bin = node.executable() ?: return null
+            return bin.toAbsolutePath().toString() to mapOf("NODE_HOME" to home.toAbsolutePath().toString())
+        }
+        if ("py" in template.extensions) {
+            val py = runCatching { PythonInstaller() }.getOrNull() ?: return null
+            val bin = py.executable() ?: return null
+            return bin.toAbsolutePath().toString() to emptyMap()
+        }
+        if ("go" in template.extensions) {
+            val go = runCatching { GoSdkInstaller() }.getOrNull() ?: return null
+            val home = go.goHome() ?: return null
+            val bin = go.executable() ?: return null
+            return bin.toAbsolutePath().toString() to mapOf("GOROOT" to home.toAbsolutePath().toString())
+        }
+        return null
     }
 
     fun forFile(path: Path): LanguageRunTemplate? {

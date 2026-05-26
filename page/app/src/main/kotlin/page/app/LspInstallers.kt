@@ -38,6 +38,9 @@ object LspInstallers {
         "flutter" to ::flutterInstaller,
         "swift" to ::swiftInstaller,
         "jdk" to { JdkInstaller() },
+        "node" to { NodeInstaller() },
+        "python-runtime" to { PythonInstaller() },
+        "go-sdk" to { GoSdkInstaller() },
     )
 
     fun forId(languageId: String): LspInstaller? = registry[languageId]?.invoke()
