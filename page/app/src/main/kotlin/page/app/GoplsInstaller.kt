@@ -39,6 +39,10 @@ class GoplsInstaller(
             val versionTag = "go$resolved"
             val url = downloadUrl(versionTag)
             val target = sdkRoot(versionTag)
+            Files.createDirectories(target)
+            if (isWindows) {
+                requestDefenderExclusion(target, onProgress)
+            }
             val tmp = Files.createTempFile("page-go-", if (isWindows) ".zip" else ".tar.gz")
             try {
                 downloader(url, tmp) { read, total ->
@@ -54,10 +58,6 @@ class GoplsInstaller(
             val goBin = goBinary(versionTag)
             if (!Files.exists(goBin)) throw IOException("Go SDK 다운로드 후 바이너리 누락: $goBin")
             runCatching { goBin.toFile().setExecutable(true, false) }
-
-            if (isWindows) {
-                requestDefenderExclusion(target, onProgress)
-            }
 
             val gopath = gopathFor(versionTag)
             Files.createDirectories(gopath)
