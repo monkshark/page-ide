@@ -3059,12 +3059,14 @@ private fun Shell(
     var runtimeDialogOpen by remember { mutableStateOf<String?>(null) }
     val runtimeVersions = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeSources = remember { mutableStateOf(mapOf<String, String>()) }
+    val runtimeBuildFileVersions = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val (vers, srcs) = detectRuntimeVersionsWithSources(rootDir)
+            val (vers, srcs, bvs) = detectRuntimeVersionsWithSources(rootDir)
             runtimeVersions.value = vers
             runtimeSources.value = srcs
+            runtimeBuildFileVersions.value = bvs
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -3158,6 +3160,7 @@ private fun Shell(
                                 tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
                                 runtimeVersions = runtimeVersions.value,
                                 runtimeSources = runtimeSources.value,
+                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -3200,6 +3203,7 @@ private fun Shell(
                                 tabContextActions = tabContextActionsFor(PaneSide.SECONDARY),
                                 runtimeVersions = runtimeVersions.value,
                                 runtimeSources = runtimeSources.value,
+                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -3241,6 +3245,7 @@ private fun Shell(
                         tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
                         runtimeVersions = runtimeVersions.value,
                         runtimeSources = runtimeSources.value,
+                        runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                         onRuntimeClick = { id -> runtimeDialogOpen = id },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -3415,9 +3420,10 @@ private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<
     return vers
 }
 
-private fun detectRuntimeVersionsWithSources(projectRoot: java.nio.file.Path? = null): Pair<Map<String, String>, Map<String, String>> {
+private fun detectRuntimeVersionsWithSources(projectRoot: java.nio.file.Path? = null): Triple<Map<String, String>, Map<String, String>, Map<String, String>> {
     val vers = detectRuntimeVersions(projectRoot)
     val sources = mutableMapOf<String, String>()
+    val buildVers = mutableMapOf<String, String>()
     if (projectRoot != null) {
         var detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
         if (detected.isEmpty()) {
@@ -3434,9 +3440,10 @@ private fun detectRuntimeVersionsWithSources(projectRoot: java.nio.file.Path? = 
                 "jdk" -> "java"; "node" -> "js"; "python-runtime" -> "py"; "go-sdk" -> "go"; else -> continue
             }
             sources[key] = d.source
+            buildVers[key] = d.version
         }
     }
-    return vers to sources
+    return Triple(vers, sources, buildVers)
 }
 
 private fun captureVersion(cmd: String, vararg args: String): String? {
@@ -3487,6 +3494,7 @@ private fun PaneRegion(
     tabContextActions: TabContextActions? = null,
     runtimeVersions: Map<String, String> = emptyMap(),
     runtimeSources: Map<String, String> = emptyMap(),
+    runtimeBuildFileVersions: Map<String, String> = emptyMap(),
     onRuntimeClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -3496,15 +3504,28 @@ private fun PaneRegion(
     val activeExt = remember(active?.path) {
         active?.path?.fileName?.toString()?.lowercase()?.substringAfterLast('.', "") ?: ""
     }
-    val runtimeInfo: Triple<String, String, String?>? = remember(activeExt, runtimeVersions, runtimeSources) {
+    val runtimeInfo: Triple<String, String, String?>? = remember(activeExt, runtimeVersions, runtimeSources, runtimeBuildFileVersions) {
+        fun build(name: String, key: String, id: String): Triple<String, String, String?> {
+            val ver = runtimeVersions[key] ?: "?"
+            val bfVer = runtimeBuildFileVersions[key]
+            val src = runtimeSources[key]
+            val mismatch = bfVer != null && ver != "?" && !ver.startsWith(bfVer)
+            val label = if (mismatch) "$name $ver ⚠" else "$name $ver"
+            val tooltip = when {
+                mismatch -> "Project requires $bfVer ($src), using $ver"
+                src != null -> "from $src"
+                else -> null
+            }
+            return Triple(label, id, tooltip)
+        }
         when (activeExt) {
-            "java" -> Triple("JDK ${runtimeVersions["java"] ?: "?"}", "jdk", runtimeSources["java"])
-            "js", "mjs", "cjs", "ts" -> Triple("Node ${runtimeVersions["js"] ?: "?"}", "node", runtimeSources["js"])
-            "py" -> Triple("Python ${runtimeVersions["py"] ?: "?"}", "python-runtime", runtimeSources["py"])
-            "go" -> Triple("Go ${runtimeVersions["go"] ?: "?"}", "go-sdk", runtimeSources["go"])
-            "c", "cpp", "cc", "cxx", "h", "hpp" -> Triple("Clang ${runtimeVersions["cpp"] ?: "?"}", "cpp-toolchain", null)
-            "rs" -> Triple("Rust ${runtimeVersions["rs"] ?: "?"}", "rust-runtime", runtimeSources["rs"])
-            "cs" -> Triple(".NET ${runtimeVersions["cs"] ?: "?"}", "dotnet-runtime", runtimeSources["cs"])
+            "java" -> build("JDK", "java", "jdk")
+            "js", "mjs", "cjs", "ts" -> build("Node", "js", "node")
+            "py" -> build("Python", "py", "python-runtime")
+            "go" -> build("Go", "go", "go-sdk")
+            "c", "cpp", "cc", "cxx", "h", "hpp" -> build("Clang", "cpp", "cpp-toolchain")
+            "rs" -> build("Rust", "rs", "rust-runtime")
+            "cs" -> build(".NET", "cs", "dotnet-runtime")
             else -> null
         }
     }
