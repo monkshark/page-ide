@@ -464,7 +464,7 @@ private fun TerminalBody(
         caretOn = true
         while (true) {
             delay(530)
-            caretOn = if (focused) !caretOn else true
+            caretOn = !caretOn
         }
     }
     val caretColor = MaterialTheme.colorScheme.onSurface
@@ -491,7 +491,7 @@ private fun TerminalBody(
                 val displayEnd = (cursorLineIndex + 2).coerceAtMost(lines.size)
                 for (idx in 0 until displayEnd) {
                     val line = lines[idx]
-                    val showCaret = idx == cursorLineIndex && alive && cursorVisible
+                    val showCaret = idx == cursorLineIndex && alive && cursorVisible && caretOn
                     Text(
                         text = line.toAnnotatedString(
                             showCaret = showCaret,
@@ -574,9 +574,7 @@ private fun TerminalLine.toAnnotatedString(
             if (localPos > 0) {
                 withStyle(spanStyle) { append(span.text.substring(0, localPos)) }
             }
-            withStyle(SpanStyle(color = Color.Black, background = caretColor)) {
-                append(span.text[localPos])
-            }
+            withStyle(SpanStyle(color = caretColor)) { append('█') }
             if (localPos + 1 < span.text.length) {
                 withStyle(spanStyle) { append(span.text.substring(localPos + 1)) }
             }
