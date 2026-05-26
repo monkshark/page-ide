@@ -488,7 +488,7 @@ private fun TerminalBody(
                     .verticalScroll(scrollState)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                val displayEnd = (cursorLineIndex + 1).coerceAtMost(lines.size)
+                val displayEnd = (cursorLineIndex + 2).coerceAtMost(lines.size)
                 for (idx in 0 until displayEnd) {
                     val line = lines[idx]
                     val showCaret = idx == cursorLineIndex && alive && cursorVisible
@@ -590,7 +590,7 @@ private fun TerminalLine.toAnnotatedString(
             append(' ')
             charIndex++
         }
-        withStyle(SpanStyle(color = Color.Black, background = caretColor)) { append(' ') }
+        withStyle(SpanStyle(color = caretColor)) { append('█') }
     }
 }
 
