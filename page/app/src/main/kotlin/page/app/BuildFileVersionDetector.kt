@@ -17,6 +17,8 @@ object BuildFileVersionDetector {
         detectNode(projectRoot)?.let(results::add)
         detectPython(projectRoot)?.let(results::add)
         detectGo(projectRoot)?.let(results::add)
+        detectRust(projectRoot)?.let(results::add)
+        detectDotnet(projectRoot)?.let(results::add)
         return results
     }
 
@@ -84,6 +86,26 @@ object BuildFileVersionDetector {
         readFile(root.resolve("go.mod"))?.let { content ->
             val match = Regex("(?m)^go\\s+(\\d+\\.\\d+[\\d.]*)").find(content)
             if (match != null) return DetectedVersion("go-sdk", match.groupValues[1], "go.mod")
+        }
+        return null
+    }
+
+    private fun detectRust(root: Path): DetectedVersion? {
+        readFile(root.resolve("rust-toolchain.toml"))?.let { content ->
+            val match = Regex("channel\\s*=\\s*\"(\\d+\\.\\d+[\\d.]*)\"").find(content)
+            if (match != null) return DetectedVersion("rust", match.groupValues[1], "rust-toolchain.toml")
+        }
+        readFile(root.resolve("Cargo.toml"))?.let { content ->
+            val match = Regex("rust-version\\s*=\\s*\"(\\d+\\.\\d+[\\d.]*)\"").find(content)
+            if (match != null) return DetectedVersion("rust", match.groupValues[1], "Cargo.toml")
+        }
+        return null
+    }
+
+    private fun detectDotnet(root: Path): DetectedVersion? {
+        readFile(root.resolve("global.json"))?.let { content ->
+            val match = Regex("\"version\"\\s*:\\s*\"(\\d+\\.\\d+[\\d.]*)\"").find(content)
+            if (match != null) return DetectedVersion("dotnet", match.groupValues[1], "global.json")
         }
         return null
     }

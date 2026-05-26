@@ -3369,6 +3369,10 @@ private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<
     val cpp = runCatching { CppToolchainInstaller().activeVersion() }.getOrNull()
         ?: runCatching { captureVersion("clang", "--version")?.let { Regex("(\\d+\\.\\d+\\.\\d+)").find(it)?.groupValues?.get(1) } }.getOrNull()
     if (!cpp.isNullOrBlank()) vers["cpp"] = cpp
+    val rust = runCatching { captureVersion("rustc", "--version")?.let { Regex("(\\d+\\.\\d+\\.\\d+)").find(it)?.groupValues?.get(1) } }.getOrNull()
+    if (!rust.isNullOrBlank()) vers["rs"] = rust
+    val dotnet = runCatching { captureVersion("dotnet", "--version") }.getOrNull()
+    if (!dotnet.isNullOrBlank()) vers["cs"] = dotnet
     if (projectRoot != null) {
         val detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
         for (d in detected) {
@@ -3448,6 +3452,8 @@ private fun PaneRegion(
             "py" -> "Python ${runtimeVersions["py"] ?: "?"}" to "python-runtime"
             "go" -> "Go ${runtimeVersions["go"] ?: "?"}" to "go-sdk"
             "c", "cpp", "cc", "cxx", "h", "hpp" -> "Clang ${runtimeVersions["cpp"] ?: "?"}" to "cpp-toolchain"
+            "rs" -> runtimeVersions["rs"]?.let { "Rust $it" to "rust" }
+            "cs" -> runtimeVersions["cs"]?.let { ".NET $it" to "dotnet" }
             else -> null
         }
     }
