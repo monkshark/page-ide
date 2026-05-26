@@ -566,7 +566,6 @@ private fun TerminalLine.toAnnotatedString(
     caretCol: Int = -1,
     caretFocused: Boolean = true,
 ): AnnotatedString = buildAnnotatedString {
-    val caretChar = if (caretFocused) '█' else '▯'
     var charIndex = 0
     for (span in spans) {
         val spanStyle = SpanStyle(
@@ -581,7 +580,9 @@ private fun TerminalLine.toAnnotatedString(
             if (localPos > 0) {
                 withStyle(spanStyle) { append(span.text.substring(0, localPos)) }
             }
-            withStyle(SpanStyle(color = caretColor)) { append(caretChar) }
+            withStyle(SpanStyle(color = Color.Black, background = caretColor)) {
+                append(span.text[localPos])
+            }
             if (localPos + 1 < span.text.length) {
                 withStyle(spanStyle) { append(span.text.substring(localPos + 1)) }
             }
@@ -595,7 +596,7 @@ private fun TerminalLine.toAnnotatedString(
             append(' ')
             charIndex++
         }
-        withStyle(SpanStyle(color = caretColor)) { append(caretChar) }
+        withStyle(SpanStyle(color = Color.Black, background = caretColor)) { append(' ') }
     }
 }
 
