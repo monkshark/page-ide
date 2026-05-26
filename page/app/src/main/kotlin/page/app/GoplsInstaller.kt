@@ -42,6 +42,7 @@ class GoplsInstaller(
             Files.createDirectories(target)
             if (isWindows) {
                 requestDefenderExclusion(target, onProgress)
+                Thread.sleep(3000)
             }
             val tmp = Files.createTempFile("page-go-", if (isWindows) ".zip" else ".tar.gz")
             try {
