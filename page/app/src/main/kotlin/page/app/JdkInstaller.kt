@@ -227,7 +227,8 @@ class JdkInstaller(
         private val gson: Gson = GsonBuilder().disableHtmlEscaping().create()
 
         internal fun sanitize(version: String): String =
-            version.replace('+', '-').replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            version.replace(Regex("\\.0\\.LTS$"), "").replace(Regex("\\.LTS$"), "").replace(Regex("-LTS$"), "")
+                .replace('+', '-').replace(Regex("[\\\\/:*?\"<>|]"), "_")
 
         internal val VERSION_DESC: Comparator<String> = Comparator { a, b ->
             val pa = versionTokens(a)
