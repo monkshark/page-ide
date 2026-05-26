@@ -40,6 +40,7 @@ object LspInstallers {
         "jdk" to { JdkInstaller() },
         "node" to { NodeInstaller() },
         "python-runtime" to { PythonInstaller() },
+        "cpp-toolchain" to { CppToolchainInstaller() },
         "go-sdk" to { GoSdkInstaller() },
     )
 
