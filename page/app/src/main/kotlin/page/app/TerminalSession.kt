@@ -139,11 +139,26 @@ class TerminalSession internal constructor(
         internal fun buildCommand(shell: ShellOption, elevated: Boolean): Array<String> {
             val base = arrayOf(shell.executable) + shell.args.toTypedArray()
             if (!elevated) return base
-            val gsudo = findOnPath("gsudo") ?: findOnPath("gsudo.exe")
-                ?: throw IllegalStateException(
-                    "gsudo not found on PATH. Install via: winget install gerardog.gsudo"
-                )
+            var gsudo = findOnPath("gsudo") ?: findOnPath("gsudo.exe")
+            if (gsudo == null) {
+                installGsudo()
+                gsudo = findOnPath("gsudo") ?: findOnPath("gsudo.exe")
+                    ?: throw IllegalStateException(
+                        "gsudo auto-install failed. Install manually: winget install gerardog.gsudo"
+                    )
+            }
             return arrayOf(gsudo) + base
+        }
+
+        private fun installGsudo() {
+            val winget = findOnPath("winget") ?: findOnPath("winget.exe") ?: return
+            try {
+                val p = ProcessBuilder(winget, "install", "--id", "gerardog.gsudo", "--accept-package-agreements", "--accept-source-agreements")
+                    .redirectErrorStream(true)
+                    .start()
+                p.inputStream.bufferedReader().use { it.readText() }
+                p.waitFor()
+            } catch (_: Throwable) {}
         }
 
         fun detectShells(): List<ShellOption> {
