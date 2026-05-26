@@ -433,11 +433,13 @@ internal fun InstallGuideDialog(
                                 Spacer(Modifier.height(10.dp))
                                 SectionLabel("Install failed")
                                 Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = failed.error.message ?: failed.error.toString(),
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = LocalTextStyle.current.copy(fontSize = 11.sp),
-                                )
+                                SelectionContainer {
+                                    Text(
+                                        text = failed.error.message ?: failed.error.toString(),
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = LocalTextStyle.current.copy(fontSize = 11.sp),
+                                    )
+                                }
                             }
                         }
                     }
