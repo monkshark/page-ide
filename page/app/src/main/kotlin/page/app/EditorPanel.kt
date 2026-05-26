@@ -147,6 +147,7 @@ fun EditorPanel(
     initialHScroll: Int = 0,
     onScrollChange: (vertical: Int, horizontal: Int) -> Unit = { _, _ -> },
     jdkVersion: String? = null,
+    jdkVersionTooltip: String? = null,
     onJdkVersionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -1202,6 +1203,7 @@ fun EditorPanel(
             todoCount = todoCount,
             onTodoToggle = onTodoToggle,
             jdkVersion = jdkVersion,
+            jdkVersionTooltip = jdkVersionTooltip,
             onJdkVersionClick = onJdkVersionClick,
         )
     }
@@ -1664,6 +1666,7 @@ private fun EditorStatusBar(
     todoCount: Int = 0,
     onTodoToggle: (() -> Unit)? = null,
     jdkVersion: String? = null,
+    jdkVersionTooltip: String? = null,
     onJdkVersionClick: (() -> Unit)? = null,
 ) {
     Surface(
@@ -1706,7 +1709,7 @@ private fun EditorStatusBar(
                     LspActivitiesItem(activities = lspActivities)
                 }
                 if (showJdk) {
-                    RuntimeVersionItem(label = jdkVersion!!, onClick = onJdkVersionClick)
+                    RuntimeVersionItem(label = jdkVersion!!, tooltip = jdkVersionTooltip, onClick = onJdkVersionClick)
                 }
             }
         }
@@ -1726,16 +1729,32 @@ private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
     )
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun RuntimeVersionItem(label: String, onClick: (() -> Unit)? = null) {
+private fun RuntimeVersionItem(label: String, tooltip: String? = null, onClick: (() -> Unit)? = null) {
     val color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Text(
-        text = label,
-        modifier = mod,
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-    )
+    if (tooltip != null) {
+        androidx.compose.foundation.TooltipArea(
+            tooltip = {
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                ) {
+                    Text(
+                        text = tooltip,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                    )
+                }
+            },
+        ) {
+            Text(text = label, modifier = mod, style = MaterialTheme.typography.labelSmall, color = color)
+        }
+    } else {
+        Text(text = label, modifier = mod, style = MaterialTheme.typography.labelSmall, color = color)
+    }
 }
 
 @Composable
