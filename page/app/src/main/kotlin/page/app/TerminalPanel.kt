@@ -495,7 +495,7 @@ private fun TerminalBody(
                 val displayEnd = (cursorLineIndex + 2).coerceAtMost(lines.size)
                 for (idx in 0 until displayEnd) {
                     val line = lines[idx]
-                    val showCaret = idx == cursorLineIndex && alive && cursorVisible && (caretOn || !focused)
+                    val showCaret = idx == cursorLineIndex && alive && cursorVisible && focused && caretOn
                     Text(
                         text = line.toAnnotatedString(
                             showCaret = showCaret,
