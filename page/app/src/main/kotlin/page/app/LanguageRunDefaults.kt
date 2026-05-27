@@ -133,7 +133,10 @@ object LanguageRunDefaults {
             return bin.toAbsolutePath().toString() to mapOf("PATH" to home.resolve("bin").toAbsolutePath().toString() + java.io.File.pathSeparator + (System.getenv("PATH") ?: ""))
         }
         if ("cs" in template.extensions) {
-            return GenericProcessBackend.DOTNET.resolve()
+            val dotnet = runCatching { DotnetSdkInstaller() }.getOrNull() ?: return null
+            val home = dotnet.dotnetHome() ?: return null
+            val bin = dotnet.executable() ?: return null
+            return bin.toAbsolutePath().toString() to mapOf("DOTNET_ROOT" to home.toAbsolutePath().toString())
         }
         return null
     }

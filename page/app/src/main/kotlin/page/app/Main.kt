@@ -3390,7 +3390,8 @@ private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<
     val rust = runCatching { RustToolchainInstaller().activeVersion() }.getOrNull()
         ?: runCatching { captureVersion("rustc", "--version")?.let { Regex("(\\d+\\.\\d+\\.\\d+)").find(it)?.groupValues?.get(1) } }.getOrNull()
     if (!rust.isNullOrBlank()) vers["rs"] = rust
-    val dotnet = runCatching { GenericProcessBackend.DOTNET.activeVersion() }.getOrNull()
+    val dotnet = runCatching { DotnetSdkInstaller().activeVersion() }.getOrNull()
+        ?: runCatching { captureVersion("dotnet", "--version") }.getOrNull()
     if (!dotnet.isNullOrBlank()) vers["cs"] = dotnet
     if (projectRoot != null) {
         var detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
