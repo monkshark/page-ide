@@ -38,6 +38,12 @@ object PageRuntimeEnv {
         runCatching { RustToolchainInstaller().rustHome() }.getOrNull()?.let { home ->
             entries += RuntimeEntry(binDir = home.resolve("bin"))
         }
+        runCatching { DotnetSdkInstaller().dotnetHome() }.getOrNull()?.let { home ->
+            entries += RuntimeEntry(
+                binDir = home,
+                envVars = mapOf("DOTNET_ROOT" to home.toAbsolutePath().toString()),
+            )
+        }
         return entries
     }
 
