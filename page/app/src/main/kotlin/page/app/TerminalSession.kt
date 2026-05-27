@@ -96,37 +96,7 @@ class TerminalSession internal constructor(
             val env = HashMap(System.getenv()).apply {
                 put("TERM", "xterm-256color")
                 put("LANG", get("LANG") ?: "en_US.UTF-8")
-                val sep = System.getProperty("path.separator") ?: ";"
-                val pathKey = keys.firstOrNull { it.equals("PATH", ignoreCase = true) } ?: "PATH"
-                val prependBins = mutableListOf<String>()
-                val jdkHome = runCatching { JdkInstaller().javaHome() }.getOrNull()
-                if (jdkHome != null) {
-                    put("JAVA_HOME", jdkHome.toAbsolutePath().toString())
-                    prependBins += jdkHome.resolve("bin").toAbsolutePath().toString()
-                }
-                val nodeHome = runCatching { NodeInstaller().nodeHome() }.getOrNull()
-                if (nodeHome != null) {
-                    val nodeBinDir = if (java.io.File(nodeHome.resolve("bin").toString()).isDirectory) nodeHome.resolve("bin") else nodeHome
-                    prependBins += nodeBinDir.toAbsolutePath().toString()
-                }
-                val pythonHome = runCatching { PythonInstaller().pythonHome() }.getOrNull()
-                if (pythonHome != null) {
-                    val pyBinDir = if (java.io.File(pythonHome.resolve("bin").toString()).isDirectory) pythonHome.resolve("bin") else pythonHome
-                    prependBins += pyBinDir.toAbsolutePath().toString()
-                }
-                val goHome = runCatching { GoSdkInstaller().goHome() }.getOrNull()
-                if (goHome != null) {
-                    put("GOROOT", goHome.toAbsolutePath().toString())
-                    prependBins += goHome.resolve("bin").toAbsolutePath().toString()
-                }
-                val llvmHome = runCatching { CppToolchainInstaller().llvmHome() }.getOrNull()
-                if (llvmHome != null) {
-                    prependBins += llvmHome.resolve("bin").toAbsolutePath().toString()
-                }
-                if (prependBins.isNotEmpty()) {
-                    val current = get(pathKey).orEmpty()
-                    put(pathKey, (prependBins + current).joinToString(sep))
-                }
+                PageRuntimeEnv.applyTo(this)
             }
             val process = PtyProcessBuilder()
                 .setCommand(cmd)

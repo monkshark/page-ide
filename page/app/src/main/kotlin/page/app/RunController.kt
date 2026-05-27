@@ -41,6 +41,7 @@ class RunController(
         val builder = ProcessBuilder(command)
         val cwd = config.workingDir?.takeIf { it.isNotBlank() }?.let { File(it) }
         if (cwd != null && cwd.isDirectory) builder.directory(cwd)
+        PageRuntimeEnv.applyTo(builder.environment())
         builder.environment().putAll(config.env)
         val started = try {
             builder.start()
