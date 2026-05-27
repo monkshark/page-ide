@@ -9,6 +9,7 @@ import kotlin.io.path.isExecutable
 class GenericLanguageBackend(
     private val definition: LanguageDefinition,
     private val executableFinder: () -> Path? = { null },
+    private val envSetup: ((MutableMap<String, String>) -> Unit)? = null,
 ) : LanguageBackend {
 
     override val id: String = definition.id
@@ -57,6 +58,7 @@ class GenericLanguageBackend(
             builder.directory(workspaceRoot.toFile())
         }
         builder.redirectErrorStream(false)
+        envSetup?.invoke(builder.environment())
         val process = builder.start()
         val transport = if (onStderrLine != null) ProcessTransport(process, onStderrLine)
         else ProcessTransport(process)

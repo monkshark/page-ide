@@ -2955,7 +2955,11 @@ private fun registerAllBackends() {
     backendsRegistered = true
     for (def in LanguageRegistry.all()) {
         if (LspBackends.byId(def.id) != null) continue
-        LspBackends.register(GenericLanguageBackend(def) { LspInstallers.forId(def.id)?.executable() })
+        LspBackends.register(GenericLanguageBackend(
+            definition = def,
+            executableFinder = { LspInstallers.forId(def.id)?.executable() },
+            envSetup = { env -> PageRuntimeEnv.applyTo(env) },
+        ))
     }
 }
 

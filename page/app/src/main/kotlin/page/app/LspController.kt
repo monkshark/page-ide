@@ -1,5 +1,6 @@
     package page.app
 
+import page.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
@@ -135,7 +136,9 @@ class LspController(
         activeBackend = backend
         startActivityJanitor()
         println("[lsp] resolving ${backend.displayName} (workspace=$workspaceRoot)")
-        val resolution = backend.resolveExecutable()
+        val env = HashMap(System.getenv())
+        PageRuntimeEnv.applyTo(env)
+        val resolution = backend.resolveExecutable(env)
         if (resolution !is LanguageBackend.Resolution.Found) {
             val notFound = resolution as LanguageBackend.Resolution.NotFound
             val joined = notFound.attempted.joinToString("\n  ")
