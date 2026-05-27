@@ -2982,12 +2982,14 @@ private fun lspStatusLineText(lspRouter: LspRouter, activePath: Path?): String? 
         else -> null
     }
     val installed = installer.installedVersion()
-    val suffix = if (isKotlin) when (ctrl?.status?.value) {
+    val suffix = when (ctrl?.status?.value) {
         LspController.Status.FAILED -> " · failed"
-        LspController.Status.STARTING -> " · starting"
+        LspController.Status.STARTING -> " · starting…"
         LspController.Status.MISSING -> " · not installed"
-        else -> ""
-    } else ""
+        LspController.Status.IDLE -> " · idle"
+        LspController.Status.READY -> ""
+        null -> if (installed != null) " · not started" else ""
+    }
     val core = if (installed != null) "$resolvedName $installed" else "$resolvedName (not installed)"
     return "$core$suffix"
 }
