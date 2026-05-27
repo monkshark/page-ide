@@ -2924,10 +2924,13 @@ private fun resolveLanguageForPath(path: Path): page.lsp.LanguageDefinition? {
 @androidx.compose.runtime.Composable
 private fun lspStatusLineText(lsp: LspController, activePath: Path?): String? {
     val definition = activePath?.let(::resolveLanguageForPath)
-    val langId = definition?.id ?: "kotlin"
-    val displayName = definition?.displayName ?: "Kotlin"
-    val isKotlin = langId == "kotlin"
-    val installer = LspInstallers.forId(langId) ?: return when {
+    val langId = definition?.id
+    val displayName = definition?.displayName
+    val isKotlin = langId == "kotlin" || (langId == null && activePath?.fileName?.toString()?.endsWith(".kt") != false)
+    if (langId == null && !isKotlin) return null
+    val resolvedId = langId ?: "kotlin"
+    val resolvedName = displayName ?: "Kotlin"
+    val installer = LspInstallers.forId(resolvedId) ?: return when {
         isKotlin && lsp.status.value == LspController.Status.MISSING -> "LSP · kotlin-language-server missing"
         isKotlin && lsp.status.value == LspController.Status.FAILED -> "LSP · failed to start"
         else -> null
@@ -2939,7 +2942,7 @@ private fun lspStatusLineText(lsp: LspController, activePath: Path?): String? {
         LspController.Status.MISSING -> " · not installed"
         else -> ""
     } else ""
-    val core = if (installed != null) "$displayName $installed" else "$displayName (not installed)"
+    val core = if (installed != null) "$resolvedName $installed" else "$resolvedName (not installed)"
     return "$core$suffix"
 }
 
