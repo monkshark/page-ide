@@ -3325,51 +3325,30 @@ private fun Shell(
     if (installGuideOpen) {
         val activeDef = paneFor(focusedPane, primary, secondary).book.active?.path
             ?.let { resolveLanguageForPath(it) }
-        val def = activeDef
-            ?: lsp.missingDefinition.value
-            ?: page.lsp.LanguageRegistry.byId("kotlin")
-        if (def != null) {
-            InstallGuideDialog(
-                definition = def,
-                attempted = lsp.missingAttempted.value,
-                onDismiss = { lsp.closeInstallGuide() },
-                onInstalled = { lsp.retry() },
-            )
-        } else {
-            lsp.closeInstallGuide()
-        }
+        val initialId = activeDef?.id
+            ?: lsp.missingDefinition.value?.id
+            ?: "kotlin"
+        ToolManagerDialog(
+            initialSelection = initialId,
+            onDismiss = { lsp.closeInstallGuide() },
+            onInstalled = { lsp.retry() },
+        )
     }
     val runtimeDialogId = runtimeDialogOpen
     if (runtimeDialogId != null) {
-        val runtimeDefs = mapOf(
-            "jdk" to page.lsp.LanguageDefinition("jdk", "Eclipse Temurin JDK", listOf("java"), emptyList(), emptyList(), "https://adoptium.net/", emptyMap(), null),
-            "node" to page.lsp.LanguageDefinition("node", "Node.js", listOf("js"), emptyList(), emptyList(), "https://nodejs.org/", emptyMap(), null),
-            "python-runtime" to page.lsp.LanguageDefinition("python-runtime", "Python", listOf("py"), emptyList(), emptyList(), "https://python.org/", emptyMap(), null),
-            "go-sdk" to page.lsp.LanguageDefinition("go-sdk", "Go SDK", listOf("go"), emptyList(), emptyList(), "https://go.dev/", emptyMap(), null),
-            "cpp-toolchain" to page.lsp.LanguageDefinition("cpp-toolchain", "LLVM/Clang Toolchain", listOf("c", "cpp"), emptyList(), emptyList(), "https://llvm.org/", emptyMap(), null),
-            "rust-runtime" to page.lsp.LanguageDefinition("rust-runtime", "Rust Toolchain", listOf("rs"), emptyList(), emptyList(), "https://rustup.rs/", emptyMap(), null),
-            "dotnet-runtime" to page.lsp.LanguageDefinition("dotnet-runtime", ".NET SDK", listOf("cs"), emptyList(), emptyList(), "https://dotnet.microsoft.com/download", emptyMap(), null),
-        )
-        val def = runtimeDefs[runtimeDialogId]
-        if (def != null) {
-            InstallGuideDialog(
-                definition = def,
-                attempted = emptyList(),
-                onDismiss = { runtimeDialogOpen = null },
-                onInstalled = {
-                    runtimeScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val (vers, srcs) = detectRuntimeVersionsWithSources(rootDir)
-                            runtimeVersions.value = vers
-                            runtimeSources.value = srcs
-                        }
+        ToolManagerDialog(
+            initialSelection = runtimeDialogId,
+            onDismiss = { runtimeDialogOpen = null },
+            onInstalled = {
+                runtimeScope.launch {
+                    withContext(Dispatchers.IO) {
+                        val (vers, srcs) = detectRuntimeVersionsWithSources(rootDir)
+                        runtimeVersions.value = vers
+                        runtimeSources.value = srcs
                     }
-                },
-                installer = LspInstallers.forId(runtimeDialogId),
-            )
-        } else {
-            runtimeDialogOpen = null
-        }
+                }
+            },
+        )
     }
     }
 }
