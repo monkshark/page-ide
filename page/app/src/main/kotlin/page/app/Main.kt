@@ -3447,7 +3447,7 @@ private fun detectRuntimeVersionsWithSources(projectRoot: java.nio.file.Path? = 
         }
         for (d in detected) {
             val key = when (d.runtime) {
-                "jdk" -> "java"; "node" -> "js"; "python-runtime" -> "py"; "go-sdk" -> "go"; else -> continue
+                "jdk" -> "java"; "node" -> "js"; "python-runtime" -> "py"; "go-sdk" -> "go"; "rust" -> "rs"; "dotnet" -> "cs"; else -> continue
             }
             sources[key] = d.source
             buildVers[key] = d.version
