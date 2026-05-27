@@ -299,7 +299,7 @@ internal fun InstallGuideDialog(
                     ) {
                         val scroll = rememberScrollState()
                         Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
-                            if (canInAppInstall && !precheckBlocked) {
+                            if (canInAppInstall && !precheckBlocked && selectedVersion != null) {
                                 SectionLabel("Install location")
                                 Spacer(Modifier.height(4.dp))
                                 Text(
@@ -878,22 +878,26 @@ private fun VersionRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             if (confirmDelete) {
-                Text(
-                    text = "Delete $version?",
-                    color = Color(0xFFf85149),
-                    style = LocalTextStyle.current.copy(fontSize = 11.sp, lineHeight = 11.sp),
+                val confirmStyle = LocalTextStyle.current.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 11.sp,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    ),
                 )
+                Text(text = "Delete $version?", color = Color(0xFFf85149), style = confirmStyle)
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = "Yes",
                     color = Color(0xFFf85149),
-                    fontSize = 11.sp,
+                    style = confirmStyle,
                     modifier = Modifier.clickable { confirmDelete = false; onDelete?.invoke() }.padding(horizontal = 6.dp),
                 )
                 Text(
                     text = "No",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
+                    style = confirmStyle,
                     modifier = Modifier.clickable { confirmDelete = false }.padding(horizontal = 6.dp),
                 )
             } else {
