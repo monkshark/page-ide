@@ -183,6 +183,17 @@ internal fun InstallGuideDialog(
         onDismiss()
     }
 
+    fun uninstallVersion(version: String) {
+        val active = installer ?: return
+        val dir = active.installDir(version)
+        scope.launch(Dispatchers.IO) {
+            runCatching { ArchiveExtractors.deleteRecursively(dir) }
+        }
+        if (selectedVersion == version) selectedVersion = null
+        installedVersions = installedVersions.filterNot { it == version }
+        if (installedVersion == version) installedVersion = null
+    }
+
     GlassTheme {
         Box(
             modifier = Modifier
@@ -320,6 +331,7 @@ internal fun InstallGuideDialog(
                                         installedVersions = installedVersions,
                                         activeVersion = installedVersion,
                                         onSelect = { selectedVersion = it },
+                                        onDeleteVersion = { v -> uninstallVersion(v) },
                                     )
                                 } else if (forkVersions.isEmpty()) {
                                     SectionHeader(label = "Recommended (verified)", expanded = true, toggleable = false)
@@ -339,6 +351,7 @@ internal fun InstallGuideDialog(
                                             installed = v in installedVersions,
                                             active = v == installedVersion,
                                             onClick = { selectedVersion = v },
+                                            onDelete = if (v in installedVersions && v != installedVersion) {{ uninstallVersion(v) }} else null,
                                         )
                                     }
                                 }
@@ -373,6 +386,7 @@ internal fun InstallGuideDialog(
                                                 installed = v in installedVersions,
                                                 active = v == installedVersion,
                                                 onClick = { selectedVersion = v },
+                                                onDelete = if (v in installedVersions && v != installedVersion) {{ uninstallVersion(v) }} else null,
                                             )
                                         }
                                     }
@@ -725,6 +739,7 @@ private fun GroupedVersionList(
     installedVersions: List<String>,
     activeVersion: String?,
     onSelect: (String) -> Unit,
+    onDeleteVersion: ((String) -> Unit)? = null,
 ) {
     var expandedGroups by remember { mutableStateOf(emptySet<String>()) }
     for (group in groups) {
@@ -814,6 +829,7 @@ private fun GroupedVersionList(
                     installed = v in installedVersions,
                     active = v == activeVersion,
                     onClick = { onSelect(v) },
+                    onDelete = if (v in installedVersions && v != activeVersion && onDeleteVersion != null) {{ onDeleteVersion(v) }} else null,
                 )
             }
         }
@@ -828,6 +844,7 @@ private fun VersionRow(
     installed: Boolean,
     active: Boolean,
     onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null,
     badge: String? = null,
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
@@ -845,7 +862,7 @@ private fun VersionRow(
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = version,
                 color = versionColor,
@@ -880,6 +897,17 @@ private fun VersionRow(
                             trim = LineHeightStyle.Trim.Both,
                         ),
                     ),
+                )
+            }
+            if (installed && !active && onDelete != null) {
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "×",
+                    color = Color(0xFFf85149).copy(alpha = 0.6f),
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .clickable(onClick = onDelete)
+                        .padding(horizontal = 4.dp),
                 )
             }
         }
