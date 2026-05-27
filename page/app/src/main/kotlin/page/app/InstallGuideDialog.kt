@@ -186,12 +186,17 @@ internal fun InstallGuideDialog(
     fun uninstallVersion(version: String) {
         val active = installer ?: return
         val dir = active.installDir(version)
+        val wasActive = installedVersion == version
         scope.launch(Dispatchers.IO) {
             runCatching { ArchiveExtractors.deleteRecursively(dir) }
+            if (wasActive) {
+                val pointer = dir.parent?.resolve("CURRENT")
+                if (pointer != null) runCatching { java.nio.file.Files.deleteIfExists(pointer) }
+            }
         }
         if (selectedVersion == version) selectedVersion = null
         installedVersions = installedVersions.filterNot { it == version }
-        if (installedVersion == version) installedVersion = null
+        if (wasActive) installedVersion = null
     }
 
     GlassTheme {
@@ -351,7 +356,7 @@ internal fun InstallGuideDialog(
                                             installed = v in installedVersions,
                                             active = v == installedVersion,
                                             onClick = { selectedVersion = v },
-                                            onDelete = if (v in installedVersions && v != installedVersion) {{ uninstallVersion(v) }} else null,
+                                            onDelete = if (v in installedVersions) {{ uninstallVersion(v) }} else null,
                                         )
                                     }
                                 }
@@ -386,7 +391,7 @@ internal fun InstallGuideDialog(
                                                 installed = v in installedVersions,
                                                 active = v == installedVersion,
                                                 onClick = { selectedVersion = v },
-                                                onDelete = if (v in installedVersions && v != installedVersion) {{ uninstallVersion(v) }} else null,
+                                                onDelete = if (v in installedVersions) {{ uninstallVersion(v) }} else null,
                                             )
                                         }
                                     }
@@ -829,7 +834,7 @@ private fun GroupedVersionList(
                     installed = v in installedVersions,
                     active = v == activeVersion,
                     onClick = { onSelect(v) },
-                    onDelete = if (v in installedVersions && v != activeVersion && onDeleteVersion != null) {{ onDeleteVersion(v) }} else null,
+                    onDelete = if (v in installedVersions && onDeleteVersion != null) {{ onDeleteVersion(v) }} else null,
                 )
             }
         }
@@ -899,7 +904,7 @@ private fun VersionRow(
                     ),
                 )
             }
-            if (installed && !active && onDelete != null) {
+            if (installed && onDelete != null) {
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = "×",
