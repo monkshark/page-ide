@@ -77,6 +77,7 @@ internal fun InstallGuideDialog(
     onDismiss: () -> Unit,
     installer: LspInstaller? = null,
     suggestedVersion: String? = null,
+    onOpenManager: (() -> Unit)? = null,
 ) {
     @Suppress("NAME_SHADOWING")
     val installer = installer ?: remember(definition.id) { LspInstallers.forId(definition.id) }
@@ -242,11 +243,25 @@ internal fun InstallGuideDialog(
                 color = MaterialTheme.colorScheme.background,
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
-                    Text(
-                        text = "Install ${definition.displayName} LSP",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Install ${definition.displayName}",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 14.sp,
+                        )
+                        if (onOpenManager != null) {
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = "Manage",
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.clickable { onOpenManager() }.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(2.dp))
                     val description = when {
                         canInAppInstall && precheck is LspInstaller.Precheck.MissingTool ->
