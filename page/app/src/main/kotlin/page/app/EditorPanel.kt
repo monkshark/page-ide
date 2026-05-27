@@ -3,6 +3,13 @@ package page.app
 import page.runtime.*
 import page.workspace.*
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1751,15 +1758,37 @@ private fun EditorStatusBar(
 
 @Composable
 private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
+    val isLoading = text.contains("starting", ignoreCase = true)
     val baseColor = MaterialTheme.colorScheme.onSurfaceVariant
     val color = if (onClick != null) MaterialTheme.colorScheme.primary else baseColor
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Text(
-        text = text,
-        modifier = mod,
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-    )
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = mod) {
+        if (isLoading) {
+            val transition = rememberInfiniteTransition()
+            val offset by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            )
+            Canvas(modifier = Modifier.width(40.dp).height(3.dp).padding(end = 6.dp)) {
+                val barWidth = size.width * 0.35f
+                val x = offset * (size.width + barWidth) - barWidth
+                drawRect(
+                    color = androidx.compose.ui.graphics.Color(0xFF6EA8FE),
+                    topLeft = Offset(x.coerceAtLeast(0f), 0f),
+                    size = Size((barWidth).coerceAtMost(size.width - x.coerceAtLeast(0f)), size.height),
+                )
+            }
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+        )
+    }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
