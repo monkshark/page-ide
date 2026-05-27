@@ -191,13 +191,13 @@ internal fun InstallGuideDialog(
         installedVersions = installedVersions.filterNot { it == version }
         if (wasActive) installedVersion = null
         scope.launch(Dispatchers.IO) {
-            runCatching { ArchiveExtractors.deleteRecursively(dir) }
             if (wasActive) {
                 val pointer = dir.parent?.resolve("CURRENT")
                 if (pointer != null) runCatching { java.nio.file.Files.deleteIfExists(pointer) }
             }
+            runCatching { ArchiveExtractors.deleteRecursively(dir) }
+            withContext(Dispatchers.Main) { onInstalled() }
         }
-        onInstalled()
     }
 
     GlassTheme {
