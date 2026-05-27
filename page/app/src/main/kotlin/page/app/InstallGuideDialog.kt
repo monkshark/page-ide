@@ -869,10 +869,7 @@ private fun VersionRow(
             .fillMaxWidth()
             .height(22.dp)
             .background(bg)
-            .clickable(onClick = {
-                if (confirmDelete) confirmDelete = false
-                else onClick()
-            })
+            .then(if (!confirmDelete) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -949,7 +946,14 @@ private fun VersionRow(
                         Text(
                             text = "×",
                             color = Color(0xFFf85149).copy(alpha = 0.6f),
-                            fontSize = 12.sp,
+                            style = LocalTextStyle.current.copy(
+                                fontSize = 12.sp,
+                                lineHeight = 12.sp,
+                                lineHeightStyle = LineHeightStyle(
+                                    alignment = LineHeightStyle.Alignment.Center,
+                                    trim = LineHeightStyle.Trim.Both,
+                                ),
+                            ),
                         )
                     }
                 }
