@@ -22,6 +22,17 @@ object BuildFileVersionDetector {
         return results
     }
 
+    fun detectWalkingUp(startDir: Path, stopAt: Path? = null): List<DetectedVersion> {
+        var dir: Path? = startDir
+        while (dir != null) {
+            val results = detect(dir)
+            if (results.isNotEmpty()) return results
+            if (dir == stopAt) break
+            dir = dir.parent
+        }
+        return emptyList()
+    }
+
     fun detectForRuntime(projectRoot: Path, runtime: String): DetectedVersion? = when (runtime) {
         "java", "jdk" -> detectJava(projectRoot)
         "js", "node" -> detectNode(projectRoot)

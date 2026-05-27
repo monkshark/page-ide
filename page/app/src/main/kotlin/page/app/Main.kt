@@ -3058,10 +3058,15 @@ private fun Shell(
     val installGuideOpen by lsp.installGuideOpen.collectAsState()
     var runtimeDialogOpen by remember { mutableStateOf<String?>(null) }
     val runtimeVersions = remember { mutableStateOf(mapOf<String, String>()) }
+    val runtimeSources = remember { mutableStateOf(mapOf<String, String>()) }
+    val runtimeBuildFileVersions = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeScope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            runtimeVersions.value = detectRuntimeVersions(rootDir)
+            val (vers, srcs, bvs) = detectRuntimeVersionsWithSources(rootDir)
+            runtimeVersions.value = vers
+            runtimeSources.value = srcs
+            runtimeBuildFileVersions.value = bvs
         }
     }
     Box(modifier = Modifier.fillMaxSize()) {
@@ -3154,6 +3159,8 @@ private fun Shell(
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
                                 runtimeVersions = runtimeVersions.value,
+                                runtimeSources = runtimeSources.value,
+                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -3195,6 +3202,8 @@ private fun Shell(
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.SECONDARY),
                                 runtimeVersions = runtimeVersions.value,
+                                runtimeSources = runtimeSources.value,
+                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -3235,6 +3244,8 @@ private fun Shell(
                         onEditorScrollChange = onEditorScrollChange,
                         tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
                         runtimeVersions = runtimeVersions.value,
+                        runtimeSources = runtimeSources.value,
+                        runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                         onRuntimeClick = { id -> runtimeDialogOpen = id },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -3342,7 +3353,11 @@ private fun Shell(
                 onDismiss = { runtimeDialogOpen = null },
                 onInstalled = {
                     runtimeScope.launch {
-                        withContext(Dispatchers.IO) { runtimeVersions.value = detectRuntimeVersions(rootDir) }
+                        withContext(Dispatchers.IO) {
+                            val (vers, srcs) = detectRuntimeVersionsWithSources(rootDir)
+                            runtimeVersions.value = vers
+                            runtimeSources.value = srcs
+                        }
                     }
                 },
             )
@@ -3374,7 +3389,16 @@ private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<
     val dotnet = runCatching { captureVersion("dotnet", "--version") }.getOrNull()
     if (!dotnet.isNullOrBlank()) vers["cs"] = dotnet
     if (projectRoot != null) {
-        val detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
+        var detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
+        if (detected.isEmpty()) {
+            detected = runCatching {
+                java.nio.file.Files.list(projectRoot).use { stream ->
+                    stream.filter { java.nio.file.Files.isDirectory(it) }
+                        .flatMap { BuildFileVersionDetector.detect(it).stream() }
+                        .toList()
+                }
+            }.getOrDefault(emptyList())
+        }
         for (d in detected) {
             val key = when (d.runtime) {
                 "jdk" -> "java"
@@ -3383,10 +3407,43 @@ private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<
                 "go-sdk" -> "go"
                 else -> continue
             }
-            vers[key] = "${d.version} (${d.source})"
+            val hasManaged = when (d.runtime) {
+                "jdk" -> runCatching { JdkInstaller().activeVersion() }.getOrNull() != null
+                "node" -> runCatching { NodeInstaller().activeVersion() }.getOrNull() != null
+                "python-runtime" -> runCatching { PythonInstaller().activeVersion() }.getOrNull() != null
+                "go-sdk" -> runCatching { GoSdkInstaller().activeVersion() }.getOrNull() != null
+                else -> false
+            }
+            if (!hasManaged) vers[key] = d.version
         }
     }
     return vers
+}
+
+private fun detectRuntimeVersionsWithSources(projectRoot: java.nio.file.Path? = null): Triple<Map<String, String>, Map<String, String>, Map<String, String>> {
+    val vers = detectRuntimeVersions(projectRoot)
+    val sources = mutableMapOf<String, String>()
+    val buildVers = mutableMapOf<String, String>()
+    if (projectRoot != null) {
+        var detected = runCatching { BuildFileVersionDetector.detect(projectRoot) }.getOrDefault(emptyList())
+        if (detected.isEmpty()) {
+            detected = runCatching {
+                java.nio.file.Files.list(projectRoot).use { stream ->
+                    stream.filter { java.nio.file.Files.isDirectory(it) }
+                        .flatMap { BuildFileVersionDetector.detect(it).stream() }
+                        .toList()
+                }
+            }.getOrDefault(emptyList())
+        }
+        for (d in detected) {
+            val key = when (d.runtime) {
+                "jdk" -> "java"; "node" -> "js"; "python-runtime" -> "py"; "go-sdk" -> "go"; else -> continue
+            }
+            sources[key] = d.source
+            buildVers[key] = d.version
+        }
+    }
+    return Triple(vers, sources, buildVers)
 }
 
 private fun captureVersion(cmd: String, vararg args: String): String? {
@@ -3436,6 +3493,8 @@ private fun PaneRegion(
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActions: TabContextActions? = null,
     runtimeVersions: Map<String, String> = emptyMap(),
+    runtimeSources: Map<String, String> = emptyMap(),
+    runtimeBuildFileVersions: Map<String, String> = emptyMap(),
     onRuntimeClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -3445,15 +3504,28 @@ private fun PaneRegion(
     val activeExt = remember(active?.path) {
         active?.path?.fileName?.toString()?.lowercase()?.substringAfterLast('.', "") ?: ""
     }
-    val runtimeInfo: Pair<String, String>? = remember(activeExt, runtimeVersions) {
+    val runtimeInfo: Triple<String, String, String?>? = remember(activeExt, runtimeVersions, runtimeSources, runtimeBuildFileVersions) {
+        fun build(name: String, key: String, id: String): Triple<String, String, String?> {
+            val ver = runtimeVersions[key] ?: "?"
+            val bfVer = runtimeBuildFileVersions[key]
+            val src = runtimeSources[key]
+            val mismatch = bfVer != null && ver != "?" && !ver.startsWith(bfVer)
+            val label = if (mismatch) "$name $ver ⚠" else "$name $ver"
+            val tooltip = when {
+                mismatch -> "Project requires $bfVer ($src), using $ver"
+                src != null -> "from $src"
+                else -> null
+            }
+            return Triple(label, id, tooltip)
+        }
         when (activeExt) {
-            "java" -> "JDK ${runtimeVersions["java"] ?: "?"}" to "jdk"
-            "js", "mjs", "cjs", "ts" -> "Node ${runtimeVersions["js"] ?: "?"}" to "node"
-            "py" -> "Python ${runtimeVersions["py"] ?: "?"}" to "python-runtime"
-            "go" -> "Go ${runtimeVersions["go"] ?: "?"}" to "go-sdk"
-            "c", "cpp", "cc", "cxx", "h", "hpp" -> "Clang ${runtimeVersions["cpp"] ?: "?"}" to "cpp-toolchain"
-            "rs" -> runtimeVersions["rs"]?.let { "Rust $it" to "rust" }
-            "cs" -> runtimeVersions["cs"]?.let { ".NET $it" to "dotnet" }
+            "java" -> build("JDK", "java", "jdk")
+            "js", "mjs", "cjs", "ts" -> build("Node", "js", "node")
+            "py" -> build("Python", "py", "python-runtime")
+            "go" -> build("Go", "go", "go-sdk")
+            "c", "cpp", "cc", "cxx", "h", "hpp" -> build("Clang", "cpp", "cpp-toolchain")
+            "rs" -> build("Rust", "rs", "rust-runtime")
+            "cs" -> build(".NET", "cs", "dotnet-runtime")
             else -> null
         }
     }
@@ -3583,7 +3655,8 @@ private fun PaneRegion(
                         onEditorScrollChange(active.path, EditorScrollSnapshot(v, h))
                     },
                     jdkVersion = runtimeInfo?.first,
-                    onJdkVersionClick = runtimeInfo?.let { (_, id) -> { onRuntimeClick?.invoke(id) } },
+                    jdkVersionTooltip = runtimeInfo?.third?.let { "from $it" },
+                    onJdkVersionClick = runtimeInfo?.let { (_, id, _) -> { onRuntimeClick?.invoke(id) } },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
