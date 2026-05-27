@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import page.lsp.LanguageDefinition
 import page.lsp.LanguageRegistry
 import kotlin.test.Test

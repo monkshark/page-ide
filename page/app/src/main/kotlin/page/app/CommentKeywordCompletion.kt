@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import page.lsp.CompletionItem
 import page.lsp.CompletionItemKind
 import page.lsp.CompletionList

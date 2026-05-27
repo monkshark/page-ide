@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

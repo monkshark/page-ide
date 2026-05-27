@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import page.lsp.LanguageDefinition
 
 object InstallGuide {

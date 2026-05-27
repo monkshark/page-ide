@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import page.editor.KotlinLexer
 import kotlin.test.Test
 import kotlin.test.assertEquals

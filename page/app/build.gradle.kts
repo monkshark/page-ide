@@ -14,10 +14,8 @@ dependencies {
     implementation(project(":page:ui"))
     implementation(project(":page:editor"))
     implementation(project(":page:lsp"))
+    implementation(project(":page:runtime"))
     implementation(libs.kotlinx.coroutines.swing)
-    implementation(libs.pty4j)
-    implementation(libs.commons.compress)
-    implementation(libs.xz)
     testImplementation(kotlin("test"))
 }
 

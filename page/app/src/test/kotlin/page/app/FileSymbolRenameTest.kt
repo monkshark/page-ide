@@ -1,5 +1,7 @@
 package page.app
 
+import page.runtime.*
+
 import org.eclipse.lsp4j.SymbolKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
