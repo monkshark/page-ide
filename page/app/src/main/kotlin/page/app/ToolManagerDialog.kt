@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +40,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import page.lsp.LanguageDefinition
 import page.lsp.LanguageRegistry
 import page.ui.GlassTheme
@@ -69,6 +74,7 @@ internal fun ToolManagerDialog(
     val entries = remember { buildToolEntries() }
     var selectedId by remember { mutableStateOf(initialSelection ?: entries.firstOrNull()?.id) }
     var openInstallDialogFor by remember { mutableStateOf<ToolEntry?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         runCatching { focusRequester.requestFocus() }
@@ -131,6 +137,18 @@ internal fun ToolManagerDialog(
                         ToolDetailPane(
                             entry = entries.firstOrNull { it.id == selectedId },
                             onInstall = { entry -> openInstallDialogFor = entry },
+                            onUninstall = { entry ->
+                                val inst = LspInstallers.forId(entry.id) ?: return@ToolDetailPane
+                                val version = inst.activeVersion() ?: return@ToolDetailPane
+                                val dir = inst.installDir(version)
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        ArchiveExtractors.deleteRecursively(dir)
+                                    }
+                                    onInstalled()
+                                    onDismiss()
+                                }
+                            },
                             modifier = Modifier.weight(1f).fillMaxHeight().padding(start = 14.dp),
                         )
                     }
@@ -191,6 +209,7 @@ private fun ToolSidebar(
 private fun ToolDetailPane(
     entry: ToolEntry?,
     onInstall: (ToolEntry) -> Unit,
+    onUninstall: (ToolEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (entry == null) {
@@ -201,6 +220,7 @@ private fun ToolDetailPane(
     }
     val installer = remember(entry.id) { LspInstallers.forId(entry.id) }
     val version = remember(entry.id) { installer?.activeVersion() ?: installer?.defaultVersion() }
+    var showUninstallConfirm by remember(entry.id) { mutableStateOf(false) }
     Column(modifier = modifier.padding(top = 4.dp)) {
         Text(
             text = entry.displayName,
@@ -229,19 +249,68 @@ private fun ToolDetailPane(
             fontSize = 11.sp,
         )
         Spacer(Modifier.height(16.dp))
-        val buttonLabel = if (entry.installed) "Manage" else "Install"
-        Surface(
-            modifier = Modifier
-                .clickable { onInstall(entry) }
-                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        ) {
-            Text(
-                text = buttonLabel,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val buttonLabel = if (entry.installed) "Manage" else "Install"
+            Surface(
+                modifier = Modifier
+                    .clickable { onInstall(entry) }
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+            ) {
+                Text(
+                    text = buttonLabel,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+            if (entry.installed) {
+                if (showUninstallConfirm) {
+                    Surface(
+                        modifier = Modifier
+                            .clickable {
+                                showUninstallConfirm = false
+                                onUninstall(entry)
+                            }
+                            .border(1.dp, Color(0xFFf85149).copy(alpha = 0.6f)),
+                        color = Color(0xFFf85149).copy(alpha = 0.1f),
+                    ) {
+                        Text(
+                            text = "Confirm",
+                            color = Color(0xFFf85149),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .clickable { showUninstallConfirm = false }
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                        color = Color.Transparent,
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                } else {
+                    Surface(
+                        modifier = Modifier
+                            .clickable { showUninstallConfirm = true }
+                            .border(1.dp, Color(0xFFf85149).copy(alpha = 0.4f)),
+                        color = Color.Transparent,
+                    ) {
+                        Text(
+                            text = "Uninstall",
+                            color = Color(0xFFf85149).copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
