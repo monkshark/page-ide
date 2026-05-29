@@ -5,6 +5,9 @@ import page.workspace.*
 import page.workspace.sync.PackageSyncEngine
 import page.app.input.ShortcutAction
 import page.app.input.ShortcutResolver
+import page.app.filetree.FileTreeActionExecutor
+import page.app.filetree.LargeCopyDialogState
+import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
 import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
@@ -950,6 +953,26 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         entries.forEach { applyTextReplace(it.path, it.rewritten) }
         entries
     }
+    val fileTreeActionExecutor = FileTreeActionExecutor(
+        scope = largeCopyScope,
+        getPasteDialog = { pasteDialog },
+        setPasteDialog = { pasteDialog = it },
+        getLargeCopyState = { largeCopyState },
+        setLargeCopyState = { largeCopyState = it },
+        rootDir = { rootDir },
+        readFileText = readFileTextWithTabs,
+        applyFolderPackageSync = applyFolderPackageSync,
+        applySingleFileMoveSync = applySingleFileMoveSync,
+        remapTabsAfterRename = { old, new -> remapTabsAfterRename(old, new) },
+        remapTreeStateAfterRename = { old, new -> remapTreeStateAfterRename(old, new) },
+        controllerFor = { p -> currentLspRouter.controllerFor(p) },
+        withFileTreeWatcherClosed = { block -> withFileTreeWatcherClosed(block) },
+        fileOpHistory = fileOpHistory,
+        bumpHistoryVersion = { fileOpHistoryVersion++ },
+        bumpTreeRevision = { treeRevision++ },
+        showInfoToast = { msg, undo -> showDropResultToast(msg, DropResultToastTone.Info, undo) },
+        onUndoFileOp = { onUndoFileOp() },
+    )
     val toggleExpanded: (Path, Boolean) -> Unit = { p, recursive ->
         expanded = when {
             recursive -> expanded + setOf(p) + page.editor.FileTree.descendantDirs(p)
@@ -2287,246 +2310,23 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val verb = if (activePasteDialog.mode == FileTreeClipboard.Mode.Cut) "Move" else "Copy"
         val total = activePasteDialog.remaining.size
         val countSuffix = if (total > 1) "  ($total remaining)" else ""
-        val finalizePasteHistory: (PasteEntryDialogState) -> Unit = { cur ->
-            val pushedMoves = cur.movesSoFar
-            val pushedCopies = cur.createdSoFar
-            if (pushedMoves.isNotEmpty()) {
-                fileOpHistory.push(FileOpHistory.PasteCutOp(pushedMoves))
-                fileOpHistoryVersion++
-                FileTreeClipboard.clearCutMarking()
-                showDropResultToast(
-                    dropResultMessage("Moved", pushedMoves.size, dropDestLabel(rootDir, cur.destParent)),
-                    DropResultToastTone.Info,
-                ) { onUndoFileOp() }
-            } else if (pushedCopies.isNotEmpty()) {
-                fileOpHistory.push(FileOpHistory.PasteCopyOp(pushedCopies))
-                fileOpHistoryVersion++
-                showDropResultToast(
-                    dropResultMessage("Copied", pushedCopies.size, dropDestLabel(rootDir, cur.destParent)),
-                    DropResultToastTone.Info,
-                ) { onUndoFileOp() }
-            }
-        }
         val skipOne: (() -> Unit)? = if (total > 1) {
             {
                 val cur = activePasteDialog
                 val rest = cur.remaining.drop(1)
                 pasteDialog = if (rest.isEmpty()) null else cur.copy(remaining = rest, error = null)
-                if (rest.isEmpty()) finalizePasteHistory(cur)
+                if (rest.isEmpty()) fileTreeActionExecutor.finalizePasteHistory(cur)
             }
         } else null
         val skipAll: (() -> Unit)? = if (total > 1) {
             {
                 val cur = activePasteDialog
                 pasteDialog = null
-                finalizePasteHistory(cur)
+                fileTreeActionExecutor.finalizePasteHistory(cur)
             }
         } else null
-        val performPaste: (String, Boolean) -> Unit = performPaste@ { newName, overwriteOnce ->
-            val current = pasteDialog ?: return@performPaste
-            val src = current.remaining.first()
-            val rest = current.remaining.drop(1)
-            val overwriteFlag = current.overwriteForAll || overwriteOnce
-            when (current.mode) {
-                FileTreeClipboard.Mode.Copy -> {
-                    val estimate = LargeCopyExecutor.estimate(src)
-                    if (estimate.isLarge) {
-                        val cancelToken = java.util.concurrent.atomic.AtomicBoolean(false)
-                        val destLabel = current.destParent.fileName?.toString()
-                            ?: current.destParent.toString()
-                        largeCopyState = LargeCopyDialogState(
-                            sourceName = src.fileName?.toString() ?: src.toString(),
-                            destName = destLabel,
-                            totalBytes = estimate.totalBytes,
-                            fileCount = estimate.fileCount,
-                            bytesCopied = 0L,
-                            filesCopied = 0,
-                            cancelToken = cancelToken,
-                        )
-                        pasteDialog = null
-                        val capturedCurrent = current
-                        val capturedRest = rest
-                        val capturedName = newName
-                        val capturedOverwrite = overwriteFlag
-                        val bytesAcc = java.util.concurrent.atomic.AtomicLong(0L)
-                        val filesAcc = java.util.concurrent.atomic.AtomicInteger(0)
-                        largeCopyScope.launch {
-                            val outcome = withContext(Dispatchers.IO) {
-                                LargeCopyExecutor.copyWithProgress(
-                                    source = src,
-                                    destParent = capturedCurrent.destParent,
-                                    newName = capturedName,
-                                    isCancelled = { cancelToken.get() },
-                                    onProgress = { deltaBytes, deltaFiles ->
-                                        val nb = bytesAcc.addAndGet(deltaBytes)
-                                        val nf = filesAcc.addAndGet(deltaFiles)
-                                        largeCopyState?.let { snap ->
-                                            largeCopyState = snap.copy(
-                                                bytesCopied = nb,
-                                                filesCopied = nf,
-                                            )
-                                        }
-                                    },
-                                    overwriteExisting = capturedOverwrite,
-                                )
-                            }
-                            largeCopyState = null
-                                when (outcome) {
-                                    is LargeCopyExecutor.CopyOutcome.Ok -> {
-                                        treeRevision++
-                                        val nextCreated = capturedCurrent.createdSoFar +
-                                            FileOpHistory.CopyEntry(source = src, dest = outcome.target)
-                                        if (capturedRest.isEmpty()) {
-                                            fileOpHistory.push(FileOpHistory.PasteCopyOp(nextCreated))
-                                            fileOpHistoryVersion++
-                                            val destLbl = dropDestLabel(rootDir, capturedCurrent.destParent)
-                                            showDropResultToast(
-                                                dropResultMessage("Copied", nextCreated.size, destLbl),
-                                                DropResultToastTone.Info,
-                                            ) { onUndoFileOp() }
-                                        } else {
-                                            pasteDialog = capturedCurrent.copy(
-                                                remaining = capturedRest,
-                                                error = null,
-                                                createdSoFar = nextCreated,
-                                            )
-                                        }
-                                    }
-                                    is LargeCopyExecutor.CopyOutcome.Cancelled -> {
-                                        treeRevision++
-                                        if (capturedCurrent.createdSoFar.isNotEmpty()) {
-                                            fileOpHistory.push(
-                                                FileOpHistory.PasteCopyOp(capturedCurrent.createdSoFar)
-                                            )
-                                            fileOpHistoryVersion++
-                                        }
-                                    }
-                                    is LargeCopyExecutor.CopyOutcome.Err -> {
-                                        pasteDialog = capturedCurrent.copy(error = outcome.message)
-                                    }
-                                }
-                            }
-                        } else {
-                            when (val result = FileTreeActions.copyFile(src, current.destParent, newName, overwriteFlag)) {
-                                is FileTreeActions.CopyResult.Ok -> {
-                                    treeRevision++
-                                    val nextCreated = current.createdSoFar +
-                                        FileOpHistory.CopyEntry(source = src, dest = result.path)
-                                    if (rest.isEmpty()) {
-                                        fileOpHistory.push(FileOpHistory.PasteCopyOp(nextCreated))
-                                        fileOpHistoryVersion++
-                                        pasteDialog = null
-                                        val destLbl = dropDestLabel(rootDir, current.destParent)
-                                        showDropResultToast(
-                                            dropResultMessage("Copied", nextCreated.size, destLbl),
-                                            DropResultToastTone.Info,
-                                        ) { onUndoFileOp() }
-                                    } else {
-                                        pasteDialog = current.copy(
-                                            remaining = rest,
-                                            error = null,
-                                            createdSoFar = nextCreated,
-                                        )
-                                    }
-                                }
-                                is FileTreeActions.CopyResult.Err -> {
-                                    pasteDialog = current.copy(error = result.message)
-                                }
-                            }
-                        }
-                    }
-                    FileTreeClipboard.Mode.Cut -> {
-                        val srcIsDir = java.nio.file.Files.isDirectory(src)
-                        val intendedNewPath = current.destParent.resolve(newName)
-                        val packageMap = if (srcIsDir) {
-                            val movingToDifferentParent = src.parent?.toAbsolutePath()?.normalize() !=
-                                current.destParent.toAbsolutePath().normalize()
-                            if (movingToDifferentParent) {
-                                FolderPackageRename.computePackageMapForMove(
-                                    oldFolder = src,
-                                    newFolder = intendedNewPath,
-                                    workspaceRoot = rootDir,
-                                    readText = readFileTextWithTabs,
-                                )
-                            } else {
-                                FolderPackageRename.computePackageMap(src, newName, readFileTextWithTabs)
-                            }
-                        } else emptyMap()
-                        val singleFilePlan = if (!srcIsDir && isKotlinSource(src) &&
-                            src.parent?.toAbsolutePath()?.normalize() !=
-                                current.destParent.toAbsolutePath().normalize()) {
-                            FolderPackageRename.planSingleFileMove(
-                                oldFile = src,
-                                newParent = current.destParent,
-                                workspaceRoot = rootDir,
-                                readText = readFileTextWithTabs,
-                            )
-                        } else null
-                        var moveOriginals: List<FileOpHistory.RewriteEntry> = emptyList()
-                        val performMove: () -> FileTreeActions.MoveResult = {
-                            val txRoot = if (srcIsDir) rootDir else null
-                            val r = FileTreeActions.moveFile(src, current.destParent, newName, txRoot, overwriteFlag)
-                            if (r is FileTreeActions.MoveResult.Ok) {
-                                remapTabsAfterRename(src, r.path)
-                                remapTreeStateAfterRename(src, r.path)
-                                if (srcIsDir) {
-                                    moveOriginals = applyFolderPackageSync(src, r.path, packageMap)
-                                } else if (singleFilePlan != null) {
-                                    moveOriginals = applySingleFileMoveSync(r.path, singleFilePlan)
-                                }
-                            }
-                            r
-                        }
-                        val result: FileTreeActions.MoveResult = if (srcIsDir) {
-                            var captured: FileTreeActions.MoveResult? = null
-                            val moveCtrl = lspRouter.controllerFor(src)
-                            val doMove = {
-                                withFileTreeWatcherClosed {
-                                    captured = performMove()
-                                }
-                            }
-                            if (moveCtrl != null) {
-                                moveCtrl.runWithClientDown("folder move: ${src.fileName} → ${current.destParent.fileName}/$newName") { doMove() }
-                            } else {
-                                doMove()
-                            }
-                            captured ?: FileTreeActions.MoveResult.Err("move did not run")
-                        } else {
-                            performMove()
-                        }
-                        when (result) {
-                            is FileTreeActions.MoveResult.Ok -> {
-                                treeRevision++
-                                val nextMoves = current.movesSoFar + (src to result.path)
-                                val nextRewriteOriginals = current.rewriteOriginalsSoFar + moveOriginals
-                                if (rest.isEmpty()) {
-                                    val cutOp = FileOpHistory.PasteCutOp(nextMoves)
-                                    val composedOp: FileOpHistory.Op = if (nextRewriteOriginals.isEmpty()) cutOp
-                                        else FileOpHistory.CompositeOp(listOf(FileOpHistory.ReferenceRewriteOp(nextRewriteOriginals), cutOp))
-                                    fileOpHistory.push(composedOp)
-                                    fileOpHistoryVersion++
-                                    FileTreeClipboard.clearCutMarking()
-                                    pasteDialog = null
-                                    val destLbl = dropDestLabel(rootDir, current.destParent)
-                                    showDropResultToast(
-                                        dropResultMessage("Moved", nextMoves.size, destLbl),
-                                        DropResultToastTone.Info,
-                                    ) { onUndoFileOp() }
-                                } else {
-                                    pasteDialog = current.copy(
-                                        remaining = rest,
-                                        error = null,
-                                        movesSoFar = nextMoves,
-                                        rewriteOriginalsSoFar = nextRewriteOriginals,
-                                    )
-                                }
-                            }
-                            is FileTreeActions.MoveResult.Err -> {
-                                pasteDialog = current.copy(error = result.message)
-                            }
-                        }
-                    }
-                }
+        val performPaste: (String, Boolean) -> Unit = { newName, overwriteOnce ->
+            fileTreeActionExecutor.performPaste(newName, overwriteOnce)
         }
         NameInputDialog(
             title = "$verb into $destLabel$countSuffix",
@@ -2690,40 +2490,10 @@ private data class DeleteEntryDialogState(
     val isMulti: Boolean get() = paths.size > 1
 }
 
-private data class PasteEntryDialogState(
-    val remaining: List<Path>,
-    val destParent: Path,
-    val mode: FileTreeClipboard.Mode,
-    val error: String? = null,
-    val createdSoFar: List<FileOpHistory.CopyEntry> = emptyList(),
-    val movesSoFar: List<Pair<Path, Path>> = emptyList(),
-    val rewriteOriginalsSoFar: List<FileOpHistory.RewriteEntry> = emptyList(),
-    val overwriteForAll: Boolean = false,
-)
-
-private data class LargeCopyDialogState(
-    val sourceName: String,
-    val destName: String,
-    val totalBytes: Long,
-    val fileCount: Int,
-    val bytesCopied: Long,
-    val filesCopied: Int,
-    val cancelToken: java.util.concurrent.atomic.AtomicBoolean,
-)
-
 private data class FileOpConfirmState(
     val isRedo: Boolean,
     val op: FileOpHistory.Op,
 )
-
-private fun dropDestLabel(rootDir: Path?, dest: Path): String {
-    val rel = FileTreeActions.relativeTo(rootDir, dest)
-    return if (rel.isEmpty() || rel == ".") (dest.fileName?.toString() ?: dest.toString()) else rel
-}
-
-private fun dropResultMessage(verb: String, count: Int, destLabel: String): String =
-    if (count == 1) "$verb 1 item into $destLabel"
-    else "$verb $count items into $destLabel"
 
 private var backendsRegistered = false
 
