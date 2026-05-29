@@ -241,4 +241,118 @@ class AutoCloseTest {
         assertEquals("(", result.text)
         assertEquals(1, result.caret)
     }
+
+    @Test
+    fun `handleBackspacePair removes both parens when caret between empty pair`() {
+        val r = AutoClose.handleBackspacePair("foo()", 4)
+        assertEquals("foo", r?.text)
+        assertEquals(3, r?.caret)
+    }
+
+    @Test
+    fun `handleBackspacePair removes both braces when caret between empty pair`() {
+        val r = AutoClose.handleBackspacePair("a{}b", 2)
+        assertEquals("ab", r?.text)
+        assertEquals(1, r?.caret)
+    }
+
+    @Test
+    fun `handleBackspacePair removes empty bracket pair`() {
+        val r = AutoClose.handleBackspacePair("[]", 1)
+        assertEquals("", r?.text)
+        assertEquals(0, r?.caret)
+    }
+
+    @Test
+    fun `handleBackspacePair removes empty double-quote pair`() {
+        val r = AutoClose.handleBackspacePair("x = \"\"", 5)
+        assertEquals("x = ", r?.text)
+        assertEquals(4, r?.caret)
+    }
+
+    @Test
+    fun `handleBackspacePair returns null when paren has content`() {
+        val r = AutoClose.handleBackspacePair("(x)", 1)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleBackspacePair returns null when next char does not match closer`() {
+        val r = AutoClose.handleBackspacePair("(]", 1)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleBackspacePair returns null when prev is not an opener`() {
+        val r = AutoClose.handleBackspacePair("ab)", 2)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleBackspacePair returns null at start of text`() {
+        val r = AutoClose.handleBackspacePair("", 0)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleHtmlTagClose inserts matching closer for simple tag`() {
+        val r = AutoClose.handleHtmlTagClose("<div>", 5)
+        assertEquals("<div></div>", r?.text)
+        assertEquals(5, r?.caret)
+    }
+
+    @Test
+    fun `handleHtmlTagClose preserves trailing content after caret`() {
+        val r = AutoClose.handleHtmlTagClose("<section>tail", 9)
+        assertEquals("<section></section>tail", r?.text)
+        assertEquals(9, r?.caret)
+    }
+
+    @Test
+    fun `handleHtmlTagClose preserves indent across line for nested tag`() {
+        val r = AutoClose.handleHtmlTagClose("<body>\n    <p>", 14)
+        assertEquals("<body>\n    <p></p>", r?.text)
+        assertEquals(14, r?.caret)
+    }
+
+    @Test
+    fun `handleHtmlTagClose strips attribute list when deriving tag name`() {
+        val r = AutoClose.handleHtmlTagClose("<a href=\"https://x\">", 20)
+        assertEquals("<a href=\"https://x\"></a>", r?.text)
+        assertEquals(20, r?.caret)
+    }
+
+    @Test
+    fun `handleHtmlTagClose skips void elements like br`() {
+        assertEquals(null, AutoClose.handleHtmlTagClose("<br>", 4))
+        assertEquals(null, AutoClose.handleHtmlTagClose("<img src=\"x\">", 13))
+        assertEquals(null, AutoClose.handleHtmlTagClose("<input>", 7))
+    }
+
+    @Test
+    fun `handleHtmlTagClose skips self-closing tag`() {
+        val r = AutoClose.handleHtmlTagClose("<custom />", 10)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleHtmlTagClose skips closing tag, comment, doctype, processing instruction`() {
+        assertEquals(null, AutoClose.handleHtmlTagClose("</div>", 6))
+        assertEquals(null, AutoClose.handleHtmlTagClose("<!--x-->", 8))
+        assertEquals(null, AutoClose.handleHtmlTagClose("<!DOCTYPE html>", 15))
+        assertEquals(null, AutoClose.handleHtmlTagClose("<?xml version=\"1.0\"?>", 21))
+    }
+
+    @Test
+    fun `handleHtmlTagClose ignores text without preceding open angle`() {
+        val r = AutoClose.handleHtmlTagClose("plain text>", 11)
+        assertEquals(null, r)
+    }
+
+    @Test
+    fun `handleHtmlTagClose keeps custom tag names with dash`() {
+        val r = AutoClose.handleHtmlTagClose("<my-element>", 12)
+        assertEquals("<my-element></my-element>", r?.text)
+        assertEquals(12, r?.caret)
+    }
 }

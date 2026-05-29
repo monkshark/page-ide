@@ -98,6 +98,7 @@ fun TabBar(
     onDragStart: () -> Unit = {},
     onDragEnd: () -> Unit = {},
     contextActions: TabContextActions? = null,
+    showCloseButton: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
@@ -248,6 +249,7 @@ fun TabBar(
                                             elevated = false,
                                             alpha = if (isDragged) 0f else 1f,
                                             onClose = { onClose(index) },
+                                            showCloseButton = showCloseButton,
                                         )
                                     }
                                 } else {
@@ -258,6 +260,7 @@ fun TabBar(
                                         elevated = false,
                                         alpha = if (isDragged) 0f else 1f,
                                         onClose = { onClose(index) },
+                                        showCloseButton = showCloseButton,
                                     )
                                 }
                             }
@@ -279,6 +282,7 @@ fun TabBar(
                             elevated = true,
                             alpha = 1f,
                             onClose = {},
+                            showCloseButton = showCloseButton,
                         )
                     }
                 }
@@ -354,6 +358,7 @@ private fun TabChip(
     elevated: Boolean,
     alpha: Float,
     onClose: () -> Unit,
+    showCloseButton: Boolean = true,
 ) {
     val name = tab.path.fileName?.toString() ?: tab.path.toString()
     val bg = if (isActive) MaterialTheme.colorScheme.background else Color.Transparent
@@ -392,8 +397,12 @@ private fun TabChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.width(8.dp))
-            CloseButton(dirty = tab.dirty, onClick = onClose)
+            if (showCloseButton) {
+                Spacer(Modifier.width(8.dp))
+                CloseButton(dirty = tab.dirty, onClick = onClose)
+            } else {
+                Spacer(Modifier.width(8.dp))
+            }
         }
         Box(
             modifier = Modifier

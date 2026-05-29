@@ -92,6 +92,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.rememberCursorPositionProvider
 import kotlinx.coroutines.delay
 import page.editor.EditHistory
 import page.editor.EditSnapshot
@@ -128,6 +130,12 @@ fun CodeEditor(
     viewportHeightProvider: (() -> Float)? = null,
     focusRequestVersion: Int = 0,
     caretBringIntoViewEnabled: Boolean = true,
+    languageMode: String? = null,
+    autoPairs: Boolean = true,
+    autoHtmlTags: Boolean = true,
+    backspaceDeletesPair: Boolean = true,
+    tabSize: Int = 4,
+    useSpacesForTab: Boolean = true,
 ) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
@@ -137,7 +145,6 @@ fun CodeEditor(
     var isFocused by remember { mutableStateOf(false) }
     var caretVisible by remember { mutableStateOf(true) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
 
     val transformed = remember(value.text, visualTransformation) {
         visualTransformation.filter(AnnotatedString(value.text))
@@ -289,6 +296,12 @@ fun CodeEditor(
                     onRedo = performRedo,
                     preferredX = preferredX,
                     viewportHeightPx = latestViewportHeight?.invoke() ?: 0f,
+                    languageMode = languageMode,
+                    autoPairs = autoPairs,
+                    autoHtmlTags = autoHtmlTags,
+                    backspaceDeletesPair = backspaceDeletesPair,
+                    tabSize = tabSize,
+                    useSpacesForTab = useSpacesForTab,
                 )
             }
             .pointerInput(Unit) {
@@ -341,7 +354,6 @@ fun CodeEditor(
                                         if (sel.collapsed || origOff < sel.min || origOff > sel.max) {
                                             latestOnChange(latestValue.copy(selection = TextRange(origOff)))
                                         }
-                                        menuOffset = DpOffset(change.position.x.toDp(), change.position.y.toDp())
                                         menuExpanded = true
                                         focusRequester.requestFocus()
                                         change.consume()
@@ -615,54 +627,58 @@ fun CodeEditor(
                 )
             }
         }
-        CompactDropdown(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-            offset = menuOffset,
-        ) {
-            val sel = value.selection
-            val hasSelection = !sel.collapsed
-            CompactMenuItem(
-                label = "잘라내기",
-                enabled = hasSelection,
-                onClick = {
-                    if (!sel.collapsed) {
-                        clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
-                        val newText = value.text.removeRange(sel.min, sel.max)
-                        onValueChange(value.copy(text = newText, selection = TextRange(sel.min)))
-                    }
-                    menuExpanded = false
-                },
-            )
-            CompactMenuItem(
-                label = "복사",
-                enabled = hasSelection,
-                onClick = {
-                    if (!sel.collapsed) {
-                        clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
-                    }
-                    menuExpanded = false
-                },
-            )
-            CompactMenuItem(
-                label = "붙여넣기",
-                onClick = {
-                    val pasted = clipboard.getText()?.text.orEmpty()
-                    if (pasted.isNotEmpty()) {
-                        val newText = value.text.substring(0, sel.min) + pasted + value.text.substring(sel.max)
-                        val caret = sel.min + pasted.length
-                        onValueChange(value.copy(text = newText, selection = TextRange(caret)))
-                    }
-                    menuExpanded = false
-                },
-            )
-            CompactMenuItem(
-                label = "전체 선택",
-                onClick = {
-                    onValueChange(value.copy(selection = TextRange(0, value.text.length)))
-                    menuExpanded = false
-                },
-            )
+        if (menuExpanded) {
+            Popup(
+                onDismissRequest = { menuExpanded = false },
+                popupPositionProvider = rememberCursorPositionProvider(),
+                properties = PopupProperties(focusable = true),
+            ) {
+                CompactMenuContainer {
+                    val sel = value.selection
+                    val hasSelection = !sel.collapsed
+                    CompactMenuItem(
+                        label = "잘라내기",
+                        enabled = hasSelection,
+                        onClick = {
+                            if (!sel.collapsed) {
+                                clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
+                                val newText = value.text.removeRange(sel.min, sel.max)
+                                onValueChange(value.copy(text = newText, selection = TextRange(sel.min)))
+                            }
+                            menuExpanded = false
+                        },
+                    )
+                    CompactMenuItem(
+                        label = "복사",
+                        enabled = hasSelection,
+                        onClick = {
+                            if (!sel.collapsed) {
+                                clipboard.setText(AnnotatedString(value.text.substring(sel.min, sel.max)))
+                            }
+                            menuExpanded = false
+                        },
+                    )
+                    CompactMenuItem(
+                        label = "붙여넣기",
+                        onClick = {
+                            val pasted = clipboard.getText()?.text.orEmpty()
+                            if (pasted.isNotEmpty()) {
+                                val newText = value.text.substring(0, sel.min) + pasted + value.text.substring(sel.max)
+                                val caret = sel.min + pasted.length
+                                onValueChange(value.copy(text = newText, selection = TextRange(caret)))
+                            }
+                            menuExpanded = false
+                        },
+                    )
+                    CompactMenuItem(
+                        label = "전체 선택",
+                        onClick = {
+                            onValueChange(value.copy(selection = TextRange(0, value.text.length)))
+                            menuExpanded = false
+                        },
+                    )
+                }
+            }
         }
         val hoverTextSnapshot = hoverText
         val hoverDiagnosticSnapshot = hoverDiagnostic
@@ -1318,6 +1334,12 @@ private fun handleDefaultKey(
     onRedo: () -> Boolean,
     preferredX: androidx.compose.runtime.MutableState<Float?>,
     viewportHeightPx: Float,
+    languageMode: String? = null,
+    autoPairs: Boolean = true,
+    autoHtmlTags: Boolean = true,
+    backspaceDeletesPair: Boolean = true,
+    tabSize: Int = 4,
+    useSpacesForTab: Boolean = true,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
     val text = value.text
@@ -1447,7 +1469,11 @@ private fun handleDefaultKey(
             true
         }
         Key.Backspace -> {
-            CodeEditorActions.applyBackspace(value)?.let(onChange)
+            CodeEditorActions.applyBackspace(
+                value,
+                backspaceDeletesPair = backspaceDeletesPair,
+                tabSize = tabSize,
+            )?.let(onChange)
             true
         }
         Key.Delete -> {
@@ -1455,11 +1481,11 @@ private fun handleDefaultKey(
             true
         }
         Key.Enter, Key.NumPadEnter -> {
-            onChange(CodeEditorActions.applyEnter(value))
+            onChange(CodeEditorActions.applyEnter(value, tabSize, useSpacesForTab))
             true
         }
         Key.Tab -> {
-            onChange(CodeEditorActions.applyTab(value, shift))
+            onChange(CodeEditorActions.applyTab(value, shift, tabSize, useSpacesForTab))
             true
         }
         else -> {
@@ -1467,7 +1493,7 @@ private fun handleDefaultKey(
             val cp = event.utf16CodePoint
             if (cp == 0 || cp == 0xFFFF || cp < 0x20 || cp == 0x7F) return false
             val ch = String(Character.toChars(cp))
-            onChange(CodeEditorActions.applyCharInsert(value, ch))
+            onChange(CodeEditorActions.applyCharInsert(value, ch, languageMode, autoPairs, autoHtmlTags, tabSize))
             true
         }
     }

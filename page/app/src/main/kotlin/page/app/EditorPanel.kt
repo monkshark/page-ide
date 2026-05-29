@@ -159,6 +159,7 @@ fun EditorPanel(
     jdkVersion: String? = null,
     jdkVersionTooltip: String? = null,
     onJdkVersionClick: (() -> Unit)? = null,
+    pageSettings: PageSettings = PageSettings(),
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {
@@ -240,8 +241,10 @@ fun EditorPanel(
     val hintColor = MaterialTheme.colorScheme.tertiary
     val tabstopActiveColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val tabstopPendingColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
-    val diagnosticDecorations = remember(value.text, diagnostics) {
-        diagnostics.mapNotNull { d ->
+    val showInlineDiagnostics = pageSettings.lsp.showInlineDiagnostics
+    val diagnosticDecorations = remember(value.text, diagnostics, showInlineDiagnostics) {
+        if (!showInlineDiagnostics) emptyList()
+        else diagnostics.mapNotNull { d ->
             val startOff = lineColToOffset(value.text, d.start.line, d.start.character)
             val endOff = lineColToOffset(value.text, d.end.line, d.end.character)
             if (startOff < 0 || endOff < 0 || endOff <= startOff) return@mapNotNull null
@@ -295,7 +298,7 @@ fun EditorPanel(
         val safeOff = off.coerceIn(0, text.length)
         if (isInStringOrComment(tokens, text, safeOff)) return@LaunchedEffect
         val pos = TextBuffer(text).lineColOf(safeOff)
-        delay(350)
+        delay(pageSettings.lsp.hoverDelayMs.toLong().coerceAtLeast(0L))
         if (token != lspHoverRequestToken) return@LaunchedEffect
         cb(pos.line, pos.col).whenComplete { info, _ ->
             if (token != lspHoverRequestToken || info == null) return@whenComplete
@@ -377,9 +380,9 @@ fun EditorPanel(
     }
 
     var inlayHints by remember(activePath) { mutableStateOf<List<InlayHintItem>>(emptyList()) }
-    LaunchedEffect(activePath, value.text, onRequestInlayHints) {
+    LaunchedEffect(activePath, value.text, onRequestInlayHints, pageSettings.lsp.showInlayHints) {
         val cb = onRequestInlayHints
-        if (cb == null) {
+        if (cb == null || !pageSettings.lsp.showInlayHints) {
             inlayHints = emptyList()
             return@LaunchedEffect
         }
@@ -446,11 +449,13 @@ fun EditorPanel(
         }
     }
 
+    val editorFontSize = pageSettings.editor.fontSize.sp
+    val editorLineHeight = (pageSettings.editor.fontSize * 1.43f).sp
     val textStyle = TextStyle(
         color = MaterialTheme.colorScheme.onBackground,
         fontFamily = EditorFontFamily,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontSize = editorFontSize,
+        lineHeight = editorLineHeight,
         lineHeightStyle = LineHeightStyle(
             alignment = LineHeightStyle.Alignment.Center,
             trim = LineHeightStyle.Trim.None,
@@ -762,14 +767,24 @@ fun EditorPanel(
         if (isInsertOne && !didTrigger) {
             val inserted = newText[newCaret - 1]
             val isWordChar = inserted.isLetter() || inserted == '_'
-            val prevIsBoundary = newCaret < 2 ||
-                !(newText[newCaret - 2].isLetterOrDigit() || newText[newCaret - 2] == '_')
             val insideString = isInsideStringLiteral(newText, newCaret - 1)
             when {
                 inserted == '.' && !insideString -> { triggerCompletion(newCaret, newCaret, "."); didTrigger = true }
                 inserted == ':' && !insideString -> { triggerCompletion(newCaret, newCaret, null); didTrigger = true }
-                isWordChar && !insideString && completionTriggerOffset < 0 && prevIsBoundary -> {
-                    triggerCompletion(newCaret - 1, newCaret, null); didTrigger = true
+                isWordChar && !insideString && completionTriggerOffset < 0 -> {
+                    val midWordEnabled = pageSettings.lsp.triggerCompletionMidWord
+                    val prevIsBoundary = newCaret < 2 ||
+                        !(newText[newCaret - 2].isLetterOrDigit() || newText[newCaret - 2] == '_')
+                    if (midWordEnabled || prevIsBoundary) {
+                        var wordStart = newCaret - 1
+                        while (wordStart > 0) {
+                            val c = newText[wordStart - 1]
+                            if (!(c.isLetterOrDigit() || c == '_')) break
+                            wordStart--
+                        }
+                        triggerCompletion(wordStart, newCaret, null)
+                        didTrigger = true
+                    }
                 }
             }
         }
@@ -906,7 +921,8 @@ fun EditorPanel(
                 }
                 .verticalScroll(scrollState)
                 .drawBehind {
-                    val lineH = 20.sp.toPx()
+                    if (!pageSettings.editor.highlightCurrentLine) return@drawBehind
+                    val lineH = editorLineHeight.toPx()
                     val topPad = 16.dp.toPx()
                     val y = topPad + caret.line * lineH
                     drawRect(
@@ -916,17 +932,19 @@ fun EditorPanel(
                     )
                 },
         ) {
-            LineNumberGutter(
-                lines = gutterLines,
-                currentOriginalLine = caret.line,
-                onToggleFold = { line ->
-                    val region = foldStartByLine[line] ?: return@LineNumberGutter
-                    foldedRegions = if (region in foldedRegions) foldedRegions - region
-                    else foldedRegions + region
-                },
-                onPickKeyword = onPickKeyword,
-                textStyle = textStyle,
-            )
+            if (pageSettings.editor.showLineNumbers) {
+                LineNumberGutter(
+                    lines = gutterLines,
+                    currentOriginalLine = caret.line,
+                    onToggleFold = { line ->
+                        val region = foldStartByLine[line] ?: return@LineNumberGutter
+                        foldedRegions = if (region in foldedRegions) foldedRegions - region
+                        else foldedRegions + region
+                    },
+                    onPickKeyword = onPickKeyword,
+                    textStyle = textStyle,
+                )
+            }
             CodeEditor(
                 value = value,
                 onValueChange = onValueChange,
@@ -1193,6 +1211,15 @@ fun EditorPanel(
                         message = d.message,
                     )
                 },
+                languageMode = remember(activePath) {
+                    val ext = activePath?.fileName?.toString()?.substringAfterLast('.', "")?.lowercase()
+                    if (ext == "html" || ext == "htm" || ext == "xhtml") "html" else null
+                },
+                autoPairs = pageSettings.autoInput.pairs,
+                autoHtmlTags = pageSettings.autoInput.htmlTags,
+                backspaceDeletesPair = pageSettings.autoInput.backspaceDeletesPair,
+                tabSize = pageSettings.editor.tabSize,
+                useSpacesForTab = pageSettings.editor.useSpacesForTab,
                 completionItems = completionDisplay,
                 completionSelectedIndex = completionSelectedIndex,
                 completionAnchorOffset = completionTriggerOffset.takeIf { it >= 0 },
@@ -1738,15 +1765,16 @@ private fun EditorStatusBar(
                 color = MaterialTheme.colorScheme.secondary,
                 onClick = onTodoToggle,
             )
-            val showLifecycle = !lspStatusText.isNullOrBlank()
             val showActivities = lspActivities.isNotEmpty()
+            val showLifecycle = !lspStatusText.isNullOrBlank()
             val showJdk = !jdkVersion.isNullOrBlank()
-            if (showLifecycle || showActivities || showJdk) {
+            if (showActivities || showLifecycle || showJdk) {
                 Box(modifier = Modifier.weight(1f))
+                if (showActivities) {
+                    LspActivitiesItem(activities = lspActivities)
+                }
                 if (showLifecycle) {
                     LspLifecycleItem(text = lspStatusText!!, onClick = onLspStatusClick)
-                } else if (showActivities) {
-                    LspActivitiesItem(activities = lspActivities)
                 }
                 if (showJdk) {
                     RuntimeVersionItem(label = jdkVersion!!, tooltip = jdkVersionTooltip, onClick = onJdkVersionClick)
@@ -1758,19 +1786,10 @@ private fun EditorStatusBar(
 
 @Composable
 private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
-    val isLoading = text.contains("starting", ignoreCase = true)
     val baseColor = MaterialTheme.colorScheme.onSurfaceVariant
     val color = if (onClick != null) MaterialTheme.colorScheme.primary else baseColor
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Row(verticalAlignment = Alignment.CenterVertically, modifier = mod) {
-        if (isLoading) {
-            androidx.compose.material3.LinearProgressIndicator(
-                modifier = Modifier.width(72.dp).height(3.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
-            androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-        }
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,

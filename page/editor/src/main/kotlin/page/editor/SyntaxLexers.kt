@@ -32,14 +32,11 @@ object SyntaxLexers {
             ext == "rb" -> TreeSitterLexers.ruby
             ext == "php" -> TreeSitterLexers.php
             ext == "swift" -> TreeSitterLexers.swift
-            ext == "scala" || ext == "sc" -> TreeSitterLexers.scala
-            ext == "lua" -> TreeSitterLexers.lua
             ext == "yaml" || ext == "yml" -> TreeSitterLexers.yaml
             ext == "html" || ext == "htm" -> TreeSitterLexers.html
             ext == "css" || ext == "scss" || ext == "less" -> TreeSitterLexers.css
             ext == "md" || ext == "markdown" -> TreeSitterLexers.markdown
             ext == "sql" -> TreeSitterLexers.sql
-            ext == "zig" -> TreeSitterLexers.zig
             ext == "vue" -> TreeSitterLexers.vue
             ext == "svelte" -> TreeSitterLexers.svelte
             name == "dockerfile" || ext == "dockerfile" -> TreeSitterLexers.dockerfile

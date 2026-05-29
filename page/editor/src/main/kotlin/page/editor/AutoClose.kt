@@ -19,6 +19,54 @@ object AutoClose {
     )
     private val closers = pairs.values.toSet()
 
+    private val htmlVoidTags = setOf(
+        "area", "base", "br", "col", "embed", "hr", "img", "input",
+        "link", "meta", "param", "source", "track", "wbr",
+    )
+
+    /**
+     * After typing `>` to close an opening HTML tag, insert the matching close tag and
+     * leave the caret between them: `<div|` → `<div>|</div>`.
+     * Returns null when the `>` does not finish an HTML opening tag (closer, void element,
+     * self-closing, comment, doctype, processing instruction).
+     */
+    fun handleHtmlTagClose(text: String, caret: Int): TextEdit? {
+        if (caret <= 0 || caret > text.length) return null
+        if (text[caret - 1] != '>') return null
+        val before = text.substring(0, caret - 1)
+        val after = text.substring(caret)
+        val ltIdx = before.lastIndexOf('<')
+        if (ltIdx < 0) return null
+        if (before.indexOf('>', ltIdx + 1) >= 0) return null
+        val inside = before.substring(ltIdx + 1)
+        if (inside.isEmpty()) return null
+        val firstChar = inside[0]
+        if (firstChar == '/' || firstChar == '!' || firstChar == '?') return null
+        if (inside.endsWith("/")) return null
+        val tagEnd = inside.indexOfFirst { it == ' ' || it == '\t' || it == '\n' }
+        val tagName = if (tagEnd < 0) inside else inside.substring(0, tagEnd)
+        if (tagName.isEmpty() || !tagName[0].isLetter()) return null
+        if (tagName.any { !(it.isLetterOrDigit() || it == '-' || it == ':') }) return null
+        if (tagName.lowercase() in htmlVoidTags) return null
+        val newText = before + ">" + "</" + tagName + ">" + after
+        return TextEdit(newText, caret)
+    }
+
+    /**
+     * If caret sits between a matched pair like `(|)`, `[|]`, `{|}`, `"|"`, `'|'`,
+     * a backspace removes both characters and moves caret left by one.
+     * Returns null if no pair to collapse — caller should fall through to normal backspace.
+     */
+    fun handleBackspacePair(text: String, caret: Int): TextEdit? {
+        if (caret <= 0 || caret > text.length) return null
+        val prev = text.getOrNull(caret - 1) ?: return null
+        val expectedCloser = pairs[prev] ?: return null
+        val next = text.getOrNull(caret) ?: return null
+        if (next != expectedCloser) return null
+        val stripped = text.substring(0, caret - 1) + text.substring(caret + 1)
+        return TextEdit(stripped, caret - 1)
+    }
+
     fun apply(old: TextEdit, new: TextEdit): TextEdit {
         if (old.selectionStart != old.selectionEnd) return wrapSelection(old, new)
 

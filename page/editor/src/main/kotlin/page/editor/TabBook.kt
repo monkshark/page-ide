@@ -137,6 +137,17 @@ data class TabBook(
         return copy(tabs = updated)
     }
 
+    fun markPathSaved(path: Path, savedText: String): TabBook {
+        var changed = false
+        val updated = tabs.map { t ->
+            if (t.path == path && t.savedText != savedText) {
+                changed = true
+                t.copy(savedText = savedText)
+            } else t
+        }
+        return if (changed) copy(tabs = updated) else this
+    }
+
     fun togglePinned(index: Int): TabBook {
         if (index !in tabs.indices) return this
         val tab = tabs[index]

@@ -21,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.rememberCursorPositionProvider
 
 @Composable
 fun CompactMenuContainer(
@@ -114,10 +114,9 @@ object CompactContextMenuRepresentation : ContextMenuRepresentation {
     override fun Representation(state: ContextMenuState, items: () -> List<ContextMenuItem>) {
         val status = state.status
         if (status is ContextMenuState.Status.Open) {
-            val positionPx = status.rect.center
             Popup(
                 onDismissRequest = { state.status = ContextMenuState.Status.Closed },
-                popupPositionProvider = rememberContextMenuPositionProvider(positionPx),
+                popupPositionProvider = rememberCursorPositionProvider(),
                 properties = PopupProperties(focusable = true),
             ) {
                 CompactMenuContainer {
@@ -187,25 +186,3 @@ private fun rememberAnchorBelowPositionProvider(offsetPx: IntOffset): PopupPosit
     }
 }
 
-@Composable
-private fun rememberContextMenuPositionProvider(positionPx: Offset): PopupPositionProvider {
-    return remember(positionPx) {
-        object : PopupPositionProvider {
-            override fun calculatePosition(
-                anchorBounds: IntRect,
-                windowSize: IntSize,
-                layoutDirection: LayoutDirection,
-                popupContentSize: IntSize,
-            ): IntOffset {
-                val x = anchorBounds.left + positionPx.x.toInt()
-                val y = anchorBounds.top + positionPx.y.toInt()
-                val maxX = windowSize.width - popupContentSize.width
-                val maxY = windowSize.height - popupContentSize.height
-                return IntOffset(
-                    x.coerceIn(0, maxOf(0, maxX)),
-                    y.coerceIn(0, maxOf(0, maxY)),
-                )
-            }
-        }
-    }
-}

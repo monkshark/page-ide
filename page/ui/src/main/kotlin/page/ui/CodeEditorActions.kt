@@ -10,19 +10,33 @@ import page.editor.WordBoundary
 
 internal object CodeEditorActions {
 
-    fun applyTab(value: TextFieldValue, shift: Boolean): TextFieldValue {
+    fun applyTab(
+        value: TextFieldValue,
+        shift: Boolean,
+        tabSize: Int = Indent.TAB_UNIT,
+        useSpaces: Boolean = true,
+    ): TextFieldValue {
         val edit = TextEdit(value.text, value.selection.start, value.selection.end)
-        val r = if (shift) Indent.handleShiftTab(edit) else Indent.handleTab(edit)
+        val r = if (shift) Indent.handleShiftTab(edit, tabSize, useSpaces)
+        else Indent.handleTab(edit, tabSize, useSpaces)
         return value.copy(text = r.text, selection = TextRange(r.selectionStart, r.selectionEnd))
     }
 
-    fun applyEnter(value: TextFieldValue): TextFieldValue {
+    fun applyEnter(
+        value: TextFieldValue,
+        tabSize: Int = Indent.TAB_UNIT,
+        useSpaces: Boolean = true,
+    ): TextFieldValue {
         val edit = TextEdit(value.text, value.selection.start, value.selection.end)
-        val r = Indent.handleEnter(edit)
+        val r = Indent.handleEnter(edit, tabSize, useSpaces)
         return value.copy(text = r.text, selection = TextRange(r.selectionStart, r.selectionEnd))
     }
 
-    fun applyBackspace(value: TextFieldValue): TextFieldValue? {
+    fun applyBackspace(
+        value: TextFieldValue,
+        backspaceDeletesPair: Boolean = true,
+        tabSize: Int = Indent.TAB_UNIT,
+    ): TextFieldValue? {
         val sel = value.selection
         if (!sel.collapsed) {
             return value.copy(
@@ -30,7 +44,12 @@ internal object CodeEditorActions {
                 selection = TextRange(sel.min),
             )
         }
-        Indent.handleBackspace(TextEdit(value.text, sel.end))?.let {
+        if (backspaceDeletesPair) {
+            AutoClose.handleBackspacePair(value.text, sel.end)?.let {
+                return value.copy(text = it.text, selection = TextRange(it.caret))
+            }
+        }
+        Indent.handleBackspace(TextEdit(value.text, sel.end), tabSize)?.let {
             return value.copy(text = it.text, selection = TextRange(it.caret))
         }
         if (sel.end == 0) return null
@@ -105,14 +124,24 @@ internal object CodeEditorActions {
         return value.copy(text = r.text, selection = TextRange(r.selectionStart, r.selectionEnd))
     }
 
-    fun applyCharInsert(value: TextFieldValue, ch: String): TextFieldValue {
+    fun applyCharInsert(
+        value: TextFieldValue,
+        ch: String,
+        languageMode: String? = null,
+        autoPairs: Boolean = true,
+        autoHtmlTags: Boolean = true,
+        tabSize: Int = Indent.TAB_UNIT,
+    ): TextFieldValue {
         val sel = value.selection
         val oldEdit = TextEdit(value.text, sel.start, sel.end)
         val inserted = value.text.substring(0, sel.min) + ch + value.text.substring(sel.max)
         val caret = sel.min + ch.length
         val newEdit = TextEdit(inserted, caret)
-        val withAutoClose = AutoClose.apply(oldEdit, newEdit)
-        val withUnindent = Indent.maybeUnindentClosingBrace(oldEdit, withAutoClose)
+        val withAutoClose = if (autoPairs) AutoClose.apply(oldEdit, newEdit) else newEdit
+        val withHtmlTag = if (autoHtmlTags && languageMode == "html" && ch == ">" && sel.collapsed) {
+            AutoClose.handleHtmlTagClose(withAutoClose.text, withAutoClose.caret) ?: withAutoClose
+        } else withAutoClose
+        val withUnindent = Indent.maybeUnindentClosingBrace(oldEdit, withHtmlTag, tabSize)
         return value.copy(
             text = withUnindent.text,
             selection = TextRange(withUnindent.caret),
