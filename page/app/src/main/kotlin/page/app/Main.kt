@@ -9,6 +9,9 @@ import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
+import page.app.state.EditorWorkspaceState
+import page.app.state.LayoutUiState
+import page.app.state.WorkspaceState
 import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
@@ -134,33 +137,36 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         width = 1280.dp,
         height = 800.dp,
     )
-    var primaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
-    var secondaryPane: EditorPaneState by remember { mutableStateOf(EditorPaneState()) }
-    var focusedPane: PaneSide by remember { mutableStateOf(PaneSide.PRIMARY) }
-    var rootDir: Path? by remember { mutableStateOf(null) }
-    var expanded: Set<Path> by remember { mutableStateOf(emptySet()) }
-    var treeSelection: Set<Path> by remember { mutableStateOf(emptySet()) }
-    var treeRevision by remember { mutableStateOf(0) }
-    var editorScrollByPath: Map<Path, EditorScrollSnapshot> by remember { mutableStateOf(emptyMap()) }
-    var sidebarWidth: Dp by remember { mutableStateOf(260.dp) }
+    val editorWorkspace = remember { EditorWorkspaceState() }
+    var primaryPane by editorWorkspace::primaryPane
+    var secondaryPane by editorWorkspace::secondaryPane
+    var focusedPane by editorWorkspace::focusedPane
+    val workspaceState = remember { WorkspaceState() }
+    var rootDir by workspaceState::rootDir
+    var expanded by workspaceState::expanded
+    var treeSelection by workspaceState::treeSelection
+    var treeRevision by workspaceState::treeRevision
+    var editorScrollByPath by editorWorkspace::editorScrollByPath
+    val layoutUiState = remember { LayoutUiState() }
+    var sidebarWidth: Dp by layoutUiState::sidebarWidth
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
     var quickOpen by remember { mutableStateOf(false) }
     var quickOpenIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
     var findInFiles by remember { mutableStateOf(false) }
     var findInFilesIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
-    var splitEnabled by remember { mutableStateOf(false) }
-    var splitOrientation by remember { mutableStateOf(SplitOrientation.HORIZONTAL) }
-    var splitState by remember { mutableStateOf(SplitPaneState(ratio = 0.5f)) }
-    var problemsOpen by remember { mutableStateOf(false) }
-    var problemsHeight: Dp by remember { mutableStateOf(220.dp) }
-    var problemsCollapsed by remember { mutableStateOf(emptySet<String>()) }
-    var problemsFileOrder by remember { mutableStateOf(emptyList<String>()) }
-    var todoOpen by remember { mutableStateOf(false) }
-    var todoHeight: Dp by remember { mutableStateOf(220.dp) }
-    var todoCollapsed by remember { mutableStateOf(emptySet<String>()) }
-    var todoFileOrder by remember { mutableStateOf(emptyList<String>()) }
-    var terminalOpen by remember { mutableStateOf(false) }
-    var terminalHeight: Dp by remember { mutableStateOf(240.dp) }
+    var splitEnabled by editorWorkspace::splitEnabled
+    var splitOrientation by editorWorkspace::splitOrientation
+    var splitState by editorWorkspace::splitState
+    var problemsOpen by layoutUiState::problemsOpen
+    var problemsHeight: Dp by layoutUiState::problemsHeight
+    var problemsCollapsed by layoutUiState::problemsCollapsed
+    var problemsFileOrder by layoutUiState::problemsFileOrder
+    var todoOpen by layoutUiState::todoOpen
+    var todoHeight: Dp by layoutUiState::todoHeight
+    var todoCollapsed by layoutUiState::todoCollapsed
+    var todoFileOrder by layoutUiState::todoFileOrder
+    var terminalOpen by layoutUiState::terminalOpen
+    var terminalHeight: Dp by layoutUiState::terminalHeight
     val terminalScope = rememberCoroutineScope()
     val terminalManager = remember(rootDir) {
         val dir = rootDir ?: Path.of(System.getProperty("user.home"))
@@ -171,14 +177,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
     var runState: RunConfigsState by remember { mutableStateOf(RunConfigsState()) }
     var runDialogOpen by remember { mutableStateOf(false) }
-    var outputOpen by remember { mutableStateOf(false) }
-    var outputHeight: Dp by remember {
-        mutableStateOf(
-            (java.awt.Toolkit.getDefaultToolkit().screenSize.height / 2f)
-                .coerceIn(240f, 1200f)
-                .dp,
-        )
-    }
+    var outputOpen by layoutUiState::outputOpen
+    var outputHeight: Dp by layoutUiState::outputHeight
     val outputState = remember { OutputPanelState() }
     val runScope = rememberCoroutineScope()
     val runController = remember {
@@ -188,16 +188,16 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         onDispose { runController.stop() }
     }
     var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
-    var referencesHeight: Dp by remember { mutableStateOf(220.dp) }
-    var createDialog: CreateEntryDialogState? by remember { mutableStateOf(null) }
-    var renameDialog: RenameEntryDialogState? by remember { mutableStateOf(null) }
-    var deleteDialog: DeleteEntryDialogState? by remember { mutableStateOf(null) }
-    var pasteDialog: PasteEntryDialogState? by remember { mutableStateOf(null) }
-    var largeCopyState: LargeCopyDialogState? by remember { mutableStateOf(null) }
+    var referencesHeight: Dp by layoutUiState::referencesHeight
+    var createDialog: CreateEntryDialogState? by layoutUiState::createDialog
+    var renameDialog: RenameEntryDialogState? by layoutUiState::renameDialog
+    var deleteDialog: DeleteEntryDialogState? by layoutUiState::deleteDialog
+    var pasteDialog: PasteEntryDialogState? by layoutUiState::pasteDialog
+    var largeCopyState: LargeCopyDialogState? by layoutUiState::largeCopyState
     val largeCopyScope = rememberCoroutineScope()
     val fileOpHistory = remember { FileOpHistory.Stack() }
     var fileOpHistoryVersion by remember { mutableStateOf(0) }
-    var fileTreeFocused by remember { mutableStateOf(false) }
+    var fileTreeFocused by workspaceState::fileTreeFocused
     var fileOpConfirm: FileOpConfirmState? by remember { mutableStateOf(null) }
     var pendingTreeFocusTick by remember { mutableStateOf(0) }
     var pageSettings: PageSettings by remember {
@@ -242,27 +242,17 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         PaneSide.SECONDARY -> undoTrackerSecondary
     }
 
-    fun paneOf(side: PaneSide): EditorPaneState = when (side) {
-        PaneSide.PRIMARY -> primaryPane
-        PaneSide.SECONDARY -> secondaryPane
-    }
+    fun paneOf(side: PaneSide): EditorPaneState = editorWorkspace.paneOf(side)
 
-    fun setPane(side: PaneSide, value: EditorPaneState) {
-        when (side) {
-            PaneSide.PRIMARY -> primaryPane = value
-            PaneSide.SECONDARY -> secondaryPane = value
-        }
-    }
+    fun setPane(side: PaneSide, value: EditorPaneState) = editorWorkspace.setPane(side, value)
 
-    fun mutatePane(side: PaneSide, transform: (EditorPaneState) -> EditorPaneState) {
-        setPane(side, transform(paneOf(side)))
-    }
+    fun mutatePane(side: PaneSide, transform: (EditorPaneState) -> EditorPaneState) =
+        editorWorkspace.mutatePane(side, transform)
 
-    fun mutateFocused(transform: (EditorPaneState) -> EditorPaneState) {
-        mutatePane(focusedPane, transform)
-    }
+    fun mutateFocused(transform: (EditorPaneState) -> EditorPaneState) =
+        editorWorkspace.mutateFocused(transform)
 
-    fun focused(): EditorPaneState = paneOf(focusedPane)
+    fun focused(): EditorPaneState = editorWorkspace.focused()
 
     LaunchedEffect(primaryPane.book.activeIndex, primaryPane.book.tabs.size) {
         val active = primaryPane.book.active
@@ -342,7 +332,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
 
     var sessionLoaded by remember { mutableStateOf(false) }
-    var foldByPath by remember { mutableStateOf<Map<String, Set<Int>>>(emptyMap()) }
+    var foldByPath by editorWorkspace::foldByPath
     var historyFile by remember { mutableStateOf(HistoryFile()) }
     var historyLoaded by remember { mutableStateOf(false) }
     var workspaceFile by remember { mutableStateOf(WorkspaceFile()) }
@@ -2470,20 +2460,20 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
 }
 
-private enum class CreateEntryKind { FILE, FOLDER }
+internal enum class CreateEntryKind { FILE, FOLDER }
 
-private data class CreateEntryDialogState(
+internal data class CreateEntryDialogState(
     val parent: Path,
     val kind: CreateEntryKind,
     val error: String? = null,
 )
 
-private data class RenameEntryDialogState(
+internal data class RenameEntryDialogState(
     val path: Path,
     val error: String? = null,
 )
 
-private data class DeleteEntryDialogState(
+internal data class DeleteEntryDialogState(
     val paths: List<Path>,
 ) {
     val primary: Path get() = paths.first()
