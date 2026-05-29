@@ -4,6 +4,7 @@ import page.runtime.*
 import page.workspace.*
 import page.workspace.sync.PackageSyncEngine
 import page.app.lsp.LspEditorInterconnector
+import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
@@ -947,27 +948,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         entries.forEach { applyTextReplace(it.path, it.rewritten) }
         entries
     }
-    val closeTabsUnderPath: (Path) -> Unit = { path ->
-        listOf(PaneSide.PRIMARY, PaneSide.SECONDARY).forEach { side ->
-            val pane = paneOf(side)
-            val victims = pane.book.tabs.withIndex()
-                .filter { (_, tab) -> tab.path == path || tab.path.startsWith(path) }
-                .map { it.index }
-            val closedPaths = victims.map { pane.book.tabs[it].path }
-            if (victims.isNotEmpty()) {
-                val newBook = victims.sortedDescending().fold(pane.book) { acc, idx -> acc.close(idx) }
-                mutatePane(side) { it.copy(book = newBook) }
-            }
-            closedPaths.forEach { p ->
-                val stillOpenAnywhere = primaryPane.book.tabs.any { it.path == p } ||
-                    secondaryPane.book.tabs.any { it.path == p }
-                if (!stillOpenAnywhere) {
-                    editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p)
-                    lspRouter.controllerFor(p)?.didClose(p)
-                }
-            }
-        }
-    }
     val toggleExpanded: (Path, Boolean) -> Unit = { p, recursive ->
         expanded = when {
             recursive -> expanded + setOf(p) + page.editor.FileTree.descendantDirs(p)
@@ -975,66 +955,25 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             else -> expanded + setOf(p) + page.editor.FileTree.singleChildChain(p)
         }
     }
-    val closeTabAt: (PaneSide, Int) -> Unit = { side, idx ->
-        val tab = paneOf(side).book.tabs.getOrNull(idx)
-        mutatePane(side) { it.copy(book = it.book.close(idx)) }
-        if (tab != null) {
-            val stillOpenAnywhere = primaryPane.book.tabs.any { it.path == tab.path } ||
-                secondaryPane.book.tabs.any { it.path == tab.path }
-            if (!stillOpenAnywhere) {
-                editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, tab.path)
-                lspRouter.controllerFor(tab.path)?.didClose(tab.path)
-            }
-        }
-    }
     val isUnsavedText: (OpenTab) -> Boolean = { tab ->
         tab.dirty && FileKinds.classify(tab.path).isEditableAsText
     }
-    val requestCloseTab: (PaneSide, Int) -> Unit = { side, idx ->
-        val tab = paneOf(side).book.tabs.getOrNull(idx)
-        if (tab != null && isUnsavedText(tab)) {
-            pendingClose = PendingClose.Tab(side, idx)
-        } else {
-            closeTabAt(side, idx)
-        }
-    }
-    val closeManyOnPane: (PaneSide, List<Int>) -> Unit = { side, indices ->
-        if (indices.isNotEmpty()) {
-            val pane = paneOf(side)
-            val closedPaths = indices.mapNotNull { i -> pane.book.tabs.getOrNull(i)?.path }
-            mutatePane(side) { it.copy(book = it.book.closeMany(indices)) }
-            closedPaths.forEach { p ->
-                val stillOpen = primaryPane.book.tabs.any { it.path == p } ||
-                    secondaryPane.book.tabs.any { it.path == p }
-                if (!stillOpen) {
-                    editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p)
-                    lspRouter.controllerFor(p)?.didClose(p)
-                }
-            }
-        }
-    }
-    val requestBatchClose: (PaneSide, List<Int>) -> Unit = { side, indices ->
-        val pane = paneOf(side)
-        val valid = indices.filter { it in pane.book.tabs.indices }
-        val dirtyPairs = valid.mapNotNull { i ->
-            val t = pane.book.tabs[i]
-            if (isUnsavedText(t)) (side to t.path) else null
-        }
-        if (dirtyPairs.isEmpty()) {
-            closeManyOnPane(side, valid)
-        } else {
-            val cleanIndices = valid.filter { i ->
-                val t = pane.book.tabs[i]
-                !isUnsavedText(t)
-            }
-            val allPaths = valid.map { side to pane.book.tabs[it].path }
-            closeManyOnPane(side, cleanIndices)
-            pendingClose = PendingClose.Batch(allPaths.filter { (s, p) ->
-                val tab = paneOf(s).book.tabs.firstOrNull { it.path == p }
-                tab != null && isUnsavedText(tab)
-            })
-        }
-    }
+    val tabController = EditorTabController(
+        paneOf = { side -> paneOf(side) },
+        mutatePane = { side, transform -> mutatePane(side, transform) },
+        isOpenAnywhere = { p ->
+            primaryPane.book.tabs.any { it.path == p } || secondaryPane.book.tabs.any { it.path == p }
+        },
+        forgetScroll = { p -> editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p) },
+        didClose = { p -> lspRouter.controllerFor(p)?.didClose(p) },
+        isUnsavedText = { tab -> isUnsavedText(tab) },
+        setPendingClose = { pendingClose = it },
+    )
+    val closeTabsUnderPath: (Path) -> Unit = { path -> tabController.closeTabsUnderPath(path) }
+    val closeTabAt: (PaneSide, Int) -> Unit = { side, idx -> tabController.closeTabAt(side, idx) }
+    val requestCloseTab: (PaneSide, Int) -> Unit = { side, idx -> tabController.requestCloseTab(side, idx) }
+    val closeManyOnPane: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.closeManyOnPane(side, indices) }
+    val requestBatchClose: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.requestBatchClose(side, indices) }
     val togglePin: (PaneSide, Int) -> Unit = { side, idx ->
         mutatePane(side) { it.copy(book = it.book.togglePinned(idx)) }
     }
