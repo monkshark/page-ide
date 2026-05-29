@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-05-27T07:46:40.268Z",
+  "updatedAt": "2026-05-29T07:06:52.224Z",
   "owner": "clangd",
   "repo": "clangd",
   "releases": [
+    {
+      "tag": "22.1.6",
+      "publishedAt": "2026-05-28T23:49:24Z"
+    },
     {
       "tag": "22.1.0",
       "publishedAt": "2026-03-01T09:40:54Z"
@@ -198,10 +202,6 @@
     {
       "tag": "snapshot_20250713",
       "publishedAt": "2025-07-14T00:34:21Z"
-    },
-    {
-      "tag": "snapshot_20250706",
-      "publishedAt": "2025-08-24T00:39:08Z"
     }
   ]
 }
