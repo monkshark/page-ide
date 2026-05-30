@@ -10,6 +10,7 @@ import page.app.filetree.LargeCopyDialogState
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
+import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -149,7 +150,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var primaryPane by editorWorkspace::primaryPane
     var secondaryPane by editorWorkspace::secondaryPane
     var focusedPane by editorWorkspace::focusedPane
-    val workspaceState = remember { WorkspaceState() }
+    val appScope = rememberCoroutineScope()
+    val workspaceState = remember { WorkspaceState(appScope) }
     var rootDir by workspaceState::rootDir
     var expanded by workspaceState::expanded
     var treeSelection by workspaceState::treeSelection
@@ -298,41 +300,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    LaunchedEffect(rootDir) {
-        val root = rootDir
-        if (root != null) {
-            val recovery = runCatching { RenameTransaction.recover(root) }.getOrNull()
-            val logHint = "see ${RenameTransaction.logFile(root)}"
-            when (recovery) {
-                is RenameTransaction.RecoveryResult.Resumed ->
-                    println("[rename] recovered: resumed ${recovery.marker.from.fileName} → ${recovery.marker.to.fileName} ($logHint)")
-                is RenameTransaction.RecoveryResult.RolledBack ->
-                    println("[rename] recovered: rolled back partial ${recovery.marker.to.fileName} ($logHint)")
-                is RenameTransaction.RecoveryResult.Skipped ->
-                    println("[rename] recovered: skipped (${recovery.reason}) ($logHint)")
-                is RenameTransaction.RecoveryResult.Failed ->
-                    println("[rename] recovery failed: ${recovery.message} ($logHint)")
-                else -> {}
-            }
-            // controllers are started on-demand via lspRouter.controllerFor()
-        }
-        todo.scanWorkspaceAsync()
-    }
-
-    LaunchedEffect(rootDir) {
-        val root = rootDir ?: run {
-            runState = RunConfigsState()
-            return@LaunchedEffect
-        }
-        runState = runCatching { RunConfigStore.load(root) }.getOrDefault(RunConfigsState())
-    }
-
-    LaunchedEffect(rootDir, runState) {
-        val root = rootDir ?: return@LaunchedEffect
-        kotlinx.coroutines.delay(400)
-        runCatching { RunConfigStore.save(root, runState) }
-    }
-
     var sessionLoaded by remember { mutableStateOf(false) }
     var foldByPath by editorWorkspace::foldByPath
     var historyFile by remember { mutableStateOf(HistoryFile()) }
@@ -433,36 +400,67 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         runCatching { SessionStore.save(root, sessionSnapshot) }
     }
 
-    LaunchedEffect(rootDir) {
-        historyLoaded = false
-        val root = rootDir
-        if (root == null) {
-            historyFile = HistoryFile()
-            historyLoaded = true
-            return@LaunchedEffect
-        }
-        historyFile = runCatching { HistoryStore.load(root) }.getOrDefault(HistoryFile())
-        historyLoaded = true
-    }
-    LaunchedEffect(rootDir) {
-        val root = rootDir
-        if (root == null) {
-            workspaceFile = WorkspaceFile()
-            return@LaunchedEffect
-        }
-        val ws = runCatching { WorkspaceStore.load(root) }.getOrDefault(WorkspaceFile())
-        workspaceFile = ws
-        val name = ws.palette
-        if (name != null) {
-            val resolved = GlassPalette.values().firstOrNull { it.name.equals(name, ignoreCase = true) }
-            if (resolved != null) palette = resolved
-        }
-    }
-    LaunchedEffect(rootDir, historyLoaded, historyFile) {
-        if (!historyLoaded) return@LaunchedEffect
-        val root = rootDir ?: return@LaunchedEffect
-        kotlinx.coroutines.delay(500)
-        runCatching { HistoryStore.save(root, historyFile) }
+    LaunchedEffect(Unit) {
+        workspaceState.launchPersistence(
+            loaders = listOf(
+                { root ->
+                    if (root != null) {
+                        val recovery = runCatching { RenameTransaction.recover(root) }.getOrNull()
+                        val logHint = "see ${RenameTransaction.logFile(root)}"
+                        when (recovery) {
+                            is RenameTransaction.RecoveryResult.Resumed ->
+                                println("[rename] recovered: resumed ${recovery.marker.from.fileName} → ${recovery.marker.to.fileName} ($logHint)")
+                            is RenameTransaction.RecoveryResult.RolledBack ->
+                                println("[rename] recovered: rolled back partial ${recovery.marker.to.fileName} ($logHint)")
+                            is RenameTransaction.RecoveryResult.Skipped ->
+                                println("[rename] recovered: skipped (${recovery.reason}) ($logHint)")
+                            is RenameTransaction.RecoveryResult.Failed ->
+                                println("[rename] recovery failed: ${recovery.message} ($logHint)")
+                            else -> {}
+                        }
+                    }
+                    todo.scanWorkspaceAsync()
+                },
+                { root ->
+                    runState = if (root == null) RunConfigsState()
+                    else runCatching { RunConfigStore.load(root) }.getOrDefault(RunConfigsState())
+                },
+                { root ->
+                    historyLoaded = false
+                    if (root == null) {
+                        historyFile = HistoryFile()
+                    } else {
+                        historyFile = runCatching { HistoryStore.load(root) }.getOrDefault(HistoryFile())
+                    }
+                    historyLoaded = true
+                },
+                { root ->
+                    if (root == null) {
+                        workspaceFile = WorkspaceFile()
+                    } else {
+                        val ws = runCatching { WorkspaceStore.load(root) }.getOrDefault(WorkspaceFile())
+                        workspaceFile = ws
+                        val name = ws.palette
+                        if (name != null) {
+                            val resolved = GlassPalette.values().firstOrNull { it.name.equals(name, ignoreCase = true) }
+                            if (resolved != null) palette = resolved
+                        }
+                    }
+                },
+            ),
+            savers = listOf(
+                DebouncedSaver(
+                    debounceMs = 400,
+                    revision = { runState },
+                    save = { root -> runCatching { RunConfigStore.save(root, runState) } },
+                ),
+                DebouncedSaver(
+                    debounceMs = 500,
+                    revision = { historyLoaded to historyFile },
+                    save = { root -> if (historyLoaded) runCatching { HistoryStore.save(root, historyFile) } },
+                ),
+            ),
+        )
     }
     val fileTreeWatcherHolder = remember { java.util.concurrent.atomic.AtomicReference<FileTreeWatcher?>(null) }
     var fileTreeWatcherEpoch by remember { mutableStateOf(0) }
