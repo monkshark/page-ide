@@ -119,7 +119,7 @@ class WindowsSdkInstallerTest {
 
     @Test
     fun buildEnvJoinsIncludeAndLibWithPathSeparator() {
-        val splat: Path = Path("C:", "splat")
+        val splat: Path = Files.createTempDirectory("page-splat-env")
         val env = windows().buildEnv(splat)
         val sep = File.pathSeparator
         assertEquals(windows().includeDirs(splat).size, env.getValue("INCLUDE").split(sep).size)
