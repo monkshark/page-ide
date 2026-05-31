@@ -1,10 +1,33 @@
 package page.runtime
 
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PageRuntimeEnvTest {
+
+    @Test
+    fun pinJavaRuntimePrependsBinAndOverridesJavaHome() {
+        val home = Files.createTempDirectory("jdk21pin")
+        val original = "/preexisting/jdk17/bin:/system"
+        val env = mutableMapOf("PATH" to original, "JAVA_HOME" to "/preexisting/jdk17")
+        PageRuntimeEnv.pinJavaRuntime(env, home)
+        val bin = home.resolve("bin").toAbsolutePath().toString()
+        assertEquals(home.toAbsolutePath().toString(), env["JAVA_HOME"], "JAVA_HOME must point at the pinned runtime")
+        val path = env["PATH"] ?: ""
+        assertTrue(path.startsWith(bin), "pinned bin must be first so bare java resolves to it")
+        assertTrue(path.endsWith(original), "existing PATH preserved after the pinned bin")
+    }
+
+    @Test
+    fun pinJavaRuntimeRespectsCaseInsensitivePathKey() {
+        val home = Files.createTempDirectory("jdk21pin")
+        val env = mutableMapOf("Path" to "/system")
+        PageRuntimeEnv.pinJavaRuntime(env, home)
+        assertTrue(env.containsKey("Path"), "original PATH casing preserved")
+        assertTrue((env["Path"] ?: "").startsWith(home.resolve("bin").toAbsolutePath().toString()))
+    }
 
     @Test
     fun applyToPrependsPathAndSetsEnvVars() {

@@ -22,7 +22,7 @@ class JdtlsInstaller(
         else LspInstaller.Precheck.MissingTool(
             tool = "java",
             installUrl = "https://adoptium.net/",
-            message = "JDT Language Server requires Java 17+ to run. Install a JDK then retry.",
+            message = "JDT Language Server requires Java 21+ to run. Install a JDK then retry.",
         )
 
     override fun isInstalled(): Boolean = executable() != null

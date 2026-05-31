@@ -2391,7 +2391,10 @@ private fun registerAllBackends() {
         LspBackends.register(GenericLanguageBackend(
             definition = def,
             executableFinder = { LspInstallers.forId(def.id)?.executable() },
-            envSetup = { env -> PageRuntimeEnv.applyTo(env) },
+            envSetup = { env ->
+                PageRuntimeEnv.applyTo(env)
+                if (def.id == "java") PageRuntimeEnv.pinJavaRuntime(env)
+            },
         ))
     }
 }

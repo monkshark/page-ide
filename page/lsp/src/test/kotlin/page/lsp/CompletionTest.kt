@@ -108,6 +108,39 @@ class CompletionTest {
     }
 
     @Test
+    fun `reindent prepends current indent to continuation lines and shifts caret`() {
+        val base = SnippetExpander.expand("if (\$1) {\n\t\$0\n}")
+        val r = SnippetExpander.reindentContinuationLines(base, "    ")
+        assertEquals("if () {\n    \t\n    }", r.text)
+        assertEquals("if () {\n    \t".length, r.finalCaret)
+        assertEquals("if (".length, r.tabstops.single().start)
+    }
+
+    @Test
+    fun `reindent is a no-op for single-line snippets`() {
+        val base = SnippetExpander.expand("length(\$0)")
+        val r = SnippetExpander.reindentContinuationLines(base, "        ")
+        assertEquals(base.text, r.text)
+        assertEquals(base.finalCaret, r.finalCaret)
+    }
+
+    @Test
+    fun `reindent is a no-op when indent is empty`() {
+        val base = SnippetExpander.expand("a {\n\tb\n}")
+        val r = SnippetExpander.reindentContinuationLines(base, "")
+        assertEquals(base.text, r.text)
+    }
+
+    @Test
+    fun `reindent shifts every numbered tabstop past each newline`() {
+        val base = SnippetExpander.expand("try {\n\t\$1\n} catch (e) {\n\t\$2\n}")
+        val r = SnippetExpander.reindentContinuationLines(base, "  ")
+        assertEquals("try {\n  \t\n  } catch (e) {\n  \t\n  }", r.text)
+        assertEquals(2, r.tabstops.size)
+        assertEquals(r.text.indexOf('\n') + 1 + "  \t".length, r.tabstops[0].start)
+    }
+
+    @Test
     fun `snippet expander unescapes dollar`() {
         val r = SnippetExpander.expand("price = \\\$5")
         assertEquals("price = \$5", r.text)

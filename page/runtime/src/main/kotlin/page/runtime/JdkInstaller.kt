@@ -176,7 +176,14 @@ class JdkInstaller(
 
     fun javaHome(): Path? {
         val ver = currentInstalledVersion() ?: return null
-        val root = jdkRoot(ver)
+        return homeForVersion(ver)
+    }
+
+    fun javaHomeAtLeast(minMajor: Int): Path? =
+        selectVersionAtLeast(installedVersions(), minMajor)?.let { homeForVersion(it) }
+
+    private fun homeForVersion(version: String): Path? {
+        val root = jdkRoot(version)
         val macHome = root.resolve("Contents").resolve("Home")
         if (Files.isDirectory(macHome.resolve("bin"))) return macHome
         if (Files.isDirectory(root.resolve("bin"))) return root
@@ -223,6 +230,12 @@ class JdkInstaller(
         const val DEFAULT_JDK_VERSION = "21.0.5+11"
 
         const val MANIFEST_URL = "https://monkshark.github.io/page-ide/jdk/versions.json"
+
+        internal fun majorOfVersion(version: String): Int =
+            version.split('.', '-', '_', '+').firstOrNull()?.toIntOrNull() ?: 0
+
+        internal fun selectVersionAtLeast(versions: List<String>, minMajor: Int): String? =
+            versions.filter { majorOfVersion(it) >= minMajor }.sortedWith(VERSION_DESC).firstOrNull()
 
         private val gson: Gson = GsonBuilder().disableHtmlEscaping().create()
 

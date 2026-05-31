@@ -19,11 +19,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.eclipse.lsp4j.PublishDiagnosticsParams
-import page.lsp.CompletionEdit
+import page.lsp.CompletionAugmentor
 import page.lsp.CompletionEnhancer
-import page.lsp.CompletionItem
-import page.lsp.CompletionItemKind
 import page.lsp.CompletionList
+import page.lsp.CompletionProfile
 import page.lsp.DefinitionTarget
 import page.lsp.Diagnostic
 import page.lsp.HoverInfo
@@ -47,7 +46,6 @@ import page.lsp.RenamePrepare
 import page.lsp.RenameWorkspaceEdit
 import page.lsp.SignatureHelpInfo
 import page.lsp.DocumentSymbolEntry
-import page.lsp.WorkspaceSymbolEntry
 import page.lsp.WorkspaceSymbolLocated
 import page.lsp.parseKlsActivity
 import page.editor.SyntaxLexers
@@ -437,18 +435,19 @@ class LspController(
             }
         }
 
-        val isKotlin = activeBackend?.id == "kotlin"
-        val canAugmentKeywords = isKotlin && prefix.isNotEmpty() && triggerCharacter == null
-        val canAugmentImports = isKotlin && prefix.length >= 2 && triggerCharacter == null
+        val profile = CompletionProfile.forLanguage(activeBackend?.id)
+        val canAugmentKeywords = profile.keywords.isNotEmpty() && prefix.isNotEmpty() && triggerCharacter == null &&
+            !isMemberAccessContext(text, line, character, prefix.length)
+        val canAugmentImports = profile.supportsAutoImport && prefix.length >= 2 && triggerCharacter == null
         return ws.completion(uri, line, character, triggerCharacter, prefix)
             .thenApply { list ->
                 mark("kls")
                 if (list == null || !canAugmentKeywords) list
-                else augmentKeywords(list, prefix).also { mark("kw") }
+                else CompletionAugmentor.augmentKeywords(list, prefix, profile.keywords, profile.keywordSnippets).also { mark("kw") }
             }
             .thenCompose { list ->
                 if (list == null || !canAugmentImports) CompletableFuture.completedFuture(list)
-                else augmentImports(ws, list, prefix, text).thenApply { result ->
+                else augmentImports(ws, list, prefix, text, profile.importStatementTerminator).thenApply { result ->
                     mark("imp")
                     result
                 }
@@ -486,11 +485,14 @@ class LspController(
         list: CompletionList,
         prefix: String,
         text: String,
+        importTerminator: String,
     ): CompletableFuture<CompletionList> {
-        val header = parseFileHeader(text)
+        val header = CompletionAugmentor.parseFileHeader(text)
+        val existingLabels = list.items.mapTo(HashSet()) { it.label }
         val tWsStart = System.nanoTime()
         println("[lsp] augmentImports → workspaceSymbols('$prefix') sent")
         return ws.workspaceSymbols(prefix)
+            .orTimeout(WORKSPACE_SYMBOLS_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
             .exceptionally {
                 val wsMs = (System.nanoTime() - tWsStart) / 1_000_000
                 println("[lsp] workspaceSymbols('$prefix') failed in ${wsMs}ms: ${it.message}")
@@ -499,129 +501,11 @@ class LspController(
             .thenApply { syms ->
                 val wsMs = (System.nanoTime() - tWsStart) / 1_000_000
                 println("[lsp] augmentImports ← workspaceSymbols('$prefix') returned ${syms.size} sym(s) in ${wsMs}ms")
-                if (syms.isEmpty()) return@thenApply list
-                val existingLabels = list.items.mapTo(HashSet()) { it.label }
-                val typeKinds = setOf(
-                    org.eclipse.lsp4j.SymbolKind.Class,
-                    org.eclipse.lsp4j.SymbolKind.Interface,
-                    org.eclipse.lsp4j.SymbolKind.Enum,
-                    org.eclipse.lsp4j.SymbolKind.Struct,
-                )
-                val seen = HashSet<String>()
-                val candidates = mutableListOf<WorkspaceSymbolEntry>()
-                for (sym in syms) {
-                    if (sym.kind !in typeKinds) continue
-                    if (sym.name.isEmpty()) continue
-                    if (!sym.name.startsWith(prefix, ignoreCase = true)) continue
-                    val container = sym.containerName?.takeIf { it.isNotBlank() } ?: continue
-                    if (container == header.packageName) continue
-                    val fqn = "$container.${sym.name}"
-                    if (fqn in header.importedFqns) continue
-                    if (sym.name in existingLabels) continue
-                    if (!seen.add(fqn)) continue
-                    candidates += sym
-                    if (candidates.size >= 20) break
-                }
-                if (candidates.isEmpty()) return@thenApply list
-                println("[lsp] augmentImports → ${candidates.size} candidate(s) for prefix='$prefix'")
-                val newItems = candidates.map { sym ->
-                    val container = sym.containerName!!
-                    val fqn = "$container.${sym.name}"
-                    val newText = if (header.insertNeedsLeadingBlankLine) "\nimport $fqn\n" else "import $fqn\n"
-                    CompletionItem(
-                        label = sym.name,
-                        kind = mapSymbolKind(sym.kind),
-                        detail = "(import from $container)",
-                        documentation = null,
-                        insertText = sym.name,
-                        isSnippet = false,
-                        edit = null,
-                        additionalEdits = listOf(
-                            CompletionEdit(
-                                startLine = header.insertLine,
-                                startCharacter = 0,
-                                endLine = header.insertLine,
-                                endCharacter = 0,
-                                newText = newText,
-                            )
-                        ),
-                        filterText = sym.name,
-                        sortText = sym.name,
-                    )
-                }
-                val leadingKeywordCount = list.items.takeWhile { it.kind == CompletionItemKind.KEYWORD }.size
-                val head = list.items.take(leadingKeywordCount)
-                val tail = list.items.drop(leadingKeywordCount)
-                list.copy(items = head + newItems + tail)
+                val newItems = CompletionAugmentor.buildImportCandidates(syms, header, prefix, existingLabels, importTerminator)
+                if (newItems.isEmpty()) return@thenApply list
+                println("[lsp] augmentImports → ${newItems.size} candidate(s) for prefix='$prefix'")
+                CompletionAugmentor.mergeImportItems(list, newItems)
             }
-    }
-
-    private fun mapSymbolKind(kind: org.eclipse.lsp4j.SymbolKind?): CompletionItemKind = when (kind) {
-        org.eclipse.lsp4j.SymbolKind.Interface -> CompletionItemKind.INTERFACE
-        org.eclipse.lsp4j.SymbolKind.Enum -> CompletionItemKind.ENUM
-        org.eclipse.lsp4j.SymbolKind.Struct -> CompletionItemKind.STRUCT
-        else -> CompletionItemKind.CLASS
-    }
-
-    private data class FileHeader(
-        val packageName: String?,
-        val importedFqns: Set<String>,
-        val insertLine: Int,
-        val insertNeedsLeadingBlankLine: Boolean,
-    )
-
-    private fun parseFileHeader(text: String): FileHeader {
-        val lines = text.split('\n')
-        var pkg: String? = null
-        val imports = HashSet<String>()
-        var lastImportLine = -1
-        var packageLine = -1
-        for (i in lines.indices) {
-            val stripped = lines[i].trim().removeSuffix(";")
-            when {
-                stripped.startsWith("package ") -> {
-                    pkg = stripped.removePrefix("package").trim()
-                    packageLine = i
-                }
-                stripped.startsWith("import ") -> {
-                    val body = stripped.removePrefix("import").trim()
-                    val fqn = body.substringBefore(" as ").trim()
-                    imports += fqn
-                    lastImportLine = i
-                }
-            }
-        }
-        val insertLine: Int
-        val needsBlank: Boolean
-        when {
-            lastImportLine >= 0 -> { insertLine = lastImportLine + 1; needsBlank = false }
-            packageLine >= 0 -> { insertLine = packageLine + 1; needsBlank = true }
-            else -> { insertLine = 0; needsBlank = false }
-        }
-        return FileHeader(pkg, imports, insertLine, needsBlank)
-    }
-
-    private fun augmentKeywords(list: CompletionList, prefix: String): CompletionList {
-        val matched = KOTLIN_KEYWORDS.filter { it.startsWith(prefix, ignoreCase = true) }
-        if (matched.isEmpty()) return list
-        val existing = list.items.mapTo(HashSet()) { it.label }
-        val toAdd = matched.filter { it !in existing }
-        if (toAdd.isEmpty()) return list
-        val keywordItems = toAdd.map { kw ->
-            CompletionItem(
-                label = kw,
-                kind = CompletionItemKind.KEYWORD,
-                detail = null,
-                documentation = null,
-                insertText = kw,
-                isSnippet = false,
-                edit = null,
-                additionalEdits = emptyList(),
-                filterText = kw,
-                sortText = kw,
-            )
-        }
-        return list.copy(items = keywordItems + list.items)
     }
 
     private fun computePrefix(text: String, line: Int, character: Int): String {
@@ -1653,20 +1537,7 @@ class LspController(
         const val SYMBOL_INDEX_KIND = KLS_SYMBOL_INDEX_KIND
         const val LINTING_KIND = KLS_LINTING_KIND
 
-        private val KOTLIN_KEYWORDS = listOf(
-            "as", "break", "class", "continue", "do", "else", "false", "for", "fun",
-            "if", "in", "interface", "is", "null", "object", "package", "return",
-            "super", "this", "throw", "true", "try", "typealias", "val", "var",
-            "when", "while",
-            "by", "catch", "constructor", "delegate", "dynamic", "field", "file",
-            "finally", "get", "import", "init", "param", "property", "receiver",
-            "set", "setparam", "value", "where",
-            "abstract", "actual", "annotation", "companion", "const", "crossinline",
-            "data", "enum", "expect", "external", "final", "infix", "inline",
-            "inner", "internal", "lateinit", "noinline", "open", "operator", "out",
-            "override", "private", "protected", "public", "reified", "sealed",
-            "suspend", "tailrec", "vararg",
-        )
+        private const val WORKSPACE_SYMBOLS_TIMEOUT_MS = 2_000L
     }
 
     private fun onDiagnostics(params: PublishDiagnosticsParams) {
@@ -1703,6 +1574,16 @@ fun rememberLspController(workspaceRoot: Path?): LspController {
         onDispose { controller.shutdown() }
     }
     return controller
+}
+
+internal fun isMemberAccessContext(text: String, line: Int, character: Int, prefixLength: Int): Boolean {
+    val lines = text.split('\n')
+    if (line < 0 || line >= lines.size) return false
+    val raw = lines[line]
+    val ln = if (raw.endsWith('\r')) raw.dropLast(1) else raw
+    val wordStart = (character - prefixLength).coerceIn(0, ln.length)
+    if (wordStart <= 0) return false
+    return ln[wordStart - 1] == '.'
 }
 
 val LspController.errorAndWarningCount: Int
