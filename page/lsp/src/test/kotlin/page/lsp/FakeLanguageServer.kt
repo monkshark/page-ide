@@ -3,6 +3,10 @@ package page.lsp
 import org.eclipse.lsp4j.CodeAction
 import org.eclipse.lsp4j.CodeActionParams
 import org.eclipse.lsp4j.Command
+import org.eclipse.lsp4j.CompletionItem
+import org.eclipse.lsp4j.CompletionList
+import org.eclipse.lsp4j.CompletionOptions
+import org.eclipse.lsp4j.CompletionParams
 import org.eclipse.lsp4j.DefinitionParams
 import org.eclipse.lsp4j.DidChangeConfigurationParams
 import org.eclipse.lsp4j.DidChangeTextDocumentParams
@@ -63,6 +67,8 @@ class FakeLanguageServer : LanguageServer {
     val formattingCalls = ConcurrentLinkedQueue<DocumentFormattingParams>()
     val codeActionCalls = ConcurrentLinkedQueue<CodeActionParams>()
     val inlayHintCalls = ConcurrentLinkedQueue<InlayHintParams>()
+    val completionCalls = ConcurrentLinkedQueue<CompletionParams>()
+    val resolveCompletionCalls = ConcurrentLinkedQueue<CompletionItem>()
     val didChangeConfigurationCalls = ConcurrentLinkedQueue<DidChangeConfigurationParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
@@ -75,6 +81,9 @@ class FakeLanguageServer : LanguageServer {
     @Volatile var formattingResponse: MutableList<out TextEdit>? = null
     @Volatile var codeActionResponse: MutableList<Either<Command, CodeAction>>? = null
     @Volatile var inlayHintResponse: MutableList<InlayHint>? = null
+    @Volatile var completionResponse: Either<MutableList<CompletionItem>, CompletionList>? = null
+    @Volatile var resolveCompletionResponse: CompletionItem? = null
+    @Volatile var advertiseCompletionResolve: Boolean = true
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
 
@@ -131,6 +140,16 @@ class FakeLanguageServer : LanguageServer {
             inlayHintCalls += params
             return CompletableFuture.completedFuture(inlayHintResponse)
         }
+        override fun completion(
+            params: CompletionParams,
+        ): CompletableFuture<Either<MutableList<CompletionItem>, CompletionList>> {
+            completionCalls += params
+            return CompletableFuture.completedFuture(completionResponse)
+        }
+        override fun resolveCompletionItem(unresolved: CompletionItem): CompletableFuture<CompletionItem> {
+            resolveCompletionCalls += unresolved
+            return CompletableFuture.completedFuture(resolveCompletionResponse ?: unresolved)
+        }
     }
 
     private val workspaceService = object : WorkspaceService {
@@ -151,6 +170,7 @@ class FakeLanguageServer : LanguageServer {
         initializeCalls += params
         val capabilities = ServerCapabilities()
         capabilities.setTextDocumentSync(TextDocumentSyncKind.Full)
+        capabilities.completionProvider = CompletionOptions().apply { resolveProvider = advertiseCompletionResolve }
         return CompletableFuture.completedFuture(InitializeResult(capabilities))
     }
 

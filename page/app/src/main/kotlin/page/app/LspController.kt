@@ -134,6 +134,7 @@ class LspController(
 
     @Volatile private var prepareRenameSupported: Boolean = false
     @Volatile private var inlayHintSupported: Boolean = false
+    @Volatile private var completionResolveSupported: Boolean = false
 
     @Volatile private var clientGeneration: Long = 0L
 
@@ -199,6 +200,8 @@ class LspController(
                     println("[lsp] prepareRename support = $prepareRenameSupported")
                     inlayHintSupported = detectInlayHintSupport(result.capabilities)
                     println("[lsp] inlayHint support = $inlayHintSupported")
+                    completionResolveSupported = detectCompletionResolveSupport(result.capabilities)
+                    println("[lsp] completion resolve support = $completionResolveSupported")
                     flushPendingOpens()
                     openWorkspaceFiles()
                 }
@@ -1108,6 +1111,23 @@ class LspController(
             }
     }
 
+    fun resolveCompletion(token: Long): CompletableFuture<page.lsp.ResolvedCompletion?> {
+        if (status.value != Status.READY || !completionResolveSupported) {
+            return CompletableFuture.completedFuture(null)
+        }
+        val ws = workspace ?: return CompletableFuture.completedFuture(null)
+        return ws.resolveCompletionItem(token)
+            .whenComplete { resolved, err ->
+                if (err != null) {
+                    println("[lsp] resolve ✗ token=$token: ${err.message}")
+                } else {
+                    val hasDoc = !resolved?.documentation.isNullOrBlank()
+                    val edits = resolved?.additionalEdits?.size ?: 0
+                    println("[lsp] resolve ✓ token=$token — doc=$hasDoc, edits=$edits")
+                }
+            }
+    }
+
     fun prepareRename(path: Path, line: Int, character: Int): CompletableFuture<RenamePrepare?> {
         if (status.value != Status.READY) return CompletableFuture.completedFuture(null)
         if (!prepareRenameSupported) return CompletableFuture.completedFuture(null)
@@ -1613,6 +1633,9 @@ internal fun detectInlayHintSupport(caps: org.eclipse.lsp4j.ServerCapabilities?)
         else -> false
     }
 }
+
+internal fun detectCompletionResolveSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean =
+    caps?.completionProvider?.resolveProvider == true
 
 internal fun isMemberAccessContext(text: String, line: Int, character: Int, prefixLength: Int): Boolean {
     val lines = text.split('\n')

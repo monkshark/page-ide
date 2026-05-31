@@ -1,5 +1,6 @@
 package page.app
 
+import org.eclipse.lsp4j.CompletionOptions
 import org.eclipse.lsp4j.InlayHintRegistrationOptions
 import org.eclipse.lsp4j.RenameOptions
 import org.eclipse.lsp4j.ServerCapabilities
@@ -44,6 +45,18 @@ class ServerCapabilityDetectionTest {
         }))
         assertTrue(detectPrepareRenameSupport(ServerCapabilities().apply {
             renameProvider = Either.forRight(RenameOptions().apply { prepareProvider = true })
+        }))
+    }
+
+    @Test
+    fun `completion resolve requires resolveProvider true`() {
+        assertFalse(detectCompletionResolveSupport(null))
+        assertFalse(detectCompletionResolveSupport(ServerCapabilities()))
+        assertFalse(detectCompletionResolveSupport(ServerCapabilities().apply {
+            completionProvider = CompletionOptions().apply { resolveProvider = false }
+        }))
+        assertTrue(detectCompletionResolveSupport(ServerCapabilities().apply {
+            completionProvider = CompletionOptions().apply { resolveProvider = true }
         }))
     }
 }

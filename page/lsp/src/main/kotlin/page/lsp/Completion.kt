@@ -59,41 +59,58 @@ data class CompletionItem(
     val additionalEdits: List<CompletionEdit> = emptyList(),
     val filterText: String = label,
     val sortText: String = label,
+    val resolveToken: Long? = null,
 ) {
     companion object {
-        fun fromLsp(item: org.eclipse.lsp4j.CompletionItem): CompletionItem {
+        fun fromLsp(item: org.eclipse.lsp4j.CompletionItem, token: Long? = null): CompletionItem {
             val labelText = item.label ?: ""
             val explicitInsert = item.insertText
             val edit = item.textEdit?.left?.let { te -> te.toCompletionEdit() }
             val resolvedInsert = edit?.newText ?: explicitInsert ?: labelText
-            val docText = item.documentation?.let { docHolder ->
-                if (docHolder.isLeft) docHolder.left
-                else docHolder.right?.value
-            }
             val additional = item.additionalTextEdits.orEmpty().map { it.toCompletionEdit() }
             return CompletionItem(
                 label = labelText,
                 kind = CompletionItemKind.fromLsp(item.kind),
                 detail = item.detail,
-                documentation = docText,
+                documentation = completionDocText(item),
                 insertText = resolvedInsert,
                 isSnippet = item.insertTextFormat == LspInsertTextFormat.Snippet,
                 edit = edit,
                 additionalEdits = additional,
                 filterText = item.filterText ?: labelText,
                 sortText = item.sortText ?: labelText,
+                resolveToken = token,
             )
         }
+    }
+}
 
-        private fun org.eclipse.lsp4j.TextEdit.toCompletionEdit(): CompletionEdit = CompletionEdit(
-            startLine = range.start.line,
-            startCharacter = range.start.character,
-            endLine = range.end.line,
-            endCharacter = range.end.character,
-            newText = newText ?: "",
+data class ResolvedCompletion(
+    val documentation: String?,
+    val detail: String?,
+    val additionalEdits: List<CompletionEdit>,
+) {
+    companion object {
+        fun fromLsp(item: org.eclipse.lsp4j.CompletionItem): ResolvedCompletion = ResolvedCompletion(
+            documentation = completionDocText(item),
+            detail = item.detail,
+            additionalEdits = item.additionalTextEdits.orEmpty().map { it.toCompletionEdit() },
         )
     }
 }
+
+internal fun completionDocText(item: org.eclipse.lsp4j.CompletionItem): String? =
+    item.documentation?.let { docHolder ->
+        if (docHolder.isLeft) docHolder.left else docHolder.right?.value
+    }
+
+internal fun org.eclipse.lsp4j.TextEdit.toCompletionEdit(): CompletionEdit = CompletionEdit(
+    startLine = range.start.line,
+    startCharacter = range.start.character,
+    endLine = range.end.line,
+    endCharacter = range.end.character,
+    newText = newText ?: "",
+)
 
 data class SnippetTabstop(val number: Int, val start: Int, val end: Int)
 
@@ -231,10 +248,11 @@ data class CompletionList(
             result: org.eclipse.lsp4j.CompletionList,
             triggerCharacter: String? = null,
             prefix: String? = null,
+            registerToken: ((org.eclipse.lsp4j.CompletionItem) -> Long?)? = null,
         ): CompletionList = CompletionList(
             isIncomplete = result.isIncomplete,
             items = CompletionEnhancer.enhance(
-                result.items.orEmpty().map(CompletionItem::fromLsp),
+                result.items.orEmpty().map { CompletionItem.fromLsp(it, registerToken?.invoke(it)) },
                 triggerCharacter,
                 prefix,
             ),
@@ -244,9 +262,14 @@ data class CompletionList(
             items: List<org.eclipse.lsp4j.CompletionItem>,
             triggerCharacter: String? = null,
             prefix: String? = null,
+            registerToken: ((org.eclipse.lsp4j.CompletionItem) -> Long?)? = null,
         ): CompletionList = CompletionList(
             isIncomplete = false,
-            items = CompletionEnhancer.enhance(items.map(CompletionItem::fromLsp), triggerCharacter, prefix),
+            items = CompletionEnhancer.enhance(
+                items.map { CompletionItem.fromLsp(it, registerToken?.invoke(it)) },
+                triggerCharacter,
+                prefix,
+            ),
         )
     }
 }

@@ -7,6 +7,7 @@ import org.eclipse.lsp4j.CodeActionLiteralSupportCapabilities
 import org.eclipse.lsp4j.CodeActionResolveSupportCapabilities
 import org.eclipse.lsp4j.CompletionCapabilities
 import org.eclipse.lsp4j.CompletionItemCapabilities
+import org.eclipse.lsp4j.CompletionItemResolveSupportCapabilities
 import org.eclipse.lsp4j.DidChangeConfigurationParams
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
@@ -127,6 +128,9 @@ class LspClient(
                 completion = CompletionCapabilities().apply {
                     completionItem = CompletionItemCapabilities().apply {
                         snippetSupport = true
+                        resolveSupport = CompletionItemResolveSupportCapabilities(
+                            listOf("documentation", "detail", "additionalTextEdits"),
+                        )
                     }
                 }
                 codeAction = CodeActionCapabilities().apply {

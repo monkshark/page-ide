@@ -2713,6 +2713,7 @@ internal fun PaneRegion(
                     onRequestSignatureHelp = active?.path?.let { p ->
                         activeCtrl?.let { ctrl -> { line, ch, trig, retrig -> ctrl.signatureHelp(p, pane.editorValue.text, line, ch, trig, retrig) } }
                     },
+                    onResolveCompletion = activeCtrl?.let { ctrl -> { token -> ctrl.resolveCompletion(token) } },
                     onGoToDefinition = { target ->
                         val path = runCatching {
                             java.nio.file.Paths.get(java.net.URI(target.uri))
