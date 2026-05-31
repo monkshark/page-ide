@@ -90,6 +90,19 @@ class LspClientTest {
     }
 
     @Test
+    fun `refreshDiagnostics returns a completed future instead of throwing`() {
+        val harness = LspTestHarness()
+        try {
+            val future = harness.client.refreshDiagnostics()
+            future.get(1, TimeUnit.SECONDS)
+            assertTrue(future.isDone)
+            assertTrue(!future.isCompletedExceptionally)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun `shutdown is idempotent`() {
         val harness = LspTestHarness()
         try {

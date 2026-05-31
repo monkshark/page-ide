@@ -35,6 +35,7 @@ class LspClient(
     private val clientName: String = "PAGE",
     private val clientVersion: String = "0.1.0",
     private val initialSettings: Any? = null,
+    private val initializationOptions: Any? = null,
 ) : LanguageClient {
 
     private val stateRef = AtomicReference(LspState.NOT_STARTED)
@@ -155,6 +156,9 @@ class LspClient(
             @Suppress("DEPRECATION")
             params.rootUri = uri
         }
+        if (initializationOptions != null) {
+            params.initializationOptions = initializationOptions
+        }
         return params
     }
 
@@ -174,6 +178,8 @@ class LspClient(
     override fun logMessage(message: MessageParams) {
         logListeners.forEach { it(message) }
     }
+
+    override fun refreshDiagnostics(): CompletableFuture<Void> = CompletableFuture.completedFuture(null)
 
     companion object {
         fun documentUri(path: Path): String = path.toUri().toString()

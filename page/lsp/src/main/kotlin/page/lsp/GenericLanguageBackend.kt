@@ -10,6 +10,7 @@ class GenericLanguageBackend(
     private val definition: LanguageDefinition,
     private val executableFinder: () -> Path? = { null },
     private val envSetup: ((MutableMap<String, String>) -> Unit)? = null,
+    private val initializationOptionsProvider: ((Path?) -> Any?)? = null,
 ) : LanguageBackend {
 
     override val id: String = definition.id
@@ -65,6 +66,10 @@ class GenericLanguageBackend(
         val process = builder.start()
         val transport = if (onStderrLine != null) ProcessTransport(process, onStderrLine)
         else ProcessTransport(process)
-        return LspClient(transport, workspaceRoot)
+        return LspClient(
+            transport = transport,
+            workspaceRoot = workspaceRoot,
+            initializationOptions = initializationOptionsProvider?.invoke(workspaceRoot),
+        )
     }
 }
