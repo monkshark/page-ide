@@ -133,6 +133,7 @@ class LspController(
     )
 
     @Volatile private var prepareRenameSupported: Boolean = false
+    @Volatile private var inlayHintSupported: Boolean = false
 
     @Volatile private var clientGeneration: Long = 0L
 
@@ -196,6 +197,8 @@ class LspController(
                     println("[lsp] READY — capabilities=${result.capabilities != null}")
                     prepareRenameSupported = detectPrepareRenameSupport(result.capabilities)
                     println("[lsp] prepareRename support = $prepareRenameSupported")
+                    inlayHintSupported = detectInlayHintSupport(result.capabilities)
+                    println("[lsp] inlayHint support = $inlayHintSupported")
                     flushPendingOpens()
                     openWorkspaceFiles()
                 }
@@ -326,7 +329,7 @@ class LspController(
         pendingChanges[uri] = scope.launch(Dispatchers.Default) {
             delay(debounceMs)
             try {
-                println("[lsp] didChange → KLS for $uri (${text.length} chars)")
+                println("[lsp] didChange → ${activeBackend?.id ?: "lsp"} for $uri (${text.length} chars)")
                 ws.didChange(uri, text)
             } catch (t: Throwable) {
                 println("[lsp] didChange failed for $uri: ${t.message}")
@@ -441,7 +444,7 @@ class LspController(
         val canAugmentImports = profile.supportsAutoImport && prefix.length >= 2 && triggerCharacter == null
         return ws.completion(uri, line, character, triggerCharacter, prefix)
             .thenApply { list ->
-                mark("kls")
+                mark("lsp")
                 if (list == null || !canAugmentKeywords) list
                 else CompletionAugmentor.augmentKeywords(list, prefix, profile.keywords, profile.keywordSnippets).also { mark("kw") }
             }
@@ -737,27 +740,30 @@ class LspController(
         endLine: Int,
         endCharacter: Int,
     ): CompletableFuture<List<InlayHintItem>> {
-        if (status.value != Status.READY) return CompletableFuture.completedFuture(emptyList())
+        if (status.value != Status.READY || !inlayHintSupported) return CompletableFuture.completedFuture(emptyList())
         val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
         val uri = path.toUri().toString()
         if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
         val version = ws.versionOf(uri) ?: return CompletableFuture.completedFuture(emptyList())
-        val key = InlayHintCacheKey(uri, version, startLine, startCharacter, endLine, endCharacter)
+        val syncedText = ws.textOf(uri) ?: return CompletableFuture.completedFuture(emptyList())
+        val (reqStartLine, reqStartChar, reqEndLine, reqEndChar) =
+            clampInlayHintRange(syncedText, startLine, startCharacter, endLine, endCharacter)
+        val key = InlayHintCacheKey(uri, version, reqStartLine, reqStartChar, reqEndLine, reqEndChar)
         inlayHintCache[key]?.let {
-            println("[lsp] inlayHints ✓ $uri @($startLine..$endLine) — ${it.size} hint(s), v=$version [cache=hit]")
+            println("[lsp] inlayHints ✓ $uri @($reqStartLine..$reqEndLine) — ${it.size} hint(s), v=$version [cache=hit]")
             return CompletableFuture.completedFuture(it)
         }
         val tStart = System.nanoTime()
-        return ws.inlayHints(uri, startLine, startCharacter, endLine, endCharacter)
+        return ws.inlayHints(uri, reqStartLine, reqStartChar, reqEndLine, reqEndChar)
             .handle<List<InlayHintItem>> { hints, err ->
                 val ms = (System.nanoTime() - tStart) / 1_000_000
                 if (err != null) {
-                    println("[lsp] inlayHints ✗ $uri @($startLine..$endLine): ${err.message} [${ms}ms]")
+                    println("[lsp] inlayHints ✗ $uri @($reqStartLine..$reqEndLine): ${err.message} [${ms}ms]")
                     emptyList()
                 } else {
                     val result = hints.orEmpty()
                     inlayHintCache[key] = result
-                    println("[lsp] inlayHints ✓ $uri @($startLine..$endLine) — ${result.size} hint(s), v=$version [${ms}ms]")
+                    println("[lsp] inlayHints ✓ $uri @($reqStartLine..$reqEndLine) — ${result.size} hint(s), v=$version [${ms}ms]")
                     result
                 }
             }
@@ -1127,15 +1133,6 @@ class LspController(
                     println("[lsp] prepareRename ✓ $uri @($line,$character) [${ms}ms] range=(${p.startLine},${p.startCharacter})..(${p.endLine},${p.endCharacter}) placeholder='${p.placeholder}'")
                 }
             }
-    }
-
-    private fun detectPrepareRenameSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean {
-        val rp = caps?.renameProvider ?: return false
-        return when {
-            rp.isLeft -> false
-            rp.isRight -> rp.right?.prepareProvider == true
-            else -> false
-        }
     }
 
     private fun isUnsupportedOperation(err: Throwable): Boolean {
@@ -1574,6 +1571,47 @@ fun rememberLspController(workspaceRoot: Path?): LspController {
         onDispose { controller.shutdown() }
     }
     return controller
+}
+
+internal data class ClampedInlayRange(
+    val startLine: Int,
+    val startCharacter: Int,
+    val endLine: Int,
+    val endCharacter: Int,
+)
+
+internal fun clampInlayHintRange(
+    syncedText: String,
+    startLine: Int,
+    startCharacter: Int,
+    endLine: Int,
+    endCharacter: Int,
+): ClampedInlayRange {
+    val lines = syncedText.split('\n')
+    val maxLine = (lines.size - 1).coerceAtLeast(0)
+    val endL = endLine.coerceIn(0, maxLine)
+    val endC = if (endL == endLine) endCharacter else lines[endL].length
+    val startL = startLine.coerceIn(0, endL)
+    val startC = if (startL == startLine) startCharacter else 0
+    return ClampedInlayRange(startL, startC, endL, endC)
+}
+
+internal fun detectPrepareRenameSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean {
+    val rp = caps?.renameProvider ?: return false
+    return when {
+        rp.isLeft -> false
+        rp.isRight -> rp.right?.prepareProvider == true
+        else -> false
+    }
+}
+
+internal fun detectInlayHintSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean {
+    val ih = caps?.inlayHintProvider ?: return false
+    return when {
+        ih.isLeft -> ih.left == true
+        ih.isRight -> ih.right != null
+        else -> false
+    }
 }
 
 internal fun isMemberAccessContext(text: String, line: Int, character: Int, prefixLength: Int): Boolean {
