@@ -166,6 +166,29 @@ object SnippetExpander {
         )
     }
 
+    fun reindentContinuationLines(expanded: ExpandedSnippet, indent: String): ExpandedSnippet {
+        if (indent.isEmpty() || !expanded.text.contains('\n')) return expanded
+        val src = expanded.text
+        val newlinesBefore = IntArray(src.length + 1)
+        var count = 0
+        for (i in src.indices) {
+            newlinesBefore[i] = count
+            if (src[i] == '\n') count++
+        }
+        newlinesBefore[src.length] = count
+        val sb = StringBuilder(src.length + count * indent.length)
+        for (c in src) {
+            sb.append(c)
+            if (c == '\n') sb.append(indent)
+        }
+        fun shift(p: Int): Int = p + indent.length * newlinesBefore[p.coerceIn(0, src.length)]
+        return ExpandedSnippet(
+            text = sb.toString(),
+            finalCaret = shift(expanded.finalCaret),
+            tabstops = expanded.tabstops.map { SnippetTabstop(it.number, shift(it.start), shift(it.end)) },
+        )
+    }
+
     private fun findClosingBrace(s: String, openAt: Int): Int {
         var depth = 0
         var i = openAt

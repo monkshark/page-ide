@@ -509,6 +509,7 @@ fun EditorPanel(
     var activeTabstopIndex by remember(activePath) { mutableStateOf(0) }
     var activeTabstopBase by remember(activePath) { mutableStateOf(0) }
     var activeTabstopBaseTextLen by remember(activePath) { mutableStateOf(0) }
+    var activeTabstopFinalCaret by remember(activePath) { mutableStateOf(-1) }
 
     var lspSignatureInfo by remember(activePath) { mutableStateOf<SignatureHelpInfo?>(null) }
     var lspSignatureActiveParam by remember(activePath) { mutableStateOf(0) }
@@ -529,10 +530,15 @@ fun EditorPanel(
         else completionItems.filter { item ->
             val key = item.filterText.takeIf { it.isNotBlank() } ?: item.label
             fuzzyMatch(completionPrefix, key)
-        }.sortedByDescending { item ->
-            val key = item.filterText.takeIf { it.isNotBlank() } ?: item.label
-            fuzzyScore(completionPrefix, key)
-        }
+        }.sortedWith(
+            compareByDescending<LspCompletionItem> { item ->
+                val key = item.filterText.takeIf { it.isNotBlank() } ?: item.label
+                fuzzyScore(completionPrefix, key)
+            }
+                .thenByDescending { it.kind == LspCompletionItemKind.KEYWORD }
+                .thenBy { it.sortText }
+                .thenBy { (it.filterText.takeIf { f -> f.isNotBlank() } ?: it.label).length },
+        )
     }
     LaunchedEffect(filteredItems.size) {
         if (completionSelectedIndex >= filteredItems.size) completionSelectedIndex = 0
@@ -543,6 +549,7 @@ fun EditorPanel(
         activeTabstopIndex = 0
         activeTabstopBase = 0
         activeTabstopBaseTextLen = 0
+        activeTabstopFinalCaret = -1
     }
 
     val closeCompletion: () -> Unit = {
@@ -668,16 +675,18 @@ fun EditorPanel(
             replaceStart = completionTriggerOffset.coerceIn(0, caret)
             replaceEnd = caret
         }
-        val baseInsert = if (commentKeywordMode && commentKeywordNeedsSpace) " " + item.insertText
-        else item.insertText
+        val insertText = if (commentKeywordMode) item.insertText else keywordInsertText(item)
+        val baseInsert = if (commentKeywordMode && commentKeywordNeedsSpace) " " + insertText
+        else insertText
         val needsParens = !item.isSnippet &&
             !baseInsert.contains("(") &&
             (item.kind == page.lsp.CompletionItemKind.METHOD ||
              item.kind == page.lsp.CompletionItemKind.FUNCTION ||
              item.kind == page.lsp.CompletionItemKind.CONSTRUCTOR)
         val rawInsert = if (needsParens) "$baseInsert($1)" else baseInsert
-        val expanded = if (item.isSnippet || needsParens) SnippetExpander.expand(rawInsert)
+        val expandedRaw = if (item.isSnippet || needsParens) SnippetExpander.expand(rawInsert)
         else page.lsp.ExpandedSnippet(rawInsert, rawInsert.length)
+        val expanded = SnippetExpander.reindentContinuationLines(expandedRaw, currentLineIndent(text, replaceStart))
         val addEdits = item.additionalEdits
             .map { ed ->
                 val s = lineColToOffset(text, ed.startLine, ed.startCharacter)
@@ -705,11 +714,14 @@ fun EditorPanel(
             TextRange(caretBase + expanded.finalCaret)
         }
         onValueChange(value.copy(text = newText, selection = newSel))
-        if (expanded.tabstops.size >= 2) {
+        val lastStopEnd = expanded.tabstops.lastOrNull()?.end ?: -1
+        val finalIsLandable = expanded.tabstops.isNotEmpty() && expanded.finalCaret > lastStopEnd
+        if (expanded.tabstops.size >= 2 || finalIsLandable) {
             activeTabstops = expanded.tabstops
             activeTabstopIndex = 0
             activeTabstopBase = replaceStart
             activeTabstopBaseTextLen = newText.length
+            activeTabstopFinalCaret = if (finalIsLandable) expanded.finalCaret else -1
         } else {
             clearTabstops()
         }
@@ -719,20 +731,27 @@ fun EditorPanel(
     val advanceTabstop: () -> Boolean = lambda@{
         val stops = activeTabstops
         if (stops.isEmpty()) return@lambda false
-        val nextIdx = activeTabstopIndex + 1
-        if (nextIdx >= stops.size) {
-            clearTabstops()
-            return@lambda false
-        }
-        val stop = stops[nextIdx]
         val base = activeTabstopBase
         val textLen = value.text.length
         val delta = textLen - activeTabstopBaseTextLen
-        val from = (base + stop.start + delta).coerceIn(0, textLen)
-        val to = (base + stop.end + delta).coerceIn(from, textLen)
-        activeTabstopIndex = nextIdx
-        onValueChange(value.copy(selection = TextRange(from, to)))
-        true
+        val nextIdx = activeTabstopIndex + 1
+        if (nextIdx < stops.size) {
+            val stop = stops[nextIdx]
+            val from = (base + stop.start + delta).coerceIn(0, textLen)
+            val to = (base + stop.end + delta).coerceIn(from, textLen)
+            activeTabstopIndex = nextIdx
+            onValueChange(value.copy(selection = TextRange(from, to)))
+            return@lambda true
+        }
+        val finalCaret = activeTabstopFinalCaret
+        if (finalCaret >= 0) {
+            val pos = (base + finalCaret + delta).coerceIn(0, textLen)
+            clearTabstops()
+            onValueChange(value.copy(selection = TextRange(pos)))
+            return@lambda true
+        }
+        clearTabstops()
+        false
     }
 
     LaunchedEffect(value.text, value.selection.end) {
@@ -1026,7 +1045,11 @@ fun EditorPanel(
                                 return@CodeEditor true
                             }
                             Key.Tab, Key.Enter, Key.NumPadEnter -> {
-                                applySelected()
+                                if (event.key == Key.Tab && activeTabstops.isNotEmpty() && advanceTabstop()) {
+                                    closeCompletion()
+                                } else {
+                                    applySelected()
+                                }
                                 return@CodeEditor true
                             }
                             Key.Escape -> {
@@ -1425,6 +1448,19 @@ private fun readDefinitionFileText(uri: String): String? {
     } catch (_: Throwable) {
         null
     }
+}
+
+private fun currentLineIndent(text: String, offset: Int): String {
+    val safe = offset.coerceIn(0, text.length)
+    var lineStart = safe
+    while (lineStart > 0 && text[lineStart - 1] != '\n') lineStart--
+    val sb = StringBuilder()
+    var i = lineStart
+    while (i < text.length && (text[i] == ' ' || text[i] == '\t')) {
+        sb.append(text[i])
+        i++
+    }
+    return sb.toString()
 }
 
 private fun lineColToOffset(text: String, line: Int, col: Int): Int {
@@ -2007,7 +2043,15 @@ private fun StatusItem(text: String) {
     )
 }
 
-private fun fuzzyMatch(query: String, target: String): Boolean {
+internal fun keywordInsertText(item: LspCompletionItem): String {
+    if (item.kind != LspCompletionItemKind.KEYWORD) return item.insertText
+    val text = item.insertText
+    if (text.isEmpty() || text.contains('$') || text.contains('\n')) return text
+    if (text.last().isWhitespace()) return text
+    return "$text "
+}
+
+internal fun fuzzyMatch(query: String, target: String): Boolean {
     if (query.isEmpty()) return true
     val q = query.lowercase()
     val t = target.lowercase()
@@ -2020,11 +2064,11 @@ private fun fuzzyMatch(query: String, target: String): Boolean {
     return false
 }
 
-private fun fuzzyScore(query: String, target: String): Int {
+internal fun fuzzyScore(query: String, target: String): Int {
     if (query.isEmpty()) return 0
     val q = query.lowercase()
     val t = target.lowercase()
-    if (t.startsWith(q)) return 1000 + (100 - t.length)
+    if (t.startsWith(q)) return if (target.startsWith(query)) 2000 else 1000
     var score = 0
     var qi = 0
     var prevMatch = false
