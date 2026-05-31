@@ -101,6 +101,20 @@ class JdkInstallerTest {
     )
 
     @Test
+    fun selectVersionAtLeastPicksHighestSatisfyingMajor() {
+        val installed = listOf("21.0.10-7-LTS", "17.0.19-10", "11.0.31-11", "8.0.432-6")
+        assertEquals("21.0.10-7-LTS", JdkInstaller.selectVersionAtLeast(installed, 21))
+        assertEquals("21.0.10-7-LTS", JdkInstaller.selectVersionAtLeast(installed, 11))
+    }
+
+    @Test
+    fun selectVersionAtLeastReturnsNullWhenNoneSatisfy() {
+        val installed = listOf("17.0.19-10", "11.0.31-11")
+        assertNull(JdkInstaller.selectVersionAtLeast(installed, 21))
+        assertNull(JdkInstaller.selectVersionAtLeast(emptyList(), 21))
+    }
+
+    @Test
     fun downloadUrlForWindowsAmd64() {
         val installer = JdkInstaller(osKey = "windows", archKey = "amd64", isWindows = true)
         val url = installer.downloadUrl("21.0.5+11")

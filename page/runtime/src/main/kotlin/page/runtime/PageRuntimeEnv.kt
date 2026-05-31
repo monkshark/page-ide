@@ -79,6 +79,22 @@ object PageRuntimeEnv {
         runCatching { ensureClangdConfigForMingw() }
     }
 
+    fun pinJavaRuntime(env: MutableMap<String, String>, minMajor: Int = 21) {
+        val home = runCatching { JdkInstaller().javaHomeAtLeast(minMajor) }.getOrNull()
+            ?: JavaRuntimeProbe.systemJavaHomeAtLeast(minMajor)
+            ?: return
+        pinJavaRuntime(env, home)
+    }
+
+    internal fun pinJavaRuntime(env: MutableMap<String, String>, home: Path) {
+        val sep = System.getProperty("path.separator") ?: ";"
+        env["JAVA_HOME"] = home.toAbsolutePath().toString()
+        val pathKey = env.keys.firstOrNull { it.equals("PATH", ignoreCase = true) } ?: "PATH"
+        val bin = home.resolve("bin").toAbsolutePath().toString()
+        val current = env[pathKey].orEmpty()
+        env[pathKey] = if (current.isEmpty()) bin else bin + sep + current
+    }
+
     fun normalizeForLaunch(env: MutableMap<String, String>) {
         if (!LspInstaller.isWindows()) return
         collapseCaseInsensitiveDuplicates(env)
