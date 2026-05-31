@@ -436,7 +436,8 @@ class LspController(
         }
 
         val profile = CompletionProfile.forLanguage(activeBackend?.id)
-        val canAugmentKeywords = profile.keywords.isNotEmpty() && prefix.isNotEmpty() && triggerCharacter == null
+        val canAugmentKeywords = profile.keywords.isNotEmpty() && prefix.isNotEmpty() && triggerCharacter == null &&
+            !isMemberAccessContext(text, line, character, prefix.length)
         val canAugmentImports = profile.supportsAutoImport && prefix.length >= 2 && triggerCharacter == null
         return ws.completion(uri, line, character, triggerCharacter, prefix)
             .thenApply { list ->
@@ -1573,6 +1574,16 @@ fun rememberLspController(workspaceRoot: Path?): LspController {
         onDispose { controller.shutdown() }
     }
     return controller
+}
+
+internal fun isMemberAccessContext(text: String, line: Int, character: Int, prefixLength: Int): Boolean {
+    val lines = text.split('\n')
+    if (line < 0 || line >= lines.size) return false
+    val raw = lines[line]
+    val ln = if (raw.endsWith('\r')) raw.dropLast(1) else raw
+    val wordStart = (character - prefixLength).coerceIn(0, ln.length)
+    if (wordStart <= 0) return false
+    return ln[wordStart - 1] == '.'
 }
 
 val LspController.errorAndWarningCount: Int
