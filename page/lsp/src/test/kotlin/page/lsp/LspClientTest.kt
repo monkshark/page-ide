@@ -29,6 +29,23 @@ class LspClientTest {
     }
 
     @Test
+    fun `initialize advertises completionItem resolveSupport so resolve-gated servers enable it`() {
+        val harness = LspTestHarness()
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            waitUntil { harness.fakeServer.initializeCalls.isNotEmpty() }
+            val completionItem = harness.fakeServer.initializeCalls.peek()
+                .capabilities.textDocument.completion.completionItem
+            assertTrue(completionItem.snippetSupport)
+            val props = completionItem.resolveSupport?.properties
+            assertNotNull(props)
+            assertTrue(props!!.containsAll(listOf("documentation", "detail", "additionalTextEdits")))
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun `shutdown transitions to EXITED and calls server shutdown + exit`() {
         val harness = LspTestHarness()
         try {
