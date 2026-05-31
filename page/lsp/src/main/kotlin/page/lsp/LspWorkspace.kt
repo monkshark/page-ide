@@ -34,6 +34,7 @@ import org.eclipse.lsp4j.VersionedTextDocumentIdentifier
 import org.eclipse.lsp4j.WorkspaceSymbolParams
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 data class WorkspaceSymbolEntry(
     val name: String,
@@ -46,6 +47,9 @@ class LspWorkspace(private val client: LspClient) {
     private data class OpenDoc(val languageId: String, var version: Int, var text: String)
 
     private val openDocs = ConcurrentHashMap<String, OpenDoc>()
+
+    private val resolveRegistry = ConcurrentHashMap<Long, org.eclipse.lsp4j.CompletionItem>()
+    private val resolveTokenSeq = AtomicLong(0)
 
     fun isOpen(uri: String): Boolean = openDocs.containsKey(uri)
     fun textOf(uri: String): String? = openDocs[uri]?.text
@@ -117,13 +121,24 @@ class LspWorkspace(private val client: LspClient) {
         } else {
             CompletionContext(CompletionTriggerKind.Invoked)
         }
+        resolveRegistry.clear()
+        val registerToken: (org.eclipse.lsp4j.CompletionItem) -> Long? = { orig ->
+            resolveTokenSeq.incrementAndGet().also { resolveRegistry[it] = orig }
+        }
         return client.server().textDocumentService.completion(params).thenApply { either ->
             when {
                 either == null -> CompletionList.EMPTY
-                either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty(), triggerCharacter, prefix)
-                else -> CompletionList.fromLsp(either.right, triggerCharacter, prefix)
+                either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty(), triggerCharacter, prefix, registerToken)
+                else -> CompletionList.fromLsp(either.right, triggerCharacter, prefix, registerToken)
             }
         }
+    }
+
+    fun resolveCompletionItem(token: Long): CompletableFuture<ResolvedCompletion?> {
+        val original = resolveRegistry[token] ?: return CompletableFuture.completedFuture(null)
+        return client.server().textDocumentService.resolveCompletionItem(original)
+            .thenApply { resolved -> resolved?.let { ResolvedCompletion.fromLsp(it) } }
+            .exceptionally { null }
     }
 
     fun hover(uri: String, line: Int, character: Int): CompletableFuture<HoverInfo?> {

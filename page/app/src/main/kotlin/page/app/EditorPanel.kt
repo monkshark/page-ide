@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -102,6 +103,7 @@ import page.lsp.HoverInfo
 import page.lsp.InlayHintItem
 import page.lsp.RenamePrepare
 import page.lsp.RenameWorkspaceEdit
+import page.lsp.ResolvedCompletion
 import page.lsp.SignatureActiveParam
 import page.lsp.SignatureHelpInfo
 import page.lsp.enrichForPropertyDecl
@@ -144,6 +146,7 @@ fun EditorPanel(
     onRequestHover: ((line: Int, character: Int) -> CompletableFuture<HoverInfo?>)? = null,
     onRequestDefinition: ((line: Int, character: Int) -> CompletableFuture<List<DefinitionTarget>>)? = null,
     onRequestSignatureHelp: ((line: Int, character: Int, triggerCharacter: String?, isRetrigger: Boolean) -> CompletableFuture<SignatureHelpInfo?>)? = null,
+    onResolveCompletion: ((token: Long) -> CompletableFuture<ResolvedCompletion?>)? = null,
     onGoToDefinition: ((DefinitionTarget) -> Unit)? = null,
     onRequestPrepareRename: ((line: Int, character: Int) -> CompletableFuture<RenamePrepare?>)? = null,
     onRequestRename: ((line: Int, character: Int, newName: String) -> CompletableFuture<RenameWorkspaceEdit>)? = null,
@@ -499,6 +502,7 @@ fun EditorPanel(
     val completionScope = rememberCoroutineScope()
     var completionItems by remember(activePath) { mutableStateOf<List<LspCompletionItem>>(emptyList()) }
     var completionSelectedIndex by remember(activePath) { mutableStateOf(0) }
+    val resolvedByToken = remember(activePath) { mutableStateMapOf<Long, ResolvedCompletion>() }
     var completionTriggerOffset by remember(activePath) { mutableStateOf(-1) }
     var completionRequestToken by remember(activePath) { mutableStateOf(0) }
     var commentKeywordMode by remember(activePath) { mutableStateOf(false) }
@@ -542,6 +546,16 @@ fun EditorPanel(
     }
     LaunchedEffect(filteredItems.size) {
         if (completionSelectedIndex >= filteredItems.size) completionSelectedIndex = 0
+    }
+    LaunchedEffect(filteredItems, completionSelectedIndex) {
+        val resolve = onResolveCompletion ?: return@LaunchedEffect
+        val item = filteredItems.getOrNull(completionSelectedIndex) ?: return@LaunchedEffect
+        val token = item.resolveToken ?: return@LaunchedEffect
+        if (resolvedByToken.containsKey(token)) return@LaunchedEffect
+        delay(120)
+        resolve(token).whenComplete { resolved, _ ->
+            if (resolved != null) resolvedByToken[token] = resolved
+        }
     }
 
     val clearTabstops: () -> Unit = {
@@ -675,57 +689,74 @@ fun EditorPanel(
             replaceStart = completionTriggerOffset.coerceIn(0, caret)
             replaceEnd = caret
         }
-        val insertText = if (commentKeywordMode) item.insertText else keywordInsertText(item)
-        val baseInsert = if (commentKeywordMode && commentKeywordNeedsSpace) " " + insertText
-        else insertText
-        val needsParens = !item.isSnippet &&
-            !baseInsert.contains("(") &&
-            (item.kind == page.lsp.CompletionItemKind.METHOD ||
-             item.kind == page.lsp.CompletionItemKind.FUNCTION ||
-             item.kind == page.lsp.CompletionItemKind.CONSTRUCTOR)
-        val rawInsert = if (needsParens) "$baseInsert($1)" else baseInsert
-        val expandedRaw = if (item.isSnippet || needsParens) SnippetExpander.expand(rawInsert)
-        else page.lsp.ExpandedSnippet(rawInsert, rawInsert.length)
-        val expanded = SnippetExpander.reindentContinuationLines(expandedRaw, currentLineIndent(text, replaceStart))
-        val addEdits = item.additionalEdits
-            .map { ed ->
-                val s = lineColToOffset(text, ed.startLine, ed.startCharacter)
-                val e = lineColToOffset(text, ed.endLine, ed.endCharacter)
-                Triple(s, e, ed.newText)
+        val finishApply: (List<page.lsp.CompletionEdit>) -> Unit = { additionalEdits ->
+            val insertText = if (commentKeywordMode) item.insertText else keywordInsertText(item)
+            val baseInsert = if (commentKeywordMode && commentKeywordNeedsSpace) " " + insertText
+            else insertText
+            val needsParens = !item.isSnippet &&
+                !baseInsert.contains("(") &&
+                (item.kind == page.lsp.CompletionItemKind.METHOD ||
+                 item.kind == page.lsp.CompletionItemKind.FUNCTION ||
+                 item.kind == page.lsp.CompletionItemKind.CONSTRUCTOR)
+            val rawInsert = if (needsParens) "$baseInsert($1)" else baseInsert
+            val expandedRaw = if (item.isSnippet || needsParens) SnippetExpander.expand(rawInsert)
+            else page.lsp.ExpandedSnippet(rawInsert, rawInsert.length)
+            val expanded = SnippetExpander.reindentContinuationLines(expandedRaw, currentLineIndent(text, replaceStart))
+            val addEdits = additionalEdits
+                .map { ed ->
+                    val s = lineColToOffset(text, ed.startLine, ed.startCharacter)
+                    val e = lineColToOffset(text, ed.endLine, ed.endCharacter)
+                    Triple(s, e, ed.newText)
+                }
+                .filter { (s, e, _) ->
+                    s in 0..text.length && e in s..text.length && (e <= replaceStart || s >= replaceEnd)
+                }
+            val allEdits = (addEdits + Triple(replaceStart, replaceEnd, expanded.text))
+                .sortedByDescending { it.first }
+            var working = text
+            for ((s, e, t) in allEdits) {
+                working = working.substring(0, s) + t + working.substring(e)
             }
-            .filter { (s, e, _) ->
-                s in 0..text.length && e in s..text.length && (e <= replaceStart || s >= replaceEnd)
+            val newText = working
+            val preShift = addEdits
+                .filter { (s, _, _) -> s < replaceStart }
+                .sumOf { (s, e, t) -> t.length - (e - s) }
+            val caretBase = replaceStart + preShift
+            val firstStop = expanded.tabstops.firstOrNull()
+            val newSel = if (firstStop != null) {
+                TextRange(caretBase + firstStop.start, caretBase + firstStop.end)
+            } else {
+                TextRange(caretBase + expanded.finalCaret)
             }
-        val allEdits = (addEdits + Triple(replaceStart, replaceEnd, expanded.text))
-            .sortedByDescending { it.first }
-        var working = text
-        for ((s, e, t) in allEdits) {
-            working = working.substring(0, s) + t + working.substring(e)
+            onValueChange(value.copy(text = newText, selection = newSel))
+            val lastStopEnd = expanded.tabstops.lastOrNull()?.end ?: -1
+            val finalIsLandable = expanded.tabstops.isNotEmpty() && expanded.finalCaret > lastStopEnd
+            if (expanded.tabstops.size >= 2 || finalIsLandable) {
+                activeTabstops = expanded.tabstops
+                activeTabstopIndex = 0
+                activeTabstopBase = replaceStart
+                activeTabstopBaseTextLen = newText.length
+                activeTabstopFinalCaret = if (finalIsLandable) expanded.finalCaret else -1
+            } else {
+                clearTabstops()
+            }
+            closeCompletion()
         }
-        val newText = working
-        val preShift = addEdits
-            .filter { (s, _, _) -> s < replaceStart }
-            .sumOf { (s, e, t) -> t.length - (e - s) }
-        val caretBase = replaceStart + preShift
-        val firstStop = expanded.tabstops.firstOrNull()
-        val newSel = if (firstStop != null) {
-            TextRange(caretBase + firstStop.start, caretBase + firstStop.end)
+        val token = item.resolveToken
+        val cached = token?.let { resolvedByToken[it] }
+        val resolve = onResolveCompletion
+        if (token != null && resolve != null && cached == null && item.additionalEdits.isEmpty()) {
+            resolve(token)
+                .orTimeout(400, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .whenComplete { resolved, _ ->
+                    completionScope.launch {
+                        if (resolved != null) resolvedByToken[token] = resolved
+                        finishApply(resolved?.additionalEdits?.takeIf { it.isNotEmpty() } ?: item.additionalEdits)
+                    }
+                }
         } else {
-            TextRange(caretBase + expanded.finalCaret)
+            finishApply(cached?.additionalEdits?.takeIf { it.isNotEmpty() } ?: item.additionalEdits)
         }
-        onValueChange(value.copy(text = newText, selection = newSel))
-        val lastStopEnd = expanded.tabstops.lastOrNull()?.end ?: -1
-        val finalIsLandable = expanded.tabstops.isNotEmpty() && expanded.finalCaret > lastStopEnd
-        if (expanded.tabstops.size >= 2 || finalIsLandable) {
-            activeTabstops = expanded.tabstops
-            activeTabstopIndex = 0
-            activeTabstopBase = replaceStart
-            activeTabstopBaseTextLen = newText.length
-            activeTabstopFinalCaret = if (finalIsLandable) expanded.finalCaret else -1
-        } else {
-            clearTabstops()
-        }
-        closeCompletion()
     }
 
     val advanceTabstop: () -> Boolean = lambda@{
@@ -855,11 +886,13 @@ fun EditorPanel(
                     ?: sanitizeLabel(item.filterText)
                     ?: sanitizeLabel(item.insertText)
                     ?: "<unnamed>"
+                val resolved = item.resolveToken?.let { resolvedByToken[it] }
+                val effectiveDetail = resolved?.detail?.takeIf { it.isNotBlank() } ?: item.detail
                 CompletionDisplay(
                     label = displayLabel,
                     kindHint = kindHint(item.kind),
-                    detail = item.detail?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() },
-                    documentation = item.documentation,
+                    detail = effectiveDetail?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() },
+                    documentation = resolved?.documentation?.takeIf { it.isNotBlank() } ?: item.documentation,
                     kindColor = kindColor(item.kind),
                 )
             }

@@ -2,6 +2,7 @@ package page.lsp
 
 import org.eclipse.lsp4j.CodeAction
 import org.eclipse.lsp4j.Command
+import org.eclipse.lsp4j.CompletionItem
 import org.eclipse.lsp4j.DocumentSymbol
 import org.eclipse.lsp4j.Hover
 import org.eclipse.lsp4j.Location
@@ -700,6 +701,84 @@ class LspWorkspaceTest {
         harness.fakeServer.inlayHintResponse = null
         val list = workspace.inlayHints(uri, 0, 0, 1, 0).get(2, TimeUnit.SECONDS)
         assertTrue(list.isEmpty())
+    }
+
+    @Test
+    fun `completion on unopened doc returns empty without server call`() {
+        val list = workspace.completion("file:///nope.kt", 0, 0).get(2, TimeUnit.SECONDS)
+        assertTrue(list.items.isEmpty())
+        assertTrue(harness.fakeServer.completionCalls.isEmpty())
+    }
+
+    @Test
+    fun `completion assigns resolve tokens to items`() {
+        val uri = "file:///CP.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.completionResponse = Either.forLeft(
+            mutableListOf(
+                CompletionItem("foo").apply { detail = "fun foo()" },
+                CompletionItem("bar").apply { detail = "fun bar()" },
+            ),
+        )
+
+        val list = workspace.completion(uri, 0, 0).get(2, TimeUnit.SECONDS)
+        assertEquals(2, list.items.size)
+        val tokens = list.items.mapNotNull { it.resolveToken }
+        assertEquals(2, tokens.size)
+        assertEquals(2, tokens.toSet().size)
+    }
+
+    @Test
+    fun `resolveCompletionItem returns documentation and additional edits`() {
+        val uri = "file:///CR.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.completionResponse = Either.forLeft(
+            mutableListOf(CompletionItem("HashMap")),
+        )
+        val list = workspace.completion(uri, 0, 0).get(2, TimeUnit.SECONDS)
+        val token = list.items.first().resolveToken
+        assertNotNull(token)
+
+        harness.fakeServer.resolveCompletionResponse = CompletionItem("HashMap").apply {
+            documentation = Either.forRight(MarkupContent(MarkupKind.MARKDOWN, "A hash-based map."))
+            detail = "java.util.HashMap"
+            additionalTextEdits = mutableListOf(
+                TextEdit(Range(Position(0, 0), Position(0, 0)), "import java.util.HashMap;\n"),
+            )
+        }
+
+        val resolved = workspace.resolveCompletionItem(token!!).get(2, TimeUnit.SECONDS)
+        assertNotNull(resolved)
+        assertEquals("A hash-based map.", resolved!!.documentation)
+        assertEquals("java.util.HashMap", resolved.detail)
+        assertEquals(1, resolved.additionalEdits.size)
+        assertEquals("import java.util.HashMap;\n", resolved.additionalEdits[0].newText)
+        assertEquals(0, resolved.additionalEdits[0].startLine)
+
+        waitUntil { harness.fakeServer.resolveCompletionCalls.isNotEmpty() }
+        assertEquals("HashMap", harness.fakeServer.resolveCompletionCalls.first().label)
+    }
+
+    @Test
+    fun `resolveCompletionItem with unknown token returns null without server call`() {
+        val resolved = workspace.resolveCompletionItem(987654L).get(2, TimeUnit.SECONDS)
+        assertNull(resolved)
+        assertTrue(harness.fakeServer.resolveCompletionCalls.isEmpty())
+    }
+
+    @Test
+    fun `new completion call clears prior resolve registry`() {
+        val uri = "file:///CL.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.completionResponse = Either.forLeft(mutableListOf(CompletionItem("first")))
+        val firstToken = workspace.completion(uri, 0, 0).get(2, TimeUnit.SECONDS).items.first().resolveToken
+        assertNotNull(firstToken)
+
+        harness.fakeServer.completionResponse = Either.forLeft(mutableListOf(CompletionItem("second")))
+        workspace.completion(uri, 0, 1).get(2, TimeUnit.SECONDS)
+
+        val stale = workspace.resolveCompletionItem(firstToken!!).get(2, TimeUnit.SECONDS)
+        assertNull(stale)
     }
 
     private fun waitUntil(timeoutMs: Long = 2000, predicate: () -> Boolean) {
