@@ -46,6 +46,24 @@ class LspClientTest {
     }
 
     @Test
+    fun `initialize advertises publishDiagnostics tagSupport so servers send Unnecessary tags`() {
+        val harness = LspTestHarness()
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            waitUntil { harness.fakeServer.initializeCalls.isNotEmpty() }
+            val publish = harness.fakeServer.initializeCalls.peek()
+                .capabilities.textDocument.publishDiagnostics
+            assertNotNull(publish)
+            val valueSet = publish!!.tagSupport?.right?.valueSet
+            assertNotNull(valueSet)
+            assertTrue(valueSet!!.contains(org.eclipse.lsp4j.DiagnosticTag.Unnecessary))
+            assertTrue(valueSet.contains(org.eclipse.lsp4j.DiagnosticTag.Deprecated))
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun `initialize advertises workspace applyEdit so command-based code actions can edit`() {
         val harness = LspTestHarness()
         try {

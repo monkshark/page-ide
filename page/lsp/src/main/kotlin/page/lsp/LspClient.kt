@@ -10,7 +10,10 @@ import org.eclipse.lsp4j.CodeActionResolveSupportCapabilities
 import org.eclipse.lsp4j.CompletionCapabilities
 import org.eclipse.lsp4j.CompletionItemCapabilities
 import org.eclipse.lsp4j.CompletionItemResolveSupportCapabilities
+import org.eclipse.lsp4j.DiagnosticTag
+import org.eclipse.lsp4j.DiagnosticsTagSupport
 import org.eclipse.lsp4j.DidChangeConfigurationParams
+import org.eclipse.lsp4j.PublishDiagnosticsCapabilities
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.MessageActionItem
@@ -185,6 +188,13 @@ class LspClient(
                     isPreferredSupport = true
                     dataSupport = true
                     resolveSupport = CodeActionResolveSupportCapabilities(listOf("edit"))
+                }
+                publishDiagnostics = PublishDiagnosticsCapabilities().apply {
+                    tagSupport = org.eclipse.lsp4j.jsonrpc.messages.Either.forRight(
+                        DiagnosticsTagSupport(
+                            listOf(DiagnosticTag.Unnecessary, DiagnosticTag.Deprecated),
+                        ),
+                    )
                 }
             }
         }
