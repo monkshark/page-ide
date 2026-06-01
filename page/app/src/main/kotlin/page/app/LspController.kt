@@ -1597,7 +1597,7 @@ class LspController(
             "Cannot rename external library symbols (kotlin-stdlib · dependency jars)"
         private val WORKSPACE_AUTO_OPEN_EXCLUDES = setOf(
             ".git", ".hg", ".svn", ".idea", ".idea_modules", ".vs", ".vscode",
-            ".gradle", "build", "out", "bin", "target", "node_modules",
+            ".gradle", "build", "out", "bin", "target", "node_modules", ".page-ide",
         )
         const val STARTUP_KIND = "startup"
         const val GRADLE_DEPS_KIND = KLS_GRADLE_DEPS_KIND
