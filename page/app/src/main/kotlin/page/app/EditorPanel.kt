@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import page.editor.BracketMatch
 import page.editor.FoldRegions
 import page.editor.Indent
@@ -249,9 +250,11 @@ fun EditorPanel(
     val diagnosticDecorations = remember(value.text, diagnostics, showInlineDiagnostics) {
         if (!showInlineDiagnostics) emptyList()
         else diagnostics.mapNotNull { d ->
-            val startOff = lineColToOffset(value.text, d.start.line, d.start.character)
-            val endOff = lineColToOffset(value.text, d.end.line, d.end.character)
-            if (startOff < 0 || endOff < 0 || endOff <= startOff) return@mapNotNull null
+            val (startOff, endOff) = diagnosticUnderlineRange(
+                value.text,
+                lineColToOffset(value.text, d.start.line, d.start.character),
+                lineColToOffset(value.text, d.end.line, d.end.character),
+            ) ?: return@mapNotNull null
             val color = when (d.severity) {
                 DiagnosticSeverity.ERROR -> errorColor
                 DiagnosticSeverity.WARNING -> warningColor
@@ -272,9 +275,12 @@ fun EditorPanel(
 
     val diagnosticRanges = remember(value.text, diagnostics) {
         diagnostics.mapNotNull { d ->
-            val s = lineColToOffset(value.text, d.start.line, d.start.character)
-            val e = lineColToOffset(value.text, d.end.line, d.end.character)
-            if (s < 0 || e <= s) null else Triple(s, e, d)
+            val widened = diagnosticUnderlineRange(
+                value.text,
+                lineColToOffset(value.text, d.start.line, d.start.character),
+                lineColToOffset(value.text, d.end.line, d.end.character),
+            ) ?: return@mapNotNull null
+            Triple(widened.first, widened.second, d)
         }
     }
     var pendingHoverDiagnostic by remember(diagnostics) { mutableStateOf<Diagnostic?>(null) }
@@ -623,15 +629,19 @@ fun EditorPanel(
         val token = completionRequestToken
         completionScope.launch {
             if (triggerChar != null) delay(80)
-            if (token != completionRequestToken) return@launch
-            cb(pos.line, pos.col, triggerChar).whenComplete { list, throwable ->
-                if (throwable != null || list == null) return@whenComplete
-                completionScope.launch {
-                    if (token == completionRequestToken) {
-                        completionItems = list.items
-                        completionSelectedIndex = 0
-                    }
+            val maxAttempts = if (triggerChar != null) 6 else 1
+            var attempt = 0
+            while (attempt < maxAttempts) {
+                if (token != completionRequestToken) return@launch
+                val list = runCatching { cb(pos.line, pos.col, triggerChar).await() }.getOrNull()
+                if (token != completionRequestToken) return@launch
+                if (list != null && list.items.isNotEmpty()) {
+                    completionItems = list.items
+                    completionSelectedIndex = 0
+                    return@launch
                 }
+                attempt++
+                if (attempt < maxAttempts) delay(900)
             }
         }
     }
@@ -1494,6 +1504,14 @@ private fun currentLineIndent(text: String, offset: Int): String {
         i++
     }
     return sb.toString()
+}
+
+internal fun diagnosticUnderlineRange(text: String, startOff: Int, endOff: Int): Pair<Int, Int>? {
+    if (startOff < 0 || endOff < 0) return null
+    if (endOff > startOff) return startOff to endOff
+    if (startOff < text.length && text[startOff] != '\n') return startOff to startOff + 1
+    if (startOff > 0 && text[startOff - 1] != '\n') return startOff - 1 to startOff
+    return null
 }
 
 private fun lineColToOffset(text: String, line: Int, col: Int): Int {

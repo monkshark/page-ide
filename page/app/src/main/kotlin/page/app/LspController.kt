@@ -32,6 +32,7 @@ import page.lsp.KLS_GRADLE_SCRIPT_DEPS_KIND
 import page.lsp.KLS_LINTING_KIND
 import page.lsp.KLS_SYMBOL_INDEX_KIND
 import page.lsp.KlsActivity
+import page.lsp.LspProgress
 import page.lsp.LanguageBackend
 import page.lsp.LanguageDefinition
 import page.lsp.LanguageRegistry
@@ -172,6 +173,7 @@ class LspController(
                 applyActivityEvent(parseKlsActivity(mp.message))
             }
             c.onShowMessage { mp -> println("[lsp:show/${mp.type}] ${mp.message}") }
+            c.onProgress { event -> if (myGeneration == clientGeneration) applyProgressEvent(event) }
             val startFuture = c.start()
             scope.launch {
                 kotlinx.coroutines.delay(60_000)
@@ -218,13 +220,13 @@ class LspController(
         }
     }
 
-    private fun startActivity(kind: String, label: String) {
+    private fun startActivity(kind: String, label: String, progress: Float? = null) {
         val now = System.currentTimeMillis()
         val existing = activities[kind]
         if (existing == null) {
-            activities[kind] = Activity(kind, label, now)
+            activities[kind] = Activity(kind, label, now, progress = progress)
         } else {
-            activities[kind] = existing.copy(label = label, startedAtMs = now)
+            activities[kind] = existing.copy(label = label, startedAtMs = now, progress = progress)
         }
     }
 
@@ -261,6 +263,36 @@ class LspController(
         }
     }
 
+    private val progressTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun applyProgressEvent(event: LspProgress) {
+        val kind = "progress:${event.token}"
+        when (event) {
+            is LspProgress.Begin -> {
+                progressTitles[event.token] = event.title
+                startActivity(kind, progressLabel(event.title, event.message), progressFraction(event.percentage))
+            }
+            is LspProgress.Report -> {
+                val title = progressTitles[event.token].orEmpty()
+                startActivity(kind, progressLabel(title, event.message), progressFraction(event.percentage))
+            }
+            is LspProgress.End -> {
+                progressTitles.remove(event.token)
+                endActivity(kind)
+            }
+        }
+    }
+
+    private fun progressFraction(percentage: Int?): Float? =
+        percentage?.let { (it / 100f).coerceIn(0f, 1f) }
+
+    private fun progressLabel(title: String, message: String?): String = when {
+        title.isNotBlank() && !message.isNullOrBlank() -> "$title — $message"
+        title.isNotBlank() -> title
+        !message.isNullOrBlank() -> message
+        else -> "작업 중…"
+    }
+
     private fun activityTimeoutMs(kind: String): Long = when (kind) {
         STARTUP_KIND -> 120_000L
         GRADLE_DEPS_KIND, GRADLE_SCRIPT_DEPS_KIND -> 600_000L
@@ -286,6 +318,7 @@ class LspController(
         val kinds = activities.keys.toList()
         println("[lsp] clearing activities ($reason): $kinds")
         activities.clear()
+        progressTitles.clear()
     }
 
     fun didOpen(path: Path, languageId: String, text: String) {
@@ -340,6 +373,24 @@ class LspController(
         }
     }
 
+    fun didSave(path: Path, text: String) {
+        val uri = path.toUri().toString()
+        if (status.value != Status.READY) return
+        val ws = workspace ?: return
+        if (!ws.isOpen(uri)) return
+        pendingChanges[uri]?.cancel()
+        invalidateCompletionCache(uri)
+        scope.launch(Dispatchers.Default) {
+            try {
+                ws.didChange(uri, text)
+                ws.didSave(uri)
+                println("[lsp] didSave → ${activeBackend?.id ?: "lsp"} for $uri")
+            } catch (t: Throwable) {
+                println("[lsp] didSave failed for $uri: ${t.message}")
+            }
+        }
+    }
+
     private fun invalidateCompletionCache(uri: String) {
         synchronized(completionCache) {
             completionCache.entries.removeAll { it.key.uri == uri }
@@ -374,7 +425,7 @@ class LspController(
         invalidateInlayHintCache(uri)
         val ws = workspace
         if (ws != null && ws.isOpen(uri)) ws.didClose(uri)
-        diagnosticsByUri.remove(uri)
+        diagnosticsByUri.remove(canonicalUri(uri))
     }
 
     private fun invalidateInlayHintCache(uri: String) {
@@ -386,7 +437,7 @@ class LspController(
 
     fun diagnosticsFor(path: Path): List<Diagnostic> {
         val uri = path.toUri().toString()
-        return diagnosticsByUri[uri].orEmpty()
+        return diagnosticsByUri[canonicalUri(uri)].orEmpty()
     }
 
     fun completion(
@@ -709,7 +760,7 @@ class LspController(
         val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
         val uri = path.toUri().toString()
         if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
-        val overlappingDiags = diagnosticsByUri[uri].orEmpty().filter { d ->
+        val overlappingDiags = diagnosticsByUri[canonicalUri(uri)].orEmpty().filter { d ->
             rangeOverlaps(
                 d.start.line, d.start.character, d.end.line, d.end.character,
                 startLine, startCharacter, endLine, endCharacter,
@@ -1463,7 +1514,7 @@ class LspController(
             invalidateCompletionCache(oldUri)
             invalidateInlayHintCache(oldUri)
             if (ws.isOpen(oldUri)) runCatching { ws.didClose(oldUri) }
-            diagnosticsByUri.remove(oldUri)
+            diagnosticsByUri.remove(canonicalUri(oldUri))
             events.add(oldUri to org.eclipse.lsp4j.FileChangeType.Deleted)
             events.add(newUri to org.eclipse.lsp4j.FileChangeType.Created)
             if (!ws.isOpen(newUri)) {
@@ -1561,12 +1612,12 @@ class LspController(
         val uri = params.uri ?: return
         if (isNoiseUri(uri)) return
         val mapped = params.diagnostics.orEmpty().map(Diagnostic::fromLsp)
-        diagnosticsByUri[uri] = mapped
+        diagnosticsByUri[canonicalUri(uri)] = mapped
         if (mapped.isNotEmpty()) {
             println("[lsp] publishDiagnostics $uri — ${mapped.size} diagnostic(s)")
             mapped.take(5).forEach { d ->
                 val msgPreview = d.message.take(60).replace('\n', ' ')
-                println("    · L${d.start.line}:${d.start.character} sev=${d.severity} code='${d.code ?: ""}' msg='$msgPreview'")
+                println("    · L${d.start.line}:${d.start.character}-L${d.end.line}:${d.end.character} sev=${d.severity} code='${d.code ?: ""}' msg='$msgPreview'")
             }
         }
     }
@@ -1636,6 +1687,13 @@ internal fun detectInlayHintSupport(caps: org.eclipse.lsp4j.ServerCapabilities?)
 
 internal fun detectCompletionResolveSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean =
     caps?.completionProvider?.resolveProvider == true
+
+private val FILE_DRIVE_URI = Regex("^(file:///)([A-Za-z])(:.*)$")
+
+internal fun canonicalUri(uri: String): String {
+    val match = FILE_DRIVE_URI.matchEntire(uri) ?: return uri
+    return match.groupValues[1] + match.groupValues[2].lowercase() + match.groupValues[3]
+}
 
 internal fun isMemberAccessContext(text: String, line: Int, character: Int, prefixLength: Int): Boolean {
     val lines = text.split('\n')
