@@ -6,10 +6,39 @@ import org.eclipse.lsp4j.RenameOptions
 import org.eclipse.lsp4j.ServerCapabilities
 import org.eclipse.lsp4j.jsonrpc.messages.Either
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ServerCapabilityDetectionTest {
+
+    @Test
+    fun `canonicalUri lowercases windows drive letter`() {
+        assertEquals(
+            "file:///c:/Users/x/main.rs",
+            canonicalUri("file:///C:/Users/x/main.rs"),
+        )
+    }
+
+    @Test
+    fun `canonicalUri leaves already-lowercase drive unchanged`() {
+        val uri = "file:///c:/Users/x/main.rs"
+        assertEquals(uri, canonicalUri(uri))
+    }
+
+    @Test
+    fun `canonicalUri leaves non-windows file uris unchanged`() {
+        val uri = "file:///home/user/main.rs"
+        assertEquals(uri, canonicalUri(uri))
+    }
+
+    @Test
+    fun `canonicalUri rust-analyzer and editor uris collapse to same key`() {
+        assertEquals(
+            canonicalUri("file:///c:/Users/x/main.rs"),
+            canonicalUri("file:///C:/Users/x/main.rs"),
+        )
+    }
 
     @Test
     fun `null capabilities disable inlay hints`() {

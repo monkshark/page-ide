@@ -625,6 +625,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         if (active != null) {
             if (FileKinds.classify(active.path).isEditableAsText) {
                 FileDocument.save(active.path, pane.editorValue.text)
+                lspRouter.controllerFor(active.path)?.didSave(active.path, pane.editorValue.text)
                 mutateFocused {
                     it.copy(
                         book = it.book
@@ -658,6 +659,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         for ((path, text) in pendingByPath) {
             try {
                 FileDocument.save(path, text)
+                lspRouter.controllerFor(path)?.didSave(path, text)
                 saved += 1
             } catch (_: java.io.IOException) { }
         }
