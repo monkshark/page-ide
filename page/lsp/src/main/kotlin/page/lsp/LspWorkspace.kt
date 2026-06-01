@@ -15,6 +15,7 @@ import org.eclipse.lsp4j.FileChangeType
 import org.eclipse.lsp4j.FileEvent
 import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.DocumentSymbolParams
+import org.eclipse.lsp4j.ExecuteCommandParams
 import org.eclipse.lsp4j.FormattingOptions
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.InlayHintParams
@@ -365,5 +366,18 @@ class LspWorkspace(private val client: LspClient) {
                 }
             }
             ?: CompletableFuture.completedFuture(initial)
+    }
+
+    fun executeCommand(command: String, arguments: List<Any?>): CompletableFuture<Boolean> {
+        val params = ExecuteCommandParams(command, arguments)
+        return client.server().workspaceService.executeCommand(params)
+            .handle { _, err ->
+                if (err != null) {
+                    println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
+                    false
+                } else {
+                    true
+                }
+            }
     }
 }

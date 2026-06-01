@@ -615,6 +615,26 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val applyRename: (RenameWorkspaceEdit) -> Unit = { edit ->
         lspEditorInterconnector.applyRename(edit)
     }
+    val applyCodeAction: (CodeActionEntry) -> Unit = { action ->
+        if (action.hasEdit) {
+            println("[lsp] codeAction apply ▶ \"${action.title}\" — ${action.edit.changes.sumOf { it.edits.size }} edit(s)")
+            applyRename(action.edit)
+        }
+        if (action.hasCommand) {
+            val ctrl = codeActionUri?.let { currentLspRouter.controllerForUri(it) }
+            val command = action.command
+            if (ctrl != null && command != null) {
+                println("[lsp] codeAction command ▶ \"${action.title}\" → $command")
+                ctrl.executeCommand(command, action.commandArguments)
+            }
+        }
+    }
+    LaunchedEffect(lspRouter) {
+        lspRouter.applyEditHandler = { edit ->
+            java.awt.EventQueue.invokeLater { applyRename(edit) }
+            true
+        }
+    }
 
     val openFile: (java.awt.Frame) -> Unit = { parent ->
         FileDialogs.open(parent)?.let { picked -> openInTab(picked) }
@@ -1618,8 +1638,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                             val pick = list.getOrNull(sel)
                             codeActionOpen = false
                             if (pick != null && pick.isExecutable) {
-                                println("[lsp] codeAction apply ▶ \"${pick.title}\" — ${pick.edit.changes.sumOf { it.edits.size }} edit(s)")
-                                applyRename(pick.edit)
+                                applyCodeAction(pick)
                             }
                             frameRef.value?.requestFocus()
                             editorFocusVersion += 1
@@ -1767,8 +1786,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onCodeActionApply = { action ->
                         codeActionOpen = false
                         if (action.isExecutable) {
-                            println("[lsp] codeAction apply ▶ \"${action.title}\" — ${action.edit.changes.sumOf { it.edits.size }} edit(s)")
-                            applyRename(action.edit)
+                            applyCodeAction(action)
                         }
                         frameRef.value?.requestFocus()
                         editorFocusVersion += 1

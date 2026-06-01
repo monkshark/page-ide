@@ -577,10 +577,10 @@ class LspWorkspaceTest {
     }
 
     @Test
-    fun `codeAction maps Command as title-only non-executable entry`() {
+    fun `codeAction maps Command as executable command-only entry`() {
         val uri = "file:///CC.kt"
         workspace.didOpen(uri, "kotlin", "x")
-        val cmd = Command("Show in panel", "page.showPanel")
+        val cmd = Command("Show in panel", "page.showPanel", listOf("arg1"))
         harness.fakeServer.codeActionResponse = mutableListOf(Either.forLeft(cmd))
 
         val list = workspace.codeAction(uri, 0, 0, 0, 0).get(2, TimeUnit.SECONDS)
@@ -588,7 +588,11 @@ class LspWorkspaceTest {
         assertEquals("Show in panel", list[0].title)
         assertNull(list[0].kind)
         assertFalse(list[0].hasEdit)
-        assertFalse(list[0].isExecutable)
+        assertTrue(list[0].hasCommand)
+        assertTrue(list[0].isExecutable)
+        assertEquals("page.showPanel", list[0].command)
+        assertEquals(1, list[0].commandArguments.size)
+        assertTrue(list[0].commandArguments[0].toString().contains("arg1"))
     }
 
     @Test

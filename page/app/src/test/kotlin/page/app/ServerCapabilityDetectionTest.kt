@@ -1,6 +1,7 @@
 package page.app
 
 import org.eclipse.lsp4j.CompletionOptions
+import org.eclipse.lsp4j.ExecuteCommandOptions
 import org.eclipse.lsp4j.InlayHintRegistrationOptions
 import org.eclipse.lsp4j.RenameOptions
 import org.eclipse.lsp4j.ServerCapabilities
@@ -86,6 +87,15 @@ class ServerCapabilityDetectionTest {
         }))
         assertTrue(detectCompletionResolveSupport(ServerCapabilities().apply {
             completionProvider = CompletionOptions().apply { resolveProvider = true }
+        }))
+    }
+
+    @Test
+    fun `executeCommand requires executeCommandProvider`() {
+        assertFalse(detectExecuteCommandSupport(null))
+        assertFalse(detectExecuteCommandSupport(ServerCapabilities()))
+        assertTrue(detectExecuteCommandSupport(ServerCapabilities().apply {
+            executeCommandProvider = ExecuteCommandOptions(listOf("java.apply.organizeImports"))
         }))
     }
 }

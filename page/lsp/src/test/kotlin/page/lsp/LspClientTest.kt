@@ -46,6 +46,63 @@ class LspClientTest {
     }
 
     @Test
+    fun `initialize advertises workspace applyEdit so command-based code actions can edit`() {
+        val harness = LspTestHarness()
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            waitUntil { harness.fakeServer.initializeCalls.isNotEmpty() }
+            val workspace = harness.fakeServer.initializeCalls.peek().capabilities.workspace
+            assertNotNull(workspace)
+            assertTrue(workspace!!.applyEdit)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `applyEdit invokes registered handler and reports applied`() {
+        val harness = LspTestHarness()
+        try {
+            var received: org.eclipse.lsp4j.WorkspaceEdit? = null
+            harness.client.onApplyEdit { edit -> received = edit; true }
+            val edit = org.eclipse.lsp4j.WorkspaceEdit(
+                mapOf(
+                    "file:///A.java" to listOf(
+                        org.eclipse.lsp4j.TextEdit(
+                            org.eclipse.lsp4j.Range(
+                                org.eclipse.lsp4j.Position(0, 0),
+                                org.eclipse.lsp4j.Position(0, 0),
+                            ),
+                            "import java.util.List;\n",
+                        ),
+                    ),
+                ),
+            )
+            val response = harness.client
+                .applyEdit(org.eclipse.lsp4j.ApplyWorkspaceEditParams(edit))
+                .get(1, TimeUnit.SECONDS)
+            assertTrue(response.isApplied)
+            assertNotNull(received)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
+    fun `applyEdit without handler reports not applied`() {
+        val harness = LspTestHarness()
+        try {
+            val edit = org.eclipse.lsp4j.WorkspaceEdit(emptyMap())
+            val response = harness.client
+                .applyEdit(org.eclipse.lsp4j.ApplyWorkspaceEditParams(edit))
+                .get(1, TimeUnit.SECONDS)
+            assertTrue(!response.isApplied)
+        } finally {
+            harness.close()
+        }
+    }
+
+    @Test
     fun `shutdown transitions to EXITED and calls server shutdown + exit`() {
         val harness = LspTestHarness()
         try {

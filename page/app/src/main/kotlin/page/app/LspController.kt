@@ -136,6 +136,9 @@ class LspController(
     @Volatile private var prepareRenameSupported: Boolean = false
     @Volatile private var inlayHintSupported: Boolean = false
     @Volatile private var completionResolveSupported: Boolean = false
+    @Volatile private var executeCommandSupported: Boolean = false
+
+    @Volatile var applyEditHandler: ((RenameWorkspaceEdit) -> Boolean)? = null
 
     @Volatile private var clientGeneration: Long = 0L
 
@@ -174,6 +177,15 @@ class LspController(
             }
             c.onShowMessage { mp -> println("[lsp:show/${mp.type}] ${mp.message}") }
             c.onProgress { event -> if (myGeneration == clientGeneration) applyProgressEvent(event) }
+            c.onApplyEdit { lspEdit ->
+                if (myGeneration != clientGeneration) return@onApplyEdit false
+                val edit = RenameWorkspaceEdit.fromLsp(lspEdit)
+                if (edit.isEmpty) return@onApplyEdit false
+                val handler = applyEditHandler ?: return@onApplyEdit false
+                val applied = runCatching { handler(edit) }.getOrDefault(false)
+                println("[lsp] applyEdit ◀ server — ${edit.changes.sumOf { it.edits.size }} edit(s), applied=$applied")
+                applied
+            }
             val startFuture = c.start()
             scope.launch {
                 kotlinx.coroutines.delay(60_000)
@@ -204,6 +216,8 @@ class LspController(
                     println("[lsp] inlayHint support = $inlayHintSupported")
                     completionResolveSupported = detectCompletionResolveSupport(result.capabilities)
                     println("[lsp] completion resolve support = $completionResolveSupported")
+                    executeCommandSupported = detectExecuteCommandSupport(result.capabilities)
+                    println("[lsp] executeCommand support = $executeCommandSupported")
                     flushPendingOpens()
                     openWorkspaceFiles()
                 }
@@ -785,6 +799,17 @@ class LspController(
                     merged
                 }
             }
+    }
+
+    fun executeCommand(command: String, arguments: List<Any?>): CompletableFuture<Boolean> {
+        if (status.value != Status.READY) return CompletableFuture.completedFuture(false)
+        val ws = workspace ?: return CompletableFuture.completedFuture(false)
+        if (!executeCommandSupported) {
+            println("[lsp] executeCommand skipped (server lacks executeCommandProvider) — \"$command\"")
+            return CompletableFuture.completedFuture(false)
+        }
+        println("[lsp] executeCommand ▶ \"$command\" (${arguments.size} arg(s))")
+        return ws.executeCommand(command, arguments)
     }
 
     fun inlayHints(
@@ -1687,6 +1712,9 @@ internal fun detectInlayHintSupport(caps: org.eclipse.lsp4j.ServerCapabilities?)
 
 internal fun detectCompletionResolveSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean =
     caps?.completionProvider?.resolveProvider == true
+
+internal fun detectExecuteCommandSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean =
+    caps?.executeCommandProvider != null
 
 private val FILE_DRIVE_URI = Regex("^(file:///)([A-Za-z])(:.*)$")
 
