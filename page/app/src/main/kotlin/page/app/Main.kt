@@ -510,8 +510,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     LaunchedEffect(focusedActivePath) {
         val path = focusedActivePath
         if (path != null) {
-            val ctrl = lspRouter.controllerFor(path)
-            val langId = lspRouter.languageIdFor(path)
+            val ctrl = currentLspRouter.controllerFor(path)
+            val langId = currentLspRouter.languageIdFor(path)
             if (ctrl != null && langId != null) {
                 ctrl.didOpen(path, langId, focused().editorValue.text)
             }
@@ -520,7 +520,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     LaunchedEffect(focusedActivePath, focusedActiveText) {
         val path = focusedActivePath
         if (path != null) {
-            lspRouter.controllerFor(path)?.didChange(path, focusedActiveText)
+            currentLspRouter.controllerFor(path)?.didChange(path, focusedActiveText)
         }
         if (path != null) todo.updateFile(path, focusedActiveText)
     }
@@ -601,8 +601,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         setPane = { side, value -> setPane(side, value) },
         mutatePane = { side, transform -> mutatePane(side, transform) },
         openInTabAt = { picked, offset -> openInTabAt(picked, offset) },
-        controllerFor = { p -> lspRouter.controllerFor(p) },
-        applyExternalChange = { uri, text -> lspRouter.applyExternalChange(uri, text) },
+        controllerFor = { p -> currentLspRouter.controllerFor(p) },
+        applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
         getReferences = { referencesState },
         setReferences = { referencesState = it },
     )
@@ -815,9 +815,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 }
             }
         }
-        affectedOldPaths.distinct().forEach { lspRouter.controllerFor(it)?.didClose(it) }
+        affectedOldPaths.distinct().forEach { currentLspRouter.controllerFor(it)?.didClose(it) }
         affectedNewPaths.distinctBy { it.first }.forEach { (p, text) ->
-            lspRouter.languageIdFor(p)?.let { langId -> lspRouter.controllerFor(p)?.didOpen(p, langId, text) }
+            currentLspRouter.languageIdFor(p)?.let { langId -> currentLspRouter.controllerFor(p)?.didOpen(p, langId, text) }
         }
     }
     val readFileTextWithTabs: (Path) -> String? = { p ->
@@ -845,7 +845,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         if (!inTab) {
             runCatching { java.nio.file.Files.writeString(path, newText) }
         }
-        runCatching { lspRouter.applyExternalChange(path.toUri().toString(), newText) }
+        runCatching { currentLspRouter.applyExternalChange(path.toUri().toString(), newText) }
     }
     fun postUndoRemapForOp(op: FileOpHistory.Op) {
         when (op) {
@@ -975,7 +975,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             primaryPane.book.tabs.any { it.path == p } || secondaryPane.book.tabs.any { it.path == p }
         },
         forgetScroll = { p -> editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p) },
-        didClose = { p -> lspRouter.controllerFor(p)?.didClose(p) },
+        didClose = { p -> currentLspRouter.controllerFor(p)?.didClose(p) },
         isUnsavedText = { tab -> isUnsavedText(tab) },
         setPendingClose = { pendingClose = it },
         autoSaveOnClose = { pageSettings.autoSave.onClose },
@@ -1185,11 +1185,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 mutatePane(otherSide) { it.copy(book = it.book.undoGroupOnNonActive(groupId)) }
                 for (tab in activeBook.tabs) {
                     if (tab.path != pane.book.tabs.getOrNull(pane.book.activeIndex)?.path) {
-                        runCatching { lspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                        runCatching { currentLspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
                     }
                 }
                 for (tab in paneOf(otherSide).book.tabs) {
-                    runCatching { lspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                    runCatching { currentLspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
                 }
             }
         }
@@ -1217,11 +1217,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 mutatePane(otherSide) { it.copy(book = it.book.redoGroupOnNonActive(groupId)) }
                 for (tab in activeBook.tabs) {
                     if (tab.path != pane.book.tabs.getOrNull(pane.book.activeIndex)?.path) {
-                        runCatching { lspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                        runCatching { currentLspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
                     }
                 }
                 for (tab in paneOf(otherSide).book.tabs) {
-                    runCatching { lspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
+                    runCatching { currentLspRouter.applyExternalChange(tab.path.toUri().toString(), tab.text) }
                 }
             }
         }
@@ -1983,7 +1983,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     }
                     val result: FileTreeActions.RenameResult = if (isDir) {
                         var captured: FileTreeActions.RenameResult? = null
-                        val dirCtrl = lspRouter.controllerFor(oldPath)
+                        val dirCtrl = currentLspRouter.controllerFor(oldPath)
                         val doRename = {
                             withFileTreeWatcherClosed {
                                 captured = performAndProcess()
@@ -2324,7 +2324,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                             secondaryPane.book.tabs.any { it.path == p }
                         if (!stillOpen) {
                             editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p)
-                            lspRouter.controllerFor(p)?.didClose(p)
+                            currentLspRouter.controllerFor(p)?.didClose(p)
                         }
                     }
                 }
