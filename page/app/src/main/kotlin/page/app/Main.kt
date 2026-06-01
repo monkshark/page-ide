@@ -2395,9 +2395,11 @@ private fun registerAllBackends() {
                 PageRuntimeEnv.applyTo(env)
                 if (def.id == "java") PageRuntimeEnv.pinJavaRuntime(env)
             },
-            initializationOptionsProvider = if (def.id == "rust") {
-                { root -> CargoWorkspaceDetector.linkedProjects(root) }
-            } else null,
+            initializationOptionsProvider = when (def.id) {
+                "rust" -> { root -> CargoWorkspaceDetector.linkedProjects(root) }
+                "java" -> { _ -> JdtlsInitializationOptions.forWorkspace() }
+                else -> null
+            },
         ))
     }
 }
