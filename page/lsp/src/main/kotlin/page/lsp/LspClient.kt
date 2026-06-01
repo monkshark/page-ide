@@ -15,7 +15,11 @@ import org.eclipse.lsp4j.MessageActionItem
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.PublishDiagnosticsParams
 import org.eclipse.lsp4j.ShowMessageRequestParams
+import org.eclipse.lsp4j.ProgressParams
+import org.eclipse.lsp4j.SynchronizationCapabilities
 import org.eclipse.lsp4j.TextDocumentClientCapabilities
+import org.eclipse.lsp4j.WindowClientCapabilities
+import org.eclipse.lsp4j.WorkDoneProgressCreateParams
 import org.eclipse.lsp4j.WorkspaceFolder
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.launch.LSPLauncher
@@ -48,6 +52,7 @@ class LspClient(
     private val diagnosticsListeners = ConcurrentLinkedQueue<(PublishDiagnosticsParams) -> Unit>()
     private val logListeners = ConcurrentLinkedQueue<(MessageParams) -> Unit>()
     private val showMessageListeners = ConcurrentLinkedQueue<(MessageParams) -> Unit>()
+    private val progressListeners = ConcurrentLinkedQueue<(LspProgress) -> Unit>()
 
     fun onDiagnostics(listener: (PublishDiagnosticsParams) -> Unit) {
         diagnosticsListeners += listener
@@ -59,6 +64,10 @@ class LspClient(
 
     fun onShowMessage(listener: (MessageParams) -> Unit) {
         showMessageListeners += listener
+    }
+
+    fun onProgress(listener: (LspProgress) -> Unit) {
+        progressListeners += listener
     }
 
     fun server(): LanguageServer = server ?: error("LSP not started yet (state=$state)")
@@ -124,7 +133,15 @@ class LspClient(
         params.processId = ProcessHandle.current().pid().toInt()
         params.clientInfo = org.eclipse.lsp4j.ClientInfo(clientName, clientVersion)
         params.capabilities = ClientCapabilities().apply {
+            window = WindowClientCapabilities().apply {
+                workDoneProgress = true
+            }
             textDocument = TextDocumentClientCapabilities().apply {
+                synchronization = SynchronizationCapabilities().apply {
+                    didSave = true
+                    willSave = false
+                    willSaveWaitUntil = false
+                }
                 completion = CompletionCapabilities().apply {
                     completionItem = CompletionItemCapabilities().apply {
                         snippetSupport = true
@@ -184,6 +201,14 @@ class LspClient(
     }
 
     override fun refreshDiagnostics(): CompletableFuture<Void> = CompletableFuture.completedFuture(null)
+
+    override fun createProgress(params: WorkDoneProgressCreateParams): CompletableFuture<Void> =
+        CompletableFuture.completedFuture(null)
+
+    override fun notifyProgress(params: ProgressParams) {
+        val event = parseLspProgress(params) ?: return
+        progressListeners.forEach { it(event) }
+    }
 
     companion object {
         fun documentUri(path: Path): String = path.toUri().toString()

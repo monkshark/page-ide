@@ -43,6 +43,13 @@ class LspRouter(
         controllers.remove(id)?.shutdown()
     }
 
+    @Synchronized
+    fun restartForExtensions(extensions: List<String>, reason: String) {
+        for (id in backendIdsForExtensions(extensions)) {
+            controllers[id]?.restart(reason)
+        }
+    }
+
     val allDiagnosticsByUri: Map<String, List<Diagnostic>>
         @Synchronized get() = controllers.values
             .flatMap { it.diagnosticsByUri.entries }
@@ -90,6 +97,11 @@ class LspRouter(
         val name = path.fileName?.toString() ?: return null
         val dot = name.lastIndexOf('.')
         return if (dot >= 0 && dot < name.length - 1) name.substring(dot + 1) else null
+    }
+
+    companion object {
+        fun backendIdsForExtensions(extensions: List<String>): Set<String> =
+            extensions.mapNotNull { LspBackends.forExtension(it)?.id }.toSet()
     }
 }
 

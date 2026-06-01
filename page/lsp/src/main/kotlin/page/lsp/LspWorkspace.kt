@@ -10,6 +10,7 @@ import org.eclipse.lsp4j.DidChangeTextDocumentParams
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
+import org.eclipse.lsp4j.DidSaveTextDocumentParams
 import org.eclipse.lsp4j.FileChangeType
 import org.eclipse.lsp4j.FileEvent
 import org.eclipse.lsp4j.DocumentFormattingParams
@@ -81,6 +82,13 @@ class LspWorkspace(private val client: LspClient) {
         openDocs.remove(uri) ?: return
         client.server().textDocumentService.didClose(
             DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+        )
+    }
+
+    fun didSave(uri: String) {
+        val doc = openDocs[uri] ?: return
+        client.server().textDocumentService.didSave(
+            DidSaveTextDocumentParams(TextDocumentIdentifier(uri), doc.text)
         )
     }
 
