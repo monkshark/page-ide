@@ -1647,7 +1647,11 @@ class LspController(
             println("[lsp] publishDiagnostics $uri — ${mapped.size} diagnostic(s)")
             mapped.take(5).forEach { d ->
                 val msgPreview = d.message.take(60).replace('\n', ' ')
-                println("    · L${d.start.line}:${d.start.character}-L${d.end.line}:${d.end.character} sev=${d.severity} code='${d.code ?: ""}' msg='$msgPreview'")
+                val tags = buildString {
+                    if (d.unnecessary) append(" unnecessary")
+                    if (d.deprecated) append(" deprecated")
+                }
+                println("    · L${d.start.line}:${d.start.character}-L${d.end.line}:${d.end.character} sev=${d.severity} code='${d.code ?: ""}'$tags msg='$msgPreview'")
             }
         }
     }
