@@ -23,6 +23,8 @@ data class Diagnostic(
     val message: String,
     val source: String? = null,
     val code: String? = null,
+    val unnecessary: Boolean = false,
+    val deprecated: Boolean = false,
 ) {
     companion object {
         fun fromLsp(d: org.eclipse.lsp4j.Diagnostic): Diagnostic = Diagnostic(
@@ -38,6 +40,8 @@ data class Diagnostic(
                     else -> null
                 }
             },
+            unnecessary = d.tags?.contains(org.eclipse.lsp4j.DiagnosticTag.Unnecessary) == true,
+            deprecated = d.tags?.contains(org.eclipse.lsp4j.DiagnosticTag.Deprecated) == true,
         )
     }
 }
