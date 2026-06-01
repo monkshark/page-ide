@@ -617,6 +617,32 @@ class LspWorkspaceTest {
     }
 
     @Test
+    fun `codeAction forwards only filter into context when given`() {
+        val uri = "file:///CF.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.codeActionResponse = mutableListOf()
+        workspace.codeAction(
+            uri, 0, 0, 0, 0,
+            only = listOf(org.eclipse.lsp4j.CodeActionKind.Source),
+        ).get(2, TimeUnit.SECONDS)
+
+        waitUntil { harness.fakeServer.codeActionCalls.isNotEmpty() }
+        val sent = harness.fakeServer.codeActionCalls.last()
+        assertEquals(listOf(org.eclipse.lsp4j.CodeActionKind.Source), sent.context.only)
+    }
+
+    @Test
+    fun `codeAction leaves only null when not requested`() {
+        val uri = "file:///CG.kt"
+        workspace.didOpen(uri, "kotlin", "x")
+        harness.fakeServer.codeActionResponse = mutableListOf()
+        workspace.codeAction(uri, 0, 0, 0, 0).get(2, TimeUnit.SECONDS)
+
+        waitUntil { harness.fakeServer.codeActionCalls.isNotEmpty() }
+        assertNull(harness.fakeServer.codeActionCalls.last().context.only)
+    }
+
+    @Test
     fun `codeAction returns empty for null server response`() {
         val uri = "file:///CE.kt"
         workspace.didOpen(uri, "kotlin", "x")

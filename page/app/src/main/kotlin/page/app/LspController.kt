@@ -786,19 +786,24 @@ class LspController(
             page.lsp.PageQuickFixes.synthesize(uri, currentText, overlappingDiags)
         } else emptyList()
         val tStart = System.nanoTime()
-        return ws.codeAction(uri, startLine, startCharacter, endLine, endCharacter, diags)
-            .handle<List<CodeActionEntry>> { actions, err ->
-                val ms = (System.nanoTime() - tStart) / 1_000_000
-                if (err != null) {
-                    println("[lsp] codeAction ✗ $uri @($startLine,$startCharacter): ${err.message} [${ms}ms]")
-                    synthesized
-                } else {
-                    val server = actions.orEmpty()
-                    val merged = server + synthesized
-                    println("[lsp] codeAction ✓ $uri @($startLine,$startCharacter) — ${merged.size} action(s) (server=${server.size}, synth=${synthesized.size}), ctx=${diags.size} diag(s) [${ms}ms]")
-                    merged
-                }
-            }
+        val positionFuture = ws.codeAction(uri, startLine, startCharacter, endLine, endCharacter, diags)
+            .exceptionally { emptyList() }
+        val sourceFuture = ws.codeAction(
+            uri, startLine, startCharacter, endLine, endCharacter,
+            emptyList(), only = listOf(org.eclipse.lsp4j.CodeActionKind.Source),
+        ).exceptionally { emptyList() }
+        return positionFuture.thenCombine(sourceFuture) { position, source ->
+            val ms = (System.nanoTime() - tStart) / 1_000_000
+            val server = dedupActions(position + source)
+            val merged = server + synthesized
+            println("[lsp] codeAction ✓ $uri @($startLine,$startCharacter) — ${merged.size} action(s) (pos=${position.size}, source=${source.size}, synth=${synthesized.size}), ctx=${diags.size} diag(s) [${ms}ms]")
+            merged
+        }
+    }
+
+    private fun dedupActions(actions: List<CodeActionEntry>): List<CodeActionEntry> {
+        val seen = HashSet<String>()
+        return actions.filter { seen.add("${it.title}|${it.command}|${it.kind}") }
     }
 
     fun executeCommand(command: String, arguments: List<Any?>): CompletableFuture<Boolean> {

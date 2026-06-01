@@ -321,10 +321,11 @@ class LspWorkspace(private val client: LspClient) {
         endLine: Int,
         endCharacter: Int,
         diagnostics: List<org.eclipse.lsp4j.Diagnostic> = emptyList(),
+        only: List<String>? = null,
     ): CompletableFuture<List<CodeActionEntry>> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
-        val context = CodeActionContext(diagnostics)
+        val context = CodeActionContext(diagnostics).apply { if (only != null) this.only = only }
         val params = CodeActionParams(TextDocumentIdentifier(uri), range, context)
         val svc = client.server().textDocumentService
         return svc.codeAction(params).thenCompose { list ->
