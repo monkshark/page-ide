@@ -56,6 +56,7 @@ class FakeLanguageServer : LanguageServer {
     val didOpenCalls = ConcurrentLinkedQueue<DidOpenTextDocumentParams>()
     val didChangeCalls = ConcurrentLinkedQueue<DidChangeTextDocumentParams>()
     val didCloseCalls = ConcurrentLinkedQueue<DidCloseTextDocumentParams>()
+    val didSaveCalls = ConcurrentLinkedQueue<DidSaveTextDocumentParams>()
     val hoverCalls = ConcurrentLinkedQueue<HoverParams>()
     val definitionCalls = ConcurrentLinkedQueue<DefinitionParams>()
     val referencesCalls = ConcurrentLinkedQueue<ReferenceParams>()
@@ -91,7 +92,7 @@ class FakeLanguageServer : LanguageServer {
         override fun didOpen(params: DidOpenTextDocumentParams) { didOpenCalls += params }
         override fun didChange(params: DidChangeTextDocumentParams) { didChangeCalls += params }
         override fun didClose(params: DidCloseTextDocumentParams) { didCloseCalls += params }
-        override fun didSave(params: DidSaveTextDocumentParams) {}
+        override fun didSave(params: DidSaveTextDocumentParams) { didSaveCalls += params }
         override fun hover(params: HoverParams): CompletableFuture<Hover> {
             hoverCalls += params
             return CompletableFuture.completedFuture(hoverResponse)

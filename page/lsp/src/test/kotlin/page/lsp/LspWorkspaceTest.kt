@@ -94,6 +94,24 @@ class LspWorkspaceTest {
     }
 
     @Test
+    fun `didSave forwards to server with current text`() {
+        val uri = "file:///S.rs"
+        workspace.didOpen(uri, "rust", "fn main() {}")
+        workspace.didSave(uri)
+
+        waitUntil { harness.fakeServer.didSaveCalls.isNotEmpty() }
+        val params = harness.fakeServer.didSaveCalls.first()
+        assertEquals(uri, params.textDocument.uri)
+        assertEquals("fn main() {}", params.text)
+    }
+
+    @Test
+    fun `didSave on unopened doc is no-op`() {
+        workspace.didSave("file:///nope.rs")
+        assertTrue(harness.fakeServer.didSaveCalls.isEmpty())
+    }
+
+    @Test
     fun `didChange on unopened doc errors out`() {
         try {
             workspace.didChange("file:///none.kt", "x")
