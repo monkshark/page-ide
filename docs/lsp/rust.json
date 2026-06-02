@@ -1,15 +1,15 @@
 {
-  "updatedAt": "2026-06-01T08:59:07.820Z",
+  "updatedAt": "2026-06-02T08:11:37.618Z",
   "owner": "rust-lang",
   "repo": "rust-analyzer",
   "releases": [
     {
-      "tag": "2026-06-01",
-      "publishedAt": "2026-06-01T06:54:40Z"
+      "tag": "nightly",
+      "publishedAt": "2026-06-02T01:32:14Z"
     },
     {
-      "tag": "nightly",
-      "publishedAt": "2026-06-01T01:32:45Z"
+      "tag": "2026-06-01",
+      "publishedAt": "2026-06-01T06:54:40Z"
     },
     {
       "tag": "2026-05-25",
