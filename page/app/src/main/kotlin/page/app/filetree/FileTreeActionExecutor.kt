@@ -5,7 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.LargeCopyExecutor
-import page.app.LspController
+import page.language.LspController
 import page.app.utils.isKotlinSource
 import page.workspace.FileOpHistory
 import page.workspace.FileTreeActions

@@ -1,4 +1,4 @@
-    package page.app
+package page.language
 
 import page.runtime.*
 import androidx.compose.runtime.Composable

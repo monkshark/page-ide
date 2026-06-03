@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
+import page.language.LspController
 import page.editor.BracketMatch
 import page.editor.FoldRegions
 import page.editor.Indent

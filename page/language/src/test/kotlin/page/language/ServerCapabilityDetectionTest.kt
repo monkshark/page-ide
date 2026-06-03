@@ -1,4 +1,4 @@
-package page.app
+package page.language
 
 import org.eclipse.lsp4j.CompletionOptions
 import org.eclipse.lsp4j.ExecuteCommandOptions

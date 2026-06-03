@@ -1,7 +1,4 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.language
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
