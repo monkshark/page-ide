@@ -23,6 +23,7 @@ import page.app.utils.windowTitle
 import page.lsp.GenericLanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
+import page.language.LspController
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -2687,7 +2688,7 @@ internal fun PaneRegion(
                     val frac = (e.progress as? page.runtime.LspInstaller.Progress.Downloading)
                         ?.takeIf { it.total > 0 }
                         ?.let { (it.bytesRead.toFloat() / it.total.toFloat()).coerceIn(0f, 1f) }
-                    page.app.LspController.Activity(
+                    LspController.Activity(
                         kind = "install",
                         label = "${e.displayName} (installing)",
                         startedAtMs = e.startedAtMs,

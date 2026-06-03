@@ -13,6 +13,7 @@ import page.lsp.LanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
 import page.lsp.RenameWorkspaceEdit
+import page.language.LspController
 import java.nio.file.Path
 
 class LspRouter(

@@ -3,7 +3,7 @@ package page.app.lsp
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import page.app.EditorPaneState
-import page.app.LspController
+import page.language.LspController
 import page.app.PaneSide
 import page.app.ReferencesQueryState
 import page.app.utils.lineCharToOffset

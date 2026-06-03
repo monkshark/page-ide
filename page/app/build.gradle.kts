@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":page:ui"))
     implementation(project(":page:editor"))
     implementation(project(":page:lsp"))
+    implementation(project(":page:language"))
     implementation(project(":page:runtime"))
     implementation(project(":page:workspace"))
     implementation(libs.kotlinx.coroutines.swing)

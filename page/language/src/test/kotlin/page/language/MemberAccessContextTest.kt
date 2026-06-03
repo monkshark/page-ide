@@ -1,4 +1,4 @@
-package page.app
+package page.language
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
