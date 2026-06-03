@@ -55,6 +55,11 @@ class GenericLanguageBackend(
     ): LspClient {
         val command = mutableListOf(executable.toAbsolutePath().toString())
         command += definition.launchArgs
+        if (definition.id == "java" && workspaceRoot != null) {
+            val dataDir = jdtlsDataDir(executable, workspaceRoot)
+            Files.createDirectories(dataDir)
+            command += listOf("-data", dataDir.toAbsolutePath().toString())
+        }
         val builder = ProcessBuilder(command)
         if (workspaceRoot != null && Files.isDirectory(workspaceRoot)) {
             builder.directory(workspaceRoot.toFile())
@@ -72,4 +77,11 @@ class GenericLanguageBackend(
             initializationOptions = initializationOptionsProvider?.invoke(workspaceRoot),
         )
     }
+}
+
+internal fun jdtlsDataDir(executable: Path, workspaceRoot: Path): Path {
+    val root = workspaceRoot.toAbsolutePath().normalize()
+    val hash = Integer.toHexString(root.toString().hashCode())
+    val name = root.fileName?.toString()?.take(40)?.ifBlank { null } ?: "ws"
+    return executable.toAbsolutePath().parent.resolve("ws-data").resolve("$name-$hash")
 }

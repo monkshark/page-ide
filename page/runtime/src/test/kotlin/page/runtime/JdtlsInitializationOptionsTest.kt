@@ -57,4 +57,26 @@ class JdtlsInitializationOptionsTest {
 
         assertEquals(JdtlsInitializationOptions.resourceFilters, project["resourceFilters"])
     }
+
+    @Test
+    fun compilerProblemSeveritiesMarksUnusedImportAsWarning() {
+        assertEquals(
+            "warning",
+            JdtlsInitializationOptions.compilerProblemSeverities["org.eclipse.jdt.core.compiler.problem.unusedImport"],
+        )
+    }
+
+    @Test
+    fun forWorkspaceSetsCodeGenerationInsertionLocationToLastMember() {
+        val options = JdtlsInitializationOptions.forWorkspace()
+
+        @Suppress("UNCHECKED_CAST")
+        val settings = options["settings"] as Map<String, Any>
+        @Suppress("UNCHECKED_CAST")
+        val java = settings["java"] as Map<String, Any>
+        @Suppress("UNCHECKED_CAST")
+        val codeGeneration = java["codeGeneration"] as Map<String, Any>
+
+        assertEquals("lastMember", codeGeneration["insertionLocation"])
+    }
 }

@@ -12,6 +12,7 @@ import page.lsp.Diagnostic
 import page.lsp.LanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
+import page.lsp.RenameWorkspaceEdit
 import java.nio.file.Path
 
 class LspRouter(
@@ -20,13 +21,23 @@ class LspRouter(
 ) {
     private val controllers = mutableMapOf<String, LspController>()
 
+    @Volatile
+    var applyEditHandler: ((RenameWorkspaceEdit) -> Boolean)? = null
+        set(value) {
+            field = value
+            synchronized(this) { controllers.values.forEach { it.applyEditHandler = value } }
+        }
+
     @Synchronized
     fun controllerFor(path: Path): LspController? {
         val ext = extractExtension(path) ?: return null
         val backend = LspBackends.forExtension(ext) ?: return null
         return controllers.getOrPut(backend.id) {
             val scope = CoroutineScope(SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.Default)
-            LspController(workspaceRoot, scope).also { it.ensureStarted(backend) }
+            LspController(workspaceRoot, scope).also {
+                it.applyEditHandler = applyEditHandler
+                it.ensureStarted(backend)
+            }
         }
     }
 

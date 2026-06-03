@@ -9,9 +9,11 @@ data class CodeActionEntry(
     val isPreferred: Boolean,
     val edit: RenameWorkspaceEdit,
     val command: String?,
+    val commandArguments: List<Any?> = emptyList(),
 ) {
     val hasEdit: Boolean get() = !edit.isEmpty
-    val isExecutable: Boolean get() = hasEdit
+    val hasCommand: Boolean get() = !command.isNullOrBlank()
+    val isExecutable: Boolean get() = hasEdit || hasCommand
 
     companion object {
         fun fromLspCodeAction(a: CodeAction?): CodeActionEntry? {
@@ -23,6 +25,7 @@ data class CodeActionEntry(
                 isPreferred = a.isPreferred == true,
                 edit = RenameWorkspaceEdit.fromLsp(a.edit),
                 command = a.command?.command,
+                commandArguments = a.command?.arguments.orEmpty(),
             )
         }
 
@@ -35,6 +38,7 @@ data class CodeActionEntry(
                 isPreferred = false,
                 edit = RenameWorkspaceEdit.EMPTY,
                 command = c.command,
+                commandArguments = c.arguments.orEmpty(),
             )
         }
     }

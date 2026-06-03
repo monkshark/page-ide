@@ -247,9 +247,11 @@ fun EditorPanel(
     val tabstopActiveColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
     val tabstopPendingColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
     val showInlineDiagnostics = pageSettings.lsp.showInlineDiagnostics
+    val unnecessaryColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
     val diagnosticDecorations = remember(value.text, diagnostics, showInlineDiagnostics) {
         if (!showInlineDiagnostics) emptyList()
         else diagnostics.mapNotNull { d ->
+            if (d.unnecessary) return@mapNotNull null
             val (startOff, endOff) = diagnosticUnderlineRange(
                 value.text,
                 lineColToOffset(value.text, d.start.line, d.start.character),
@@ -268,6 +270,20 @@ fun EditorPanel(
                     EditorDecoration.Style.DOTTED_UNDERLINE
             }
             EditorDecoration(startOff, endOff, color, style)
+        }
+    }
+    val unnecessaryRanges = remember(value.text, diagnostics, showInlineDiagnostics) {
+        if (!showInlineDiagnostics) emptyList()
+        else diagnostics.filter { it.unnecessary }.mapNotNull { d ->
+            val rawStart = lineColToOffset(value.text, d.start.line, d.start.character)
+            val rawEnd = lineColToOffset(value.text, d.end.line, d.end.character)
+            val lineStart = lineColToOffset(value.text, d.start.line, 0)
+            val lineEnd = value.text.indexOf('\n', rawEnd).let { if (it < 0) value.text.length else it }
+            val lineText = value.text.substring(lineStart.coerceIn(0, value.text.length), lineEnd.coerceIn(0, value.text.length))
+            val isImport = lineText.trimStart().startsWith("import ")
+            val start = if (isImport) lineStart + (lineText.length - lineText.trimStart().length) else rawStart
+            val end = if (isImport) lineEnd else rawEnd
+            if (start >= end) null else start until end
         }
     }
     val errorCount = diagnostics.count { it.severity == DiagnosticSeverity.ERROR }
@@ -422,10 +438,11 @@ fun EditorPanel(
         search, tokens, bracketMatch, matchBg, activeBg, bracketBg, palette,
         foldSegments, foldPlaceholderColor, foldPlaceholderBg, todoColors,
         keywordOverrideByRange, inlayHintDisplays, inlayHintColor,
+        unnecessaryRanges, unnecessaryColor,
     ) {
         val matches = search?.matches.orEmpty()
         val activeIndex = search?.activeMatchIndex ?: -1
-        if (tokens.isEmpty() && matches.isEmpty() && bracketMatch == null && foldSegments.isEmpty() && inlayHintDisplays.isEmpty()) {
+        if (tokens.isEmpty() && matches.isEmpty() && bracketMatch == null && foldSegments.isEmpty() && inlayHintDisplays.isEmpty() && unnecessaryRanges.isEmpty()) {
             VisualTransformation.None
         } else {
             CombinedHighlightTransformation(
@@ -439,6 +456,8 @@ fun EditorPanel(
                 activeBg = activeBg,
                 bracketMatch = bracketMatch,
                 bracketBg = bracketBg,
+                unnecessaryRanges = unnecessaryRanges,
+                unnecessaryStyle = SpanStyle(color = unnecessaryColor),
                 foldSegments = foldSegments,
                 foldPlaceholderStyle = SpanStyle(
                     color = foldPlaceholderColor,
@@ -1552,6 +1571,8 @@ private class CombinedHighlightTransformation(
     private val activeBg: androidx.compose.ui.graphics.Color,
     private val bracketMatch: Pair<Int, Int>?,
     private val bracketBg: androidx.compose.ui.graphics.Color,
+    private val unnecessaryRanges: List<IntRange> = emptyList(),
+    private val unnecessaryStyle: SpanStyle = SpanStyle(),
     private val foldSegments: List<FoldRegions.Segment>,
     private val foldPlaceholderStyle: SpanStyle,
     private val foldCloserStyle: SpanStyle,
@@ -1707,6 +1728,7 @@ private class CombinedHighlightTransformation(
             val start = token.range.first.coerceIn(0, text.length)
             val end = (token.range.last + 1).coerceIn(start, text.length)
             if (start == end) continue
+            if (unnecessaryRanges.any { start < (it.last + 1) && end > it.first }) continue
             val color = when {
                 token.kind == TokenKind.TODO_TAG ->
                     tokenOverride[token.range]
@@ -1733,6 +1755,12 @@ private class CombinedHighlightTransformation(
                 if (start == end) continue
                 builder.addStyle(SpanStyle(background = bracketBg), start, end)
             }
+        }
+        for (range in unnecessaryRanges) {
+            val start = range.first.coerceIn(0, text.length)
+            val end = (range.last + 1).coerceIn(start, text.length)
+            if (start == end) continue
+            builder.addStyle(unnecessaryStyle, start, end)
         }
         return builder.toAnnotatedString()
     }

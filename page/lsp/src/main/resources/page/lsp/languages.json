@@ -45,8 +45,6 @@
                                       },
                           "runCommand":  "java",
                           "launchArgs":  [
-                                             "-data",
-                                             "/tmp/jdtls-workspace"
                                          ]
                       },
                       {

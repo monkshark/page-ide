@@ -1,5 +1,7 @@
 package page.lsp
 
+import org.eclipse.lsp4j.ApplyWorkspaceEditParams
+import org.eclipse.lsp4j.ApplyWorkspaceEditResponse
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.CodeActionCapabilities
 import org.eclipse.lsp4j.CodeActionKindCapabilities
@@ -8,7 +10,10 @@ import org.eclipse.lsp4j.CodeActionResolveSupportCapabilities
 import org.eclipse.lsp4j.CompletionCapabilities
 import org.eclipse.lsp4j.CompletionItemCapabilities
 import org.eclipse.lsp4j.CompletionItemResolveSupportCapabilities
+import org.eclipse.lsp4j.DiagnosticTag
+import org.eclipse.lsp4j.DiagnosticsTagSupport
 import org.eclipse.lsp4j.DidChangeConfigurationParams
+import org.eclipse.lsp4j.PublishDiagnosticsCapabilities
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.InitializeResult
 import org.eclipse.lsp4j.MessageActionItem
@@ -19,7 +24,10 @@ import org.eclipse.lsp4j.ProgressParams
 import org.eclipse.lsp4j.SynchronizationCapabilities
 import org.eclipse.lsp4j.TextDocumentClientCapabilities
 import org.eclipse.lsp4j.WindowClientCapabilities
+import org.eclipse.lsp4j.ExecuteCommandCapabilities
 import org.eclipse.lsp4j.WorkDoneProgressCreateParams
+import org.eclipse.lsp4j.WorkspaceClientCapabilities
+import org.eclipse.lsp4j.WorkspaceEditCapabilities
 import org.eclipse.lsp4j.WorkspaceFolder
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.launch.LSPLauncher
@@ -53,6 +61,11 @@ class LspClient(
     private val logListeners = ConcurrentLinkedQueue<(MessageParams) -> Unit>()
     private val showMessageListeners = ConcurrentLinkedQueue<(MessageParams) -> Unit>()
     private val progressListeners = ConcurrentLinkedQueue<(LspProgress) -> Unit>()
+    private val applyEditHandler = AtomicReference<((org.eclipse.lsp4j.WorkspaceEdit) -> Boolean)?>(null)
+
+    fun onApplyEdit(handler: (org.eclipse.lsp4j.WorkspaceEdit) -> Boolean) {
+        applyEditHandler.set(handler)
+    }
 
     fun onDiagnostics(listener: (PublishDiagnosticsParams) -> Unit) {
         diagnosticsListeners += listener
@@ -133,6 +146,13 @@ class LspClient(
         params.processId = ProcessHandle.current().pid().toInt()
         params.clientInfo = org.eclipse.lsp4j.ClientInfo(clientName, clientVersion)
         params.capabilities = ClientCapabilities().apply {
+            workspace = WorkspaceClientCapabilities().apply {
+                applyEdit = true
+                workspaceEdit = WorkspaceEditCapabilities().apply {
+                    documentChanges = true
+                }
+                executeCommand = ExecuteCommandCapabilities()
+            }
             window = WindowClientCapabilities().apply {
                 workDoneProgress = true
             }
@@ -169,6 +189,13 @@ class LspClient(
                     dataSupport = true
                     resolveSupport = CodeActionResolveSupportCapabilities(listOf("edit"))
                 }
+                publishDiagnostics = PublishDiagnosticsCapabilities().apply {
+                    tagSupport = org.eclipse.lsp4j.jsonrpc.messages.Either.forRight(
+                        DiagnosticsTagSupport(
+                            listOf(DiagnosticTag.Unnecessary, DiagnosticTag.Deprecated),
+                        ),
+                    )
+                }
             }
         }
         if (workspaceRoot != null) {
@@ -201,6 +228,17 @@ class LspClient(
     }
 
     override fun refreshDiagnostics(): CompletableFuture<Void> = CompletableFuture.completedFuture(null)
+
+    override fun applyEdit(params: ApplyWorkspaceEditParams): CompletableFuture<ApplyWorkspaceEditResponse> {
+        val handler = applyEditHandler.get()
+        val edit = params.edit
+        val applied = if (handler != null && edit != null) {
+            runCatching { handler(edit) }.getOrDefault(false)
+        } else {
+            false
+        }
+        return CompletableFuture.completedFuture(ApplyWorkspaceEditResponse(applied))
+    }
 
     override fun createProgress(params: WorkDoneProgressCreateParams): CompletableFuture<Void> =
         CompletableFuture.completedFuture(null)

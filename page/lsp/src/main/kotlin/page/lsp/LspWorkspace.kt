@@ -15,6 +15,7 @@ import org.eclipse.lsp4j.FileChangeType
 import org.eclipse.lsp4j.FileEvent
 import org.eclipse.lsp4j.DocumentFormattingParams
 import org.eclipse.lsp4j.DocumentSymbolParams
+import org.eclipse.lsp4j.ExecuteCommandParams
 import org.eclipse.lsp4j.FormattingOptions
 import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.InlayHintParams
@@ -320,10 +321,11 @@ class LspWorkspace(private val client: LspClient) {
         endLine: Int,
         endCharacter: Int,
         diagnostics: List<org.eclipse.lsp4j.Diagnostic> = emptyList(),
+        only: List<String>? = null,
     ): CompletableFuture<List<CodeActionEntry>> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
-        val context = CodeActionContext(diagnostics)
+        val context = CodeActionContext(diagnostics).apply { if (only != null) this.only = only }
         val params = CodeActionParams(TextDocumentIdentifier(uri), range, context)
         val svc = client.server().textDocumentService
         return svc.codeAction(params).thenCompose { list ->
@@ -365,5 +367,31 @@ class LspWorkspace(private val client: LspClient) {
                 }
             }
             ?: CompletableFuture.completedFuture(initial)
+    }
+
+    fun executeCommand(command: String, arguments: List<Any?>): CompletableFuture<Boolean> {
+        val params = ExecuteCommandParams(command, arguments)
+        return client.server().workspaceService.executeCommand(params)
+            .handle { _, err ->
+                if (err != null) {
+                    println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
+                    false
+                } else {
+                    true
+                }
+            }
+    }
+
+    fun executeCommandForResult(command: String, arguments: List<Any?>): CompletableFuture<Any?> {
+        val params = ExecuteCommandParams(command, arguments)
+        return client.server().workspaceService.executeCommand(params)
+            .handle { result, err ->
+                if (err != null) {
+                    println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
+                    null
+                } else {
+                    result
+                }
+            }
     }
 }

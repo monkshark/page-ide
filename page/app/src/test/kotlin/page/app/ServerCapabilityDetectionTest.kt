@@ -1,6 +1,7 @@
 package page.app
 
 import org.eclipse.lsp4j.CompletionOptions
+import org.eclipse.lsp4j.ExecuteCommandOptions
 import org.eclipse.lsp4j.InlayHintRegistrationOptions
 import org.eclipse.lsp4j.RenameOptions
 import org.eclipse.lsp4j.ServerCapabilities
@@ -87,5 +88,87 @@ class ServerCapabilityDetectionTest {
         assertTrue(detectCompletionResolveSupport(ServerCapabilities().apply {
             completionProvider = CompletionOptions().apply { resolveProvider = true }
         }))
+    }
+
+    @Test
+    fun `executeCommand requires executeCommandProvider`() {
+        assertFalse(detectExecuteCommandSupport(null))
+        assertFalse(detectExecuteCommandSupport(ServerCapabilities()))
+        assertTrue(detectExecuteCommandSupport(ServerCapabilities().apply {
+            executeCommandProvider = ExecuteCommandOptions(listOf("java.apply.organizeImports"))
+        }))
+    }
+
+    @Test
+    fun `reinject when empty publish arrives for content that had unnecessary`() {
+        assertTrue(
+            shouldReinjectUnnecessary(
+                incomingHasUnnecessary = false,
+                cachedForCurrentContent = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `do not reinject when incoming already has unnecessary`() {
+        assertFalse(
+            shouldReinjectUnnecessary(
+                incomingHasUnnecessary = true,
+                cachedForCurrentContent = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `do not reinject when content does not match cache`() {
+        assertFalse(
+            shouldReinjectUnnecessary(
+                incomingHasUnnecessary = false,
+                cachedForCurrentContent = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `extractProjectUris reads a list of file uri strings`() {
+        assertEquals(
+            listOf("file:///c:/ws/proj-a", "file:///c:/ws/proj-b"),
+            extractProjectUris(listOf("file:///c:/ws/proj-a", "file:///c:/ws/proj-b")),
+        )
+    }
+
+    @Test
+    fun `extractProjectUris strips quotes from json-like elements`() {
+        val jsonPrimitiveLike = object {
+            override fun toString() = "\"file:///c:/ws/proj-a\""
+        }
+        assertEquals(
+            listOf("file:///c:/ws/proj-a"),
+            extractProjectUris(listOf(jsonPrimitiveLike)),
+        )
+    }
+
+    @Test
+    fun `extractProjectUris drops non-file entries and non-iterables`() {
+        assertEquals(emptyList<String>(), extractProjectUris(listOf("not-a-uri", 42, null)))
+        assertEquals(emptyList<String>(), extractProjectUris(null))
+        assertEquals(emptyList<String>(), extractProjectUris("file:///c:/ws/proj-a"))
+    }
+
+    @Test
+    fun `drainBatch returns every pending entry once and empties the map`() {
+        val pending = linkedMapOf<String, List<page.lsp.Diagnostic>>(
+            "file:///a" to emptyList(),
+            "file:///b" to emptyList(),
+            "file:///c" to emptyList(),
+        )
+        val batch = drainBatch(pending)
+        assertEquals(listOf("file:///a", "file:///b", "file:///c"), batch.map { it.first })
+        assertTrue(pending.isEmpty())
+    }
+
+    @Test
+    fun `drainBatch on empty map yields empty list`() {
+        assertEquals(emptyList(), drainBatch(mutableMapOf()))
     }
 }
