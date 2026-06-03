@@ -24,6 +24,8 @@ import page.lsp.GenericLanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
 import page.language.LspController
+import page.language.LspRouter
+import page.language.rememberLspRouter
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background

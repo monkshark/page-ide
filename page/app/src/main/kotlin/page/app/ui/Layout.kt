@@ -31,6 +31,7 @@ import page.app.*
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.language.LspRouter
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
 import page.runtime.LspInstallers
