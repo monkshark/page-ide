@@ -30,6 +30,7 @@ import org.eclipse.lsp4j.WorkspaceClientCapabilities
 import org.eclipse.lsp4j.WorkspaceEditCapabilities
 import org.eclipse.lsp4j.WorkspaceFolder
 import org.eclipse.lsp4j.jsonrpc.Launcher
+import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
 import org.eclipse.lsp4j.services.LanguageServer
@@ -247,6 +248,18 @@ class LspClient(
         val event = parseLspProgress(params) ?: return
         progressListeners.forEach { it(event) }
     }
+
+    @JsonNotification("language/status")
+    fun jdtlsStatus(params: Any?) {}
+
+    @JsonNotification("language/actionableNotification")
+    fun jdtlsActionableNotification(params: Any?) {}
+
+    @JsonNotification("language/progressReport")
+    fun jdtlsProgressReport(params: Any?) {}
+
+    @JsonNotification("language/eventNotification")
+    fun jdtlsEventNotification(params: Any?) {}
 
     companion object {
         fun documentUri(path: Path): String = path.toUri().toString()
