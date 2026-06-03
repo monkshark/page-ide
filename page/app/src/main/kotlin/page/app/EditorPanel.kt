@@ -275,8 +275,14 @@ fun EditorPanel(
     val unnecessaryRanges = remember(value.text, diagnostics, showInlineDiagnostics) {
         if (!showInlineDiagnostics) emptyList()
         else diagnostics.filter { it.unnecessary }.mapNotNull { d ->
-            val start = lineColToOffset(value.text, d.start.line, d.start.character)
-            val end = lineColToOffset(value.text, d.end.line, d.end.character)
+            val rawStart = lineColToOffset(value.text, d.start.line, d.start.character)
+            val rawEnd = lineColToOffset(value.text, d.end.line, d.end.character)
+            val lineStart = lineColToOffset(value.text, d.start.line, 0)
+            val lineEnd = value.text.indexOf('\n', rawEnd).let { if (it < 0) value.text.length else it }
+            val lineText = value.text.substring(lineStart.coerceIn(0, value.text.length), lineEnd.coerceIn(0, value.text.length))
+            val isImport = lineText.trimStart().startsWith("import ")
+            val start = if (isImport) lineStart + (lineText.length - lineText.trimStart().length) else rawStart
+            val end = if (isImport) lineEnd else rawEnd
             if (start >= end) null else start until end
         }
     }
@@ -1722,6 +1728,7 @@ private class CombinedHighlightTransformation(
             val start = token.range.first.coerceIn(0, text.length)
             val end = (token.range.last + 1).coerceIn(start, text.length)
             if (start == end) continue
+            if (unnecessaryRanges.any { start < (it.last + 1) && end > it.first }) continue
             val color = when {
                 token.kind == TokenKind.TODO_TAG ->
                     tokenOverride[token.range]

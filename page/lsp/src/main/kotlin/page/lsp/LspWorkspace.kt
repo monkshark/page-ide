@@ -381,4 +381,17 @@ class LspWorkspace(private val client: LspClient) {
                 }
             }
     }
+
+    fun executeCommandForResult(command: String, arguments: List<Any?>): CompletableFuture<Any?> {
+        val params = ExecuteCommandParams(command, arguments)
+        return client.server().workspaceService.executeCommand(params)
+            .handle { result, err ->
+                if (err != null) {
+                    println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
+                    null
+                } else {
+                    result
+                }
+            }
+    }
 }

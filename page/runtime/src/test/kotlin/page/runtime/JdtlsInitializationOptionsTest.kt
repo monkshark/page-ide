@@ -59,6 +59,14 @@ class JdtlsInitializationOptionsTest {
     }
 
     @Test
+    fun compilerProblemSeveritiesMarksUnusedImportAsWarning() {
+        assertEquals(
+            "warning",
+            JdtlsInitializationOptions.compilerProblemSeverities["org.eclipse.jdt.core.compiler.problem.unusedImport"],
+        )
+    }
+
+    @Test
     fun forWorkspaceSetsCodeGenerationInsertionLocationToLastMember() {
         val options = JdtlsInitializationOptions.forWorkspace()
 

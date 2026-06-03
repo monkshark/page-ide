@@ -18,6 +18,10 @@ object JdtlsInitializationOptions {
 
     const val codeGenerationInsertionLocation: String = "lastMember"
 
+    val compilerProblemSeverities: Map<String, String> = mapOf(
+        "org.eclipse.jdt.core.compiler.problem.unusedImport" to "warning",
+    )
+
     fun forWorkspace(): Map<String, Any> = mapOf(
         "settings" to mapOf(
             "java" to mapOf(

@@ -8,6 +8,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -220,6 +221,7 @@ class LspController(
                     println("[lsp] executeCommand support = $executeCommandSupported")
                     flushPendingOpens()
                     openWorkspaceFiles()
+                    applyJavaCompilerPolicies(backend)
                 }
             }
             client = c
@@ -431,6 +433,36 @@ class LspController(
         }
     }
 
+    private fun applyJavaCompilerPolicies(backend: LanguageBackend) {
+        if (backend.id != "java" || !executeCommandSupported) return
+        val myGeneration = clientGeneration
+        val rootFallback = workspaceRoot?.toUri()?.toString()?.removeSuffix("/")
+        scope.launch {
+            kotlinx.coroutines.delay(2_000)
+            if (myGeneration != clientGeneration || status.value != Status.READY) return@launch
+            val ws = workspace ?: return@launch
+            ws.executeCommandForResult(
+                "java.project.getAll",
+                emptyList(),
+            ).thenAccept { result ->
+                if (myGeneration != clientGeneration) return@thenAccept
+                val targets = extractProjectUris(result).ifEmpty { listOfNotNull(rootFallback) }
+                if (targets.isEmpty()) {
+                    println("[lsp] java compiler policies → no java project resolved")
+                    return@thenAccept
+                }
+                targets.forEach { projectUri ->
+                    ws.executeCommand(
+                        "java.project.updateSettings",
+                        listOf(projectUri, page.runtime.JdtlsInitializationOptions.compilerProblemSeverities),
+                    ).thenAccept { ok ->
+                        println("[lsp] java compiler policies → unusedImport=warning ${if (ok) "✓" else "✗"} ($projectUri)")
+                    }
+                }
+            }
+        }
+    }
+
     fun didClose(path: Path) {
         val uri = path.toUri().toString()
         pendingChanges.remove(uri)?.cancel()
@@ -440,6 +472,8 @@ class LspController(
         val ws = workspace
         if (ws != null && ws.isOpen(uri)) ws.didClose(uri)
         diagnosticsByUri.remove(canonicalUri(uri))
+        pendingDiagnostics.remove(canonicalUri(uri))
+        unnecessaryByContent.remove(canonicalUri(uri))
     }
 
     private fun invalidateInlayHintCache(uri: String) {
@@ -1545,6 +1579,8 @@ class LspController(
             invalidateInlayHintCache(oldUri)
             if (ws.isOpen(oldUri)) runCatching { ws.didClose(oldUri) }
             diagnosticsByUri.remove(canonicalUri(oldUri))
+            pendingDiagnostics.remove(canonicalUri(oldUri))
+            unnecessaryByContent.remove(canonicalUri(oldUri))
             events.add(oldUri to org.eclipse.lsp4j.FileChangeType.Deleted)
             events.add(newUri to org.eclipse.lsp4j.FileChangeType.Created)
             if (!ws.isOpen(newUri)) {
@@ -1580,6 +1616,8 @@ class LspController(
         lastCompletionByLine.clear()
         synchronized(inlayHintCache) { inlayHintCache.clear() }
         diagnosticsByUri.clear()
+        pendingDiagnostics.clear()
+        unnecessaryByContent.clear()
         clearActivities("client down: $reason")
         val shutdownFuture = runCatching { client?.shutdown() }.getOrNull()
         if (shutdownFuture != null) {
@@ -1636,13 +1674,60 @@ class LspController(
         const val LINTING_KIND = KLS_LINTING_KIND
 
         private const val WORKSPACE_SYMBOLS_TIMEOUT_MS = 2_000L
+        private const val DIAGNOSTICS_FLUSH_MS = 80L
+    }
+
+    private val unnecessaryByContent = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, List<Diagnostic>>>()
+    private val pendingDiagnostics = java.util.concurrent.ConcurrentHashMap<String, List<Diagnostic>>()
+    private val diagnosticsFlushScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun scheduleDiagnosticsFlush() {
+        if (!diagnosticsFlushScheduled.compareAndSet(false, true)) return
+        scope.launch {
+            delay(DIAGNOSTICS_FLUSH_MS)
+            diagnosticsFlushScheduled.set(false)
+            val batch = drainBatch(pendingDiagnostics)
+            if (batch.isEmpty()) return@launch
+            Snapshot.withMutableSnapshot {
+                for ((k, v) in batch) diagnosticsByUri[k] = v
+            }
+        }
     }
 
     private fun onDiagnostics(params: PublishDiagnosticsParams) {
         val uri = params.uri ?: return
         if (isNoiseUri(uri)) return
+        val key = canonicalUri(uri)
         val mapped = params.diagnostics.orEmpty().map(Diagnostic::fromLsp)
-        diagnosticsByUri[canonicalUri(uri)] = mapped
+        val incomingHasUnnecessary = mapped.any { it.unnecessary }
+
+        val cached = unnecessaryByContent[key]
+        val contentHash = if (incomingHasUnnecessary || cached != null) {
+            val openKey = workspace?.openUris()?.firstOrNull { canonicalUri(it) == key }
+            openKey?.let { workspace?.textOf(it)?.hashCode() }
+        } else {
+            null
+        }
+
+        val cachedForContent = cached != null && contentHash != null &&
+            cached.first == contentHash && cached.second.isNotEmpty()
+        val reinject = shouldReinjectUnnecessary(
+            incomingHasUnnecessary = incomingHasUnnecessary,
+            cachedForCurrentContent = cachedForContent,
+        )
+
+        val effective = if (reinject) mapped + cached!!.second else mapped
+        pendingDiagnostics[key] = effective
+        scheduleDiagnosticsFlush()
+
+        val effectiveUnnecessary = effective.filter { it.unnecessary }
+        if (effectiveUnnecessary.isNotEmpty() && contentHash != null) {
+            unnecessaryByContent[key] = contentHash to effectiveUnnecessary
+        }
+
+        if (reinject) {
+            println("[lsp] publishDiagnostics $uri — kept ${cached!!.second.size} unnecessary diag(s) for restored content")
+        }
         if (mapped.isNotEmpty()) {
             println("[lsp] publishDiagnostics $uri — ${mapped.size} diagnostic(s)")
             mapped.take(5).forEach { d ->
@@ -1726,6 +1811,34 @@ internal fun detectExecuteCommandSupport(caps: org.eclipse.lsp4j.ServerCapabilit
     caps?.executeCommandProvider != null
 
 private val FILE_DRIVE_URI = Regex("^(file:///)([A-Za-z])(:.*)$")
+
+internal fun shouldReinjectUnnecessary(
+    incomingHasUnnecessary: Boolean,
+    cachedForCurrentContent: Boolean,
+): Boolean = !incomingHasUnnecessary && cachedForCurrentContent
+
+internal fun drainBatch(pending: MutableMap<String, List<Diagnostic>>): List<Pair<String, List<Diagnostic>>> {
+    if (pending.isEmpty()) return emptyList()
+    val out = ArrayList<Pair<String, List<Diagnostic>>>(pending.size)
+    val it = pending.entries.iterator()
+    while (it.hasNext()) {
+        val e = it.next()
+        out.add(e.key to e.value)
+        it.remove()
+    }
+    return out
+}
+
+internal fun extractProjectUris(result: Any?): List<String> {
+    val items = result as? Iterable<*> ?: return emptyList()
+    return items.mapNotNull { el ->
+        when (el) {
+            null -> null
+            is String -> el
+            else -> el.toString().trim().removeSurrounding("\"").ifBlank { null }
+        }
+    }.filter { it.startsWith("file:") }
+}
 
 internal fun canonicalUri(uri: String): String {
     val match = FILE_DRIVE_URI.matchEntire(uri) ?: return uri
