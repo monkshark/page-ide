@@ -1,4 +1,4 @@
-package page.app
+package page.language
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -13,7 +13,6 @@ import page.lsp.LanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
 import page.lsp.RenameWorkspaceEdit
-import page.language.LspController
 import java.nio.file.Path
 
 class LspRouter(
