@@ -1,4 +1,4 @@
-package page.app
+package page.language
 
 import page.lsp.LanguageBackend
 import page.lsp.LspBackends
