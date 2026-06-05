@@ -10,6 +10,8 @@ import page.app.DeleteEntryDialogState
 import page.app.RenameEntryDialogState
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
+import page.editor.IndexedFile
+import page.lsp.DocumentSymbolEntry
 
 internal class LayoutUiState {
     var sidebarWidth: Dp by mutableStateOf(260.dp)
@@ -41,4 +43,11 @@ internal class LayoutUiState {
     var deleteDialog: DeleteEntryDialogState? by mutableStateOf(null)
     var pasteDialog: PasteEntryDialogState? by mutableStateOf(null)
     var largeCopyState: LargeCopyDialogState? by mutableStateOf(null)
+
+    var quickOpen by mutableStateOf(false)
+    var quickOpenIndex by mutableStateOf<List<IndexedFile>>(emptyList())
+    var documentSymbolOpen by mutableStateOf(false)
+    var documentSymbolList by mutableStateOf<List<DocumentSymbolEntry>>(emptyList())
+    var documentSymbolUri by mutableStateOf("")
+    var workspaceSymbolOpen by mutableStateOf(false)
 }

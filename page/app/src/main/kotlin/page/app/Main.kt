@@ -19,6 +19,7 @@ import page.app.ui.PaletteToast
 import page.app.ui.dialog.FileTreeCreateDialog
 import page.app.ui.dialog.FileTreePasteDialog
 import page.app.ui.dialog.FileTreeRenameDeleteDialogs
+import page.app.ui.dialog.NavigationPickerDialogs
 import page.app.ui.dialog.PendingCloseDialog
 import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
@@ -115,7 +116,6 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.lsp.CodeActionEntry
-import page.lsp.DocumentSymbolEntry
 import page.lsp.RenameApply
 import page.lsp.RenameFileChange
 import page.lsp.RenameWorkspaceEdit
@@ -168,8 +168,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val layoutUiState = remember { LayoutUiState() }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
     var pendingClose: PendingClose? by remember { mutableStateOf(null) }
-    var quickOpen by remember { mutableStateOf(false) }
-    var quickOpenIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
+    var quickOpen by layoutUiState::quickOpen
+    var quickOpenIndex by layoutUiState::quickOpenIndex
     var findInFiles by remember { mutableStateOf(false) }
     var findInFilesIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
     var splitEnabled by editorWorkspace::splitEnabled
@@ -238,10 +238,10 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val autoSaveOptions: AutoSaveOptions = pageSettings.autoSave
     var settingsDialogOpen by remember { mutableStateOf(false) }
     var dropResultToast: DropResultToastState? by remember { mutableStateOf(null) }
-    var documentSymbolOpen by remember { mutableStateOf(false) }
-    var documentSymbolList by remember { mutableStateOf<List<DocumentSymbolEntry>>(emptyList()) }
-    var documentSymbolUri by remember { mutableStateOf("") }
-    var workspaceSymbolOpen by remember { mutableStateOf(false) }
+    var documentSymbolOpen by layoutUiState::documentSymbolOpen
+    var documentSymbolList by layoutUiState::documentSymbolList
+    var documentSymbolUri by layoutUiState::documentSymbolUri
+    var workspaceSymbolOpen by layoutUiState::workspaceSymbolOpen
     var codeActionOpen by remember { mutableStateOf(false) }
     var codeActionList by remember { mutableStateOf<List<CodeActionEntry>>(emptyList()) }
     var codeActionUri by remember { mutableStateOf<String?>(null) }
@@ -1847,36 +1847,19 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    if (quickOpen) {
-        QuickOpenDialog(
-            files = quickOpenIndex,
-            onPick = { f ->
-                quickOpen = false
-                openInTab(f.path)
-            },
-            onDismiss = { quickOpen = false },
-        )
-    }
-
-    if (documentSymbolOpen) {
-        DocumentSymbolDialog(
-            uri = documentSymbolUri,
-            symbols = documentSymbolList,
-            onPick = { pick ->
-                documentSymbolOpen = false
-                val pickedPath = runCatching { Path.of(java.net.URI(pick.uri)) }.getOrNull()
-                if (pickedPath != null) {
-                    jumpToProblem(pickedPath, pick.startLine, pick.startCharacter)
-                }
-                frameRef.value?.requestFocus()
-                editorFocusVersion += 1
-            },
-            onDismiss = {
-                documentSymbolOpen = false
-                frameRef.value?.requestFocus()
-            },
-        )
-    }
+    NavigationPickerDialogs(
+        ui = layoutUiState,
+        openInTab = openInTab,
+        jumpToProblem = jumpToProblem,
+        workspaceSymbolQuery = { q ->
+            val wsPath = focused().book.active?.path
+            val wsCtrl = wsPath?.let { currentLspRouter.controllerFor(it) }
+            if (wsCtrl != null) runCatching { wsCtrl.workspaceSymbolsLocated(q).await() }.getOrDefault(emptyList())
+            else emptyList()
+        },
+        requestFrameFocus = { frameRef.value?.requestFocus() },
+        onEditorFocusBump = { editorFocusVersion += 1 },
+    )
 
     if (runDialogOpen) {
         RunConfigDialog(
@@ -1947,30 +1930,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 if (activeFileOpConfirm.isRedo) onRedoFileOp() else onUndoFileOp()
             },
             onDismiss = { fileOpConfirm = null },
-        )
-    }
-
-    if (workspaceSymbolOpen) {
-        WorkspaceSymbolDialog(
-            queryFor = { q ->
-                val wsPath = focused().book.active?.path
-                val wsCtrl = wsPath?.let { currentLspRouter.controllerFor(it) }
-                if (wsCtrl != null) runCatching { wsCtrl.workspaceSymbolsLocated(q).await() }.getOrDefault(emptyList())
-                else emptyList()
-            },
-            onPick = { pick ->
-                workspaceSymbolOpen = false
-                val pickedPath = runCatching { Path.of(java.net.URI(pick.uri)) }.getOrNull()
-                if (pickedPath != null) {
-                    jumpToProblem(pickedPath, pick.startLine, pick.startCharacter)
-                }
-                frameRef.value?.requestFocus()
-                editorFocusVersion += 1
-            },
-            onDismiss = {
-                workspaceSymbolOpen = false
-                frameRef.value?.requestFocus()
-            },
         )
     }
 
