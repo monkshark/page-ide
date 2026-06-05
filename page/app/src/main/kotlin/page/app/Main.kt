@@ -5,6 +5,7 @@ import page.workspace.*
 import page.workspace.sync.PackageSyncEngine
 import page.app.input.ShortcutAction
 import page.app.input.ShortcutResolver
+import page.app.filetree.FileOpUndoController
 import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.FileTreeContextController
 import page.app.filetree.FileTreeDropController
@@ -714,101 +715,20 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     )
     val remapTreeStateAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTreeStateAfterRename(old, new) }
     val remapTabsAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTabsAfterRename(old, new) }
-    val readFileTextWithTabs: (Path) -> String? = { p ->
-        paneOf(PaneSide.PRIMARY).book.tabs.firstOrNull { it.path == p }?.text
-            ?: paneOf(PaneSide.SECONDARY).book.tabs.firstOrNull { it.path == p }?.text
-            ?: runCatching { java.nio.file.Files.readString(p) }.getOrNull()
-    }
-    val applyTextReplace: (Path, String) -> Unit = { path, newText ->
-        var inTab = false
-        for (side in listOf(PaneSide.PRIMARY, PaneSide.SECONDARY)) {
-            val p = paneOf(side)
-            val idx = p.book.tabs.indexOfFirst { it.path == path }
-            if (idx < 0) continue
-            inTab = true
-            val tab = p.book.tabs[idx]
-            if (tab.text == newText) continue
-            val isActive = idx == p.book.activeIndex
-            val updatedTabs = p.book.tabs.toMutableList().also { it[idx] = tab.copy(text = newText) }
-            val newEditorValue = if (isActive) {
-                val caret = p.editorValue.selection.start.coerceAtMost(newText.length)
-                TextFieldValue(newText, TextRange(caret))
-            } else p.editorValue
-            setPane(side, p.copy(book = p.book.copy(tabs = updatedTabs), editorValue = newEditorValue))
-        }
-        if (!inTab) {
-            runCatching { java.nio.file.Files.writeString(path, newText) }
-        }
-        runCatching { currentLspRouter.applyExternalChange(path.toUri().toString(), newText) }
-    }
-    fun postUndoRemapForOp(op: FileOpHistory.Op) {
-        when (op) {
-            is FileOpHistory.PasteCutOp -> op.moves.forEach { (origin, current) ->
-                remapTabsAfterRename(current, origin)
-                remapTreeStateAfterRename(current, origin)
-            }
-            is FileOpHistory.RenameOp -> {
-                remapTabsAfterRename(op.to, op.from)
-                remapTreeStateAfterRename(op.to, op.from)
-            }
-            is FileOpHistory.ReferenceRewriteOp -> op.rewrites.forEach { entry ->
-                applyTextReplace(entry.path, entry.original)
-            }
-            is FileOpHistory.CompositeOp -> op.parts.asReversed().forEach { postUndoRemapForOp(it) }
-            else -> Unit
-        }
-    }
-    val onUndoFileOp: () -> Boolean = {
-        val op = fileOpHistory.peek()
-        if (op == null) false
-        else when (val result = op.undo()) {
-            is FileOpHistory.UndoResult.Ok -> {
-                fileOpHistory.popForUndo()
-                fileOpHistoryVersion++
-                postUndoRemapForOp(op)
-                treeRevision++
-                true
-            }
-            is FileOpHistory.UndoResult.Err -> {
-                println("[filetree] undo failed: ${result.message}")
-                false
-            }
-        }
-    }
-    fun postRedoRemapForOp(op: FileOpHistory.Op) {
-        when (op) {
-            is FileOpHistory.PasteCutOp -> op.moves.forEach { (origin, current) ->
-                remapTabsAfterRename(origin, current)
-                remapTreeStateAfterRename(origin, current)
-            }
-            is FileOpHistory.RenameOp -> {
-                remapTabsAfterRename(op.from, op.to)
-                remapTreeStateAfterRename(op.from, op.to)
-            }
-            is FileOpHistory.ReferenceRewriteOp -> op.rewrites.forEach { entry ->
-                applyTextReplace(entry.path, entry.rewritten)
-            }
-            is FileOpHistory.CompositeOp -> op.parts.forEach { postRedoRemapForOp(it) }
-            else -> Unit
-        }
-    }
-    val onRedoFileOp: () -> Boolean = {
-        val op = fileOpHistory.peekRedo()
-        if (op == null) false
-        else when (val result = op.redo()) {
-            is FileOpHistory.UndoResult.Ok -> {
-                fileOpHistory.popForRedo()
-                fileOpHistoryVersion++
-                postRedoRemapForOp(op)
-                treeRevision++
-                true
-            }
-            is FileOpHistory.UndoResult.Err -> {
-                println("[filetree] redo failed: ${result.message}")
-                false
-            }
-        }
-    }
+    val fileOpUndoController = FileOpUndoController(
+        fileOpHistory = fileOpHistory,
+        paneOf = { side -> paneOf(side) },
+        setPane = { side, value -> setPane(side, value) },
+        applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
+        remapTabsAfterRename = remapTabsAfterRename,
+        remapTreeStateAfterRename = remapTreeStateAfterRename,
+        onFileOpHistoryChanged = { fileOpHistoryVersion++ },
+        onTreeRevision = { treeRevision++ },
+    )
+    val readFileTextWithTabs: (Path) -> String? = { p -> fileOpUndoController.readFileTextWithTabs(p) }
+    val applyTextReplace: (Path, String) -> Unit = { path, newText -> fileOpUndoController.applyTextReplace(path, newText) }
+    val onUndoFileOp: () -> Boolean = { fileOpUndoController.onUndoFileOp() }
+    val onRedoFileOp: () -> Boolean = { fileOpUndoController.onRedoFileOp() }
     val applyFolderPackageSync: (Path, Path, Map<String, String>) -> List<FileOpHistory.RewriteEntry> = { _, newFolder, packageMap ->
         val entries = PackageSyncEngine.folderRewrites(newFolder, packageMap, rootDir, readFileTextWithTabs)
         entries.forEach { applyTextReplace(it.path, it.rewritten) }
