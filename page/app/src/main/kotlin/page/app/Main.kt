@@ -2,6 +2,7 @@ package page.app
 
 import page.runtime.*
 import page.workspace.*
+import page.app.input.GlobalKeyDispatcher
 import page.app.input.ShortcutDispatchController
 import page.app.filetree.FileOpUndoController
 import page.app.filetree.FileTreeActionExecutor
@@ -994,90 +995,28 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
         DisposableEffect(window) {
             val frame = window
-            val dispatcher = java.awt.KeyEventDispatcher { e ->
-                if (e.id != java.awt.event.KeyEvent.KEY_PRESSED) return@KeyEventDispatcher false
-                if (!frame.isFocused) return@KeyEventDispatcher false
-                val ctrl = (e.modifiersEx and java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0
-                val alt = (e.modifiersEx and java.awt.event.InputEvent.ALT_DOWN_MASK) != 0
-                val shift = (e.modifiersEx and java.awt.event.InputEvent.SHIFT_DOWN_MASK) != 0
-                if (codeActionOpenRef.value && !ctrl && !alt && !shift) {
-                    val list = codeActionListRef.value
-                    val sel = codeActionSelectedRef.value
-                    when (e.keyCode) {
-                        java.awt.event.KeyEvent.VK_ESCAPE -> {
-                            codeActionOpen = false
-                            frameRef.value?.requestFocus()
-                            editorFocusVersion += 1
-                            return@KeyEventDispatcher true
-                        }
-                        java.awt.event.KeyEvent.VK_UP -> {
-                            if (list.isNotEmpty()) {
-                                codeActionSelected = ((sel - 1) + list.size) % list.size
-                            }
-                            return@KeyEventDispatcher true
-                        }
-                        java.awt.event.KeyEvent.VK_DOWN -> {
-                            if (list.isNotEmpty()) {
-                                codeActionSelected = (sel + 1) % list.size
-                            }
-                            return@KeyEventDispatcher true
-                        }
-                        java.awt.event.KeyEvent.VK_ENTER -> {
-                            val pick = list.getOrNull(sel)
-                            codeActionOpen = false
-                            if (pick != null && pick.isExecutable) {
-                                applyCodeAction(pick)
-                            }
-                            frameRef.value?.requestFocus()
-                            editorFocusVersion += 1
-                            return@KeyEventDispatcher true
-                        }
-                    }
-                }
-                when {
-                    ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_S -> {
-                        openSettingsRef.value()
-                        true
-                    }
-                    ctrl && !alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
-                        toggleTerminalRef.value()
-                        true
-                    }
-                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_BACK_QUOTE -> {
-                        toggleTerminalRef.value()
-                        true
-                    }
-                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_T -> {
-                        openWsRef.value()
-                        true
-                    }
-                    ctrl && e.keyCode == java.awt.event.KeyEvent.VK_F12 -> {
-                        openDocRef.value()
-                        true
-                    }
-                    !ctrl && alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_F -> {
-                        triggerFormatRef.value()
-                        true
-                    }
-                    !ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_ENTER -> {
-                        triggerCodeActionRef.value()
-                        true
-                    }
-                    !ctrl && !alt && shift && e.keyCode == java.awt.event.KeyEvent.VK_F10 -> {
-                        startActiveRunRef.value()
-                        true
-                    }
-                    ctrl && !alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_F2 -> {
-                        stopActiveRunRef.value()
-                        true
-                    }
-                    ctrl && alt && !shift && e.keyCode == java.awt.event.KeyEvent.VK_R -> {
-                        openRunDialogRef.value()
-                        true
-                    }
-                    else -> false
-                }
-            }
+            val dispatcher = GlobalKeyDispatcher(
+                isWindowFocused = { frame.isFocused },
+                codeActionOpen = { codeActionOpenRef.value },
+                codeActionList = { codeActionListRef.value },
+                codeActionSelected = { codeActionSelectedRef.value },
+                setCodeActionOpen = { codeActionOpen = it },
+                setCodeActionSelected = { codeActionSelected = it },
+                applyCodeAction = { action -> applyCodeAction(action) },
+                requestEditorRefocus = {
+                    frameRef.value?.requestFocus()
+                    editorFocusVersion += 1
+                },
+                openSettings = { openSettingsRef.value() },
+                toggleTerminal = { toggleTerminalRef.value() },
+                openWorkspaceSymbol = { openWsRef.value() },
+                openDocumentSymbol = { openDocRef.value() },
+                triggerFormat = { triggerFormatRef.value() },
+                triggerCodeAction = { triggerCodeActionRef.value() },
+                startActiveRun = { startActiveRunRef.value() },
+                stopActiveRun = { stopActiveRunRef.value() },
+                openRunDialog = { openRunDialogRef.value() },
+            )
             val fm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
             fm.addKeyEventDispatcher(dispatcher)
             onDispose { fm.removeKeyEventDispatcher(dispatcher) }
