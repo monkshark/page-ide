@@ -2,8 +2,7 @@ package page.app
 
 import page.runtime.*
 import page.workspace.*
-import page.app.input.ShortcutAction
-import page.app.input.ShortcutResolver
+import page.app.input.ShortcutDispatchController
 import page.app.filetree.FileOpUndoController
 import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.FileTreeContextController
@@ -81,14 +80,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -898,69 +890,51 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
     val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
-    val handleShortcut: (KeyEvent) -> Boolean = handler@{ event ->
-        if (event.type != KeyEventType.KeyDown) return@handler false
-        val frame = frameRef.value
-        val focusedSearch = focused().search
-        when (ShortcutResolver.resolve(
-            key = event.key,
-            ctrl = event.isCtrlPressed,
-            alt = event.isAltPressed,
-            shift = event.isShiftPressed,
-            hasSearch = focusedSearch != null,
-        )) {
-            ShortcutAction.CYCLE_PALETTE -> { cyclePalette(); true }
-            ShortcutAction.OPEN_FOLDER -> { if (frame != null) openFolder(frame); true }
-            ShortcutAction.OPEN_FILE -> { if (frame != null) openFile(frame); true }
-            ShortcutAction.OPEN_SETTINGS -> { settingsDialogOpen = true; true }
-            ShortcutAction.SAVE -> { if (frame != null) saveFile(frame); true }
-            ShortcutAction.CLOSE_TAB -> { closeActiveTab(); true }
-            ShortcutAction.TOGGLE_PROBLEMS -> { problemsOpen = !problemsOpen; true }
-            ShortcutAction.TOGGLE_TODO -> { todoOpen = !todoOpen; true }
-            ShortcutAction.TOGGLE_FIND_IN_FILES -> {
-                if (findInFiles) findInFiles = false else openFindInFiles()
-                true
+    val shortcutDispatchController = ShortcutDispatchController(
+        hasSearch = { focused().search != null },
+        cyclePalette = cyclePalette,
+        openFolder = { frameRef.value?.let { openFolder(it) } },
+        openFile = { frameRef.value?.let { openFile(it) } },
+        openSettings = { settingsDialogOpen = true },
+        saveFile = { frameRef.value?.let { saveFile(it) } },
+        closeActiveTab = closeActiveTab,
+        toggleProblems = { problemsOpen = !problemsOpen },
+        toggleTodo = { todoOpen = !todoOpen },
+        toggleFindInFiles = { if (findInFiles) findInFiles = false else openFindInFiles() },
+        openSearch = openSearch,
+        openReplace = openReplace,
+        openQuickOpen = openQuickOpen,
+        openWorkspaceSymbol = openWorkspaceSymbol,
+        openDocumentSymbol = openDocumentSymbol,
+        toggleSplitOrientation = {
+            splitOrientation = if (splitOrientation == SplitOrientation.HORIZONTAL)
+                SplitOrientation.VERTICAL else SplitOrientation.HORIZONTAL
+        },
+        toggleSplit = { splitEnabled = !splitEnabled },
+        requestUndo = {
+            val undoOp = fileOpHistory.peek()
+            if (fileTreeFocused && undoOp != null) {
+                fileOpConfirm = FileOpConfirmState(isRedo = false, op = undoOp)
+            } else {
+                doUndo()
             }
-            ShortcutAction.OPEN_SEARCH -> { openSearch(); true }
-            ShortcutAction.OPEN_REPLACE -> { openReplace(); true }
-            ShortcutAction.OPEN_QUICK_OPEN -> { openQuickOpen(); true }
-            ShortcutAction.OPEN_WORKSPACE_SYMBOL -> { openWorkspaceSymbol(); true }
-            ShortcutAction.OPEN_DOCUMENT_SYMBOL -> { openDocumentSymbol(); true }
-            ShortcutAction.TOGGLE_SPLIT_ORIENTATION -> {
-                splitOrientation = if (splitOrientation == SplitOrientation.HORIZONTAL)
-                    SplitOrientation.VERTICAL else SplitOrientation.HORIZONTAL
-                true
+        },
+        requestRedo = {
+            val redoOp = fileOpHistory.peekRedo()
+            if (fileTreeFocused && redoOp != null) {
+                fileOpConfirm = FileOpConfirmState(isRedo = true, op = redoOp)
+            } else {
+                doRedo()
             }
-            ShortcutAction.TOGGLE_SPLIT -> { splitEnabled = !splitEnabled; true }
-            ShortcutAction.UNDO -> {
-                val undoOp = fileOpHistory.peek()
-                if (fileTreeFocused && undoOp != null) {
-                    fileOpConfirm = FileOpConfirmState(isRedo = false, op = undoOp)
-                } else {
-                    doUndo()
-                }
-                true
-            }
-            ShortcutAction.REDO -> {
-                val redoOp = fileOpHistory.peekRedo()
-                if (fileTreeFocused && redoOp != null) {
-                    fileOpConfirm = FileOpConfirmState(isRedo = true, op = redoOp)
-                } else {
-                    doRedo()
-                }
-                true
-            }
-            ShortcutAction.FORMAT -> { triggerFormat(); true }
-            ShortcutAction.CODE_ACTION -> { triggerCodeAction(); true }
-            ShortcutAction.PREV_TAB -> { editorWorkspace.activateAdjacentTab(-1); true }
-            ShortcutAction.NEXT_TAB -> { editorWorkspace.activateAdjacentTab(1); true }
-            ShortcutAction.JUMP_PROBLEM_NEXT -> { jumpProblemRelative(true); true }
-            ShortcutAction.JUMP_PROBLEM_PREV -> { jumpProblemRelative(false); true }
-            ShortcutAction.REFRESH_TREE -> { treeRevision++; true }
-            ShortcutAction.CLOSE_SEARCH -> { closeSearch(focusedPane); true }
-            ShortcutAction.NONE -> false
-        }
-    }
+        },
+        triggerFormat = triggerFormat,
+        triggerCodeAction = triggerCodeAction,
+        activateAdjacentTab = { delta -> editorWorkspace.activateAdjacentTab(delta) },
+        jumpProblemRelative = jumpProblemRelative,
+        refreshTree = { treeRevision++ },
+        closeSearch = { closeSearch(focusedPane) },
+    )
+    val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
     Window(
         onCloseRequest = requestExit,
         state = windowState,
