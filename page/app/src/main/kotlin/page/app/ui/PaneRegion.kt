@@ -66,7 +66,7 @@ internal fun PaneRegion(
     runtimeSources: Map<String, String> = emptyMap(),
     runtimeBuildFileVersions: Map<String, String> = emptyMap(),
     onRuntimeClick: ((String) -> Unit)? = null,
-    pageSettings: PageSettings = PageSettings(),
+    pageSettings: PageSettings = LocalPageSettings.current,
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
@@ -252,7 +252,6 @@ internal fun PaneRegion(
                     jdkVersion = runtimeInfo?.first,
                     jdkVersionTooltip = runtimeInfo?.third?.let { "from $it" },
                     onJdkVersionClick = runtimeInfo?.let { (_, id, _) -> { onRuntimeClick?.invoke(id) } },
-                    pageSettings = pageSettings,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }

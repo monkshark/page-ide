@@ -108,7 +108,6 @@ internal fun IdeMainLayout(
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
     settingsPanelOpen: Boolean = false,
-    pageSettings: PageSettings = PageSettings(),
     onSettingsApply: (PageSettings) -> Unit = {},
     onSettingsPanelClose: () -> Unit = {},
     onToggleSettings: () -> Unit = {},
@@ -220,7 +219,7 @@ internal fun IdeMainLayout(
                     )
                 } else if (settingsPanelOpen) {
                     SettingsPanel(
-                        settings = pageSettings,
+                        settings = LocalPageSettings.current,
                         onApply = onSettingsApply,
                         onClose = onSettingsPanelClose,
                         modifier = Modifier.fillMaxSize(),
@@ -270,7 +269,6 @@ internal fun IdeMainLayout(
                                 runtimeSources = runtimeSources.value,
                                 runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
-                                pageSettings = pageSettings,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -311,7 +309,6 @@ internal fun IdeMainLayout(
                                 runtimeSources = runtimeSources.value,
                                 runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                                 onRuntimeClick = { id -> runtimeDialogOpen = id },
-                                pageSettings = pageSettings,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -351,7 +348,6 @@ internal fun IdeMainLayout(
                         runtimeSources = runtimeSources.value,
                         runtimeBuildFileVersions = runtimeBuildFileVersions.value,
                         onRuntimeClick = { id -> runtimeDialogOpen = id },
-                        pageSettings = pageSettings,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
