@@ -2,7 +2,6 @@ package page.app
 
 import page.runtime.*
 import page.workspace.*
-import page.workspace.sync.PackageSyncEngine
 import page.app.input.ShortcutAction
 import page.app.input.ShortcutResolver
 import page.app.filetree.FileOpUndoController
@@ -14,6 +13,7 @@ import page.app.filetree.RenameRemapController
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
+import page.app.lsp.WorkspaceEditController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
@@ -631,20 +631,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val applyRename: (RenameWorkspaceEdit) -> Unit = { edit ->
         lspEditorInterconnector.applyRename(edit)
     }
-    val applyCodeAction: (CodeActionEntry) -> Unit = { action ->
-        if (action.hasEdit) {
-            println("[lsp] codeAction apply ▶ \"${action.title}\" — ${action.edit.changes.sumOf { it.edits.size }} edit(s)")
-            applyRename(action.edit)
-        }
-        if (action.hasCommand) {
-            val ctrl = codeActionUri?.let { currentLspRouter.controllerForUri(it) }
-            val command = action.command
-            if (ctrl != null && command != null) {
-                println("[lsp] codeAction command ▶ \"${action.title}\" → $command")
-                ctrl.executeCommand(command, action.commandArguments)
-            }
-        }
-    }
     LaunchedEffect(lspRouter) {
         lspRouter.applyEditHandler = { edit ->
             java.awt.EventQueue.invokeLater { applyRename(edit) }
@@ -729,15 +715,20 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val applyTextReplace: (Path, String) -> Unit = { path, newText -> fileOpUndoController.applyTextReplace(path, newText) }
     val onUndoFileOp: () -> Boolean = { fileOpUndoController.onUndoFileOp() }
     val onRedoFileOp: () -> Boolean = { fileOpUndoController.onRedoFileOp() }
+    val workspaceEditController = WorkspaceEditController(
+        applyRename = applyRename,
+        codeActionUri = { codeActionUri },
+        controllerForUri = { uri -> currentLspRouter.controllerForUri(uri) },
+        rootDir = { rootDir },
+        readFileText = readFileTextWithTabs,
+        applyTextReplace = applyTextReplace,
+    )
+    val applyCodeAction: (CodeActionEntry) -> Unit = { action -> workspaceEditController.applyCodeAction(action) }
     val applyFolderPackageSync: (Path, Path, Map<String, String>) -> List<FileOpHistory.RewriteEntry> = { _, newFolder, packageMap ->
-        val entries = PackageSyncEngine.folderRewrites(newFolder, packageMap, rootDir, readFileTextWithTabs)
-        entries.forEach { applyTextReplace(it.path, it.rewritten) }
-        entries
+        workspaceEditController.applyFolderPackageSync(newFolder, packageMap)
     }
     val applySingleFileMoveSync: (Path, FolderPackageRename.SingleFileMovePlan) -> List<FileOpHistory.RewriteEntry> = { newPath, plan ->
-        val entries = PackageSyncEngine.singleFileMoveRewrites(newPath, plan, rootDir, readFileTextWithTabs)
-        entries.forEach { applyTextReplace(it.path, it.rewritten) }
-        entries
+        workspaceEditController.applySingleFileMoveSync(newPath, plan)
     }
     val fileTreeActionExecutor = FileTreeActionExecutor(
         scope = largeCopyScope,
