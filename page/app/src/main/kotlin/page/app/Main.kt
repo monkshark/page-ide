@@ -14,6 +14,7 @@ import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
 import page.app.lsp.WorkspaceEditController
+import page.app.run.RunActionsController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
@@ -939,32 +940,31 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val codeActionOpenRef = rememberUpdatedState(codeActionOpen)
         val codeActionListRef = rememberUpdatedState(codeActionList)
         val codeActionSelectedRef = rememberUpdatedState(codeActionSelected)
-        val toggleTerminal: () -> Unit = {
-            terminalOpen = !terminalOpen
-            if (terminalOpen && terminalManager.tabs.isEmpty()) terminalManager.newTab()
-        }
+        val runActionsController = RunActionsController(
+            isRunning = { runController.isRunning },
+            isCurrentFileActive = { runState.isCurrentFileActive },
+            buildConfigForActiveFile = {
+                focused().book.active?.path?.let { LanguageRunDefaults.buildConfig(it, rootDir) }
+            },
+            activeRunConfig = { runState.active },
+            startRun = { cfg -> runController.start(cfg) },
+            stopRun = { runController.stop() },
+            autoSaveBeforeRun = { autoSaveOptions.beforeRun },
+            saveAllDirty = { saveAllDirty() },
+            clearOutputOnRun = { pageSettings.run.clearOutputOnRun },
+            clearOutput = { runCatching { outputState.clear() } },
+            openTerminalOnRun = { pageSettings.run.openTerminalOnRun },
+            terminalOpen = { terminalOpen },
+            setTerminalOpen = { terminalOpen = it },
+            ensureTerminalTab = { if (terminalManager.tabs.isEmpty()) terminalManager.newTab() },
+            setOutputOpen = { outputOpen = it },
+            setRunDialogOpen = { runDialogOpen = it },
+        )
+        val toggleTerminal: () -> Unit = { runActionsController.toggleTerminal() }
         val toggleTerminalRef = rememberUpdatedState(toggleTerminal)
-        val startActiveRun: () -> Unit = run@{
-            if (runController.isRunning) return@run
-            val cfg = if (runState.isCurrentFileActive) {
-                val file = focused().book.active?.path ?: return@run
-                LanguageRunDefaults.buildConfig(file, rootDir) ?: return@run
-            } else {
-                runState.active ?: return@run
-            }
-            if (autoSaveOptions.beforeRun) saveAllDirty()
-            if (pageSettings.run.clearOutputOnRun) runCatching { outputState.clear() }
-            if (pageSettings.run.openTerminalOnRun) {
-                terminalOpen = true
-                if (terminalManager.tabs.isEmpty()) terminalManager.newTab()
-            }
-            outputOpen = true
-            runController.start(cfg)
-        }
-        val stopActiveRun: () -> Unit = {
-            runController.stop()
-        }
-        val openRunDialog: () -> Unit = { runDialogOpen = true }
+        val startActiveRun: () -> Unit = { runActionsController.startActiveRun() }
+        val stopActiveRun: () -> Unit = { runActionsController.stopActiveRun() }
+        val openRunDialog: () -> Unit = { runActionsController.openRunDialog() }
         val startActiveRunRef = rememberUpdatedState(startActiveRun)
         val stopActiveRunRef = rememberUpdatedState(stopActiveRun)
         val openRunDialogRef = rememberUpdatedState(openRunDialog)
