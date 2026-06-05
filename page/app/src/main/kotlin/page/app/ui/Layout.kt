@@ -42,6 +42,67 @@ import page.workspace.FileTreePanel
 import page.workspace.TreeDragController
 import java.nio.file.Path
 
+internal data class FileTreePanelActions(
+    val onToggle: (Path, Boolean) -> Unit,
+    val onOpenFile: (Path) -> Unit,
+    val onCreateFileIn: (Path) -> Unit,
+    val onCreateFolderIn: (Path) -> Unit,
+    val onRenameEntry: (Path) -> Unit,
+    val onDeleteEntry: (Path) -> Unit,
+    val onDeleteEntries: (Set<Path>) -> Unit,
+    val onRevealInFiles: (Path) -> Unit,
+    val onCopyPath: (Path) -> Unit,
+    val onCopyRelativePath: (Path) -> Unit,
+    val onPasteInto: (Path) -> Unit,
+    val onDropPlan: (TreeDragController.DropPlan) -> Unit,
+    val onExternalDrop: (List<Path>, Path) -> Unit,
+    val onDropRejected: (String) -> Unit,
+    val onUndoFileOp: () -> Boolean,
+    val canUndoFileOp: Boolean,
+    val onTreeFocusChanged: (Boolean) -> Unit = {},
+    val pendingTreeFocusTick: Int = 0,
+)
+
+internal data class EditorSearchActions(
+    val onQueryChange: (PaneSide, String) -> Unit,
+    val onReplaceChange: (PaneSide, String) -> Unit,
+    val onToggleCase: (PaneSide) -> Unit,
+    val onSearchNext: (PaneSide) -> Unit,
+    val onSearchPrev: (PaneSide) -> Unit,
+    val onReplace: (PaneSide) -> Unit,
+    val onReplaceAll: (PaneSide) -> Unit,
+    val onSearchClose: (PaneSide) -> Unit,
+)
+
+internal data class RunPanelBinding(
+    val runState: RunConfigsState,
+    val onSelectRunConfig: (String) -> Unit,
+    val onStartRun: () -> Unit,
+    val onStopRun: () -> Unit,
+    val onOpenRunDialog: () -> Unit,
+    val runIsRunning: Boolean,
+    val outputState: OutputPanelState,
+    val onOutputClear: () -> Unit,
+)
+
+internal data class CodeActionPreviewBinding(
+    val visible: Boolean = false,
+    val actions: List<CodeActionEntry> = emptyList(),
+    val selected: Int = 0,
+    val onSelectedChange: (Int) -> Unit = {},
+    val uri: String? = null,
+    val text: String? = null,
+    val onApply: (CodeActionEntry) -> Unit = {},
+    val onDismiss: () -> Unit = {},
+)
+
+internal data class SettingsBinding(
+    val panelOpen: Boolean = false,
+    val onApply: (PageSettings) -> Unit = {},
+    val onPanelClose: () -> Unit = {},
+    val onToggle: () -> Unit = {},
+)
+
 @Composable
 internal fun IdeMainLayout(
     workspace: WorkspaceState,
@@ -49,46 +110,15 @@ internal fun IdeMainLayout(
     ui: LayoutUiState,
     lspRouter: LspRouter,
     onCloseTab: (PaneSide, Int) -> Unit,
-    onToggle: (Path, Boolean) -> Unit,
-    onOpenFile: (Path) -> Unit,
-    onCreateFileIn: (Path) -> Unit,
-    onCreateFolderIn: (Path) -> Unit,
-    onRenameEntry: (Path) -> Unit,
-    onDeleteEntry: (Path) -> Unit,
-    onDeleteEntries: (Set<Path>) -> Unit,
-    onRevealInFiles: (Path) -> Unit,
-    onCopyPath: (Path) -> Unit,
-    onCopyRelativePath: (Path) -> Unit,
-    onPasteInto: (Path) -> Unit,
-    onDropPlan: (TreeDragController.DropPlan) -> Unit,
-    onExternalDrop: (List<Path>, Path) -> Unit,
-    onDropRejected: (String) -> Unit,
-    onUndoFileOp: () -> Boolean,
-    canUndoFileOp: Boolean,
-    onTreeFocusChanged: (Boolean) -> Unit = {},
-    pendingTreeFocusTick: Int = 0,
-    onQueryChange: (PaneSide, String) -> Unit,
-    onReplaceChange: (PaneSide, String) -> Unit,
-    onToggleCase: (PaneSide) -> Unit,
-    onSearchNext: (PaneSide) -> Unit,
-    onSearchPrev: (PaneSide) -> Unit,
-    onReplace: (PaneSide) -> Unit,
-    onReplaceAll: (PaneSide) -> Unit,
-    onSearchClose: (PaneSide) -> Unit,
+    fileTree: FileTreePanelActions,
+    search: EditorSearchActions,
     onWindowShortcut: (KeyEvent) -> Boolean,
     onJumpToProblem: (Path, Int, Int) -> Unit,
     onApplyRename: (RenameWorkspaceEdit) -> Unit,
     todoItems: List<page.editor.TodoItem>,
     terminalManager: TerminalManager,
     onTerminalToggle: () -> Unit,
-    runState: RunConfigsState,
-    onSelectRunConfig: (String) -> Unit,
-    onStartRun: () -> Unit,
-    onStopRun: () -> Unit,
-    onOpenRunDialog: () -> Unit,
-    runIsRunning: Boolean,
-    outputState: OutputPanelState,
-    onOutputClear: () -> Unit,
+    run: RunPanelBinding,
     referencesState: ReferencesQueryState?,
     onRequestReferences: (Path, Int, Int, String) -> Unit,
     onReferencesClose: () -> Unit,
@@ -96,22 +126,58 @@ internal fun IdeMainLayout(
     foldedLinesFor: (Path?) -> Set<Int> = { emptySet() },
     onFoldChange: (Path, Set<Int>) -> Unit = { _, _ -> },
     editorFocusVersion: Int = 0,
-    codeActionPreviewVisible: Boolean = false,
-    codeActionPreviewActions: List<CodeActionEntry> = emptyList(),
-    codeActionPreviewSelected: Int = 0,
-    onCodeActionSelectedChange: (Int) -> Unit = {},
-    codeActionPreviewUri: String? = null,
-    codeActionPreviewText: String? = null,
-    onCodeActionApply: (CodeActionEntry) -> Unit = {},
-    onCodeActionDismiss: () -> Unit = {},
+    codeAction: CodeActionPreviewBinding = CodeActionPreviewBinding(),
     editorScrollFor: (Path) -> EditorScrollSnapshot? = { null },
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
-    settingsPanelOpen: Boolean = false,
-    onSettingsApply: (PageSettings) -> Unit = {},
-    onSettingsPanelClose: () -> Unit = {},
-    onToggleSettings: () -> Unit = {},
+    settings: SettingsBinding = SettingsBinding(),
 ) {
+    val onToggle = fileTree.onToggle
+    val onOpenFile = fileTree.onOpenFile
+    val onCreateFileIn = fileTree.onCreateFileIn
+    val onCreateFolderIn = fileTree.onCreateFolderIn
+    val onRenameEntry = fileTree.onRenameEntry
+    val onDeleteEntry = fileTree.onDeleteEntry
+    val onDeleteEntries = fileTree.onDeleteEntries
+    val onRevealInFiles = fileTree.onRevealInFiles
+    val onCopyPath = fileTree.onCopyPath
+    val onCopyRelativePath = fileTree.onCopyRelativePath
+    val onPasteInto = fileTree.onPasteInto
+    val onDropPlan = fileTree.onDropPlan
+    val onExternalDrop = fileTree.onExternalDrop
+    val onDropRejected = fileTree.onDropRejected
+    val onUndoFileOp = fileTree.onUndoFileOp
+    val canUndoFileOp = fileTree.canUndoFileOp
+    val onTreeFocusChanged = fileTree.onTreeFocusChanged
+    val pendingTreeFocusTick = fileTree.pendingTreeFocusTick
+    val onQueryChange = search.onQueryChange
+    val onReplaceChange = search.onReplaceChange
+    val onToggleCase = search.onToggleCase
+    val onSearchNext = search.onSearchNext
+    val onSearchPrev = search.onSearchPrev
+    val onReplace = search.onReplace
+    val onReplaceAll = search.onReplaceAll
+    val onSearchClose = search.onSearchClose
+    val runState = run.runState
+    val onSelectRunConfig = run.onSelectRunConfig
+    val onStartRun = run.onStartRun
+    val onStopRun = run.onStopRun
+    val onOpenRunDialog = run.onOpenRunDialog
+    val runIsRunning = run.runIsRunning
+    val outputState = run.outputState
+    val onOutputClear = run.onOutputClear
+    val codeActionPreviewVisible = codeAction.visible
+    val codeActionPreviewActions = codeAction.actions
+    val codeActionPreviewSelected = codeAction.selected
+    val onCodeActionSelectedChange = codeAction.onSelectedChange
+    val codeActionPreviewUri = codeAction.uri
+    val codeActionPreviewText = codeAction.text
+    val onCodeActionApply = codeAction.onApply
+    val onCodeActionDismiss = codeAction.onDismiss
+    val settingsPanelOpen = settings.panelOpen
+    val onSettingsApply = settings.onApply
+    val onSettingsPanelClose = settings.onPanelClose
+    val onToggleSettings = settings.onToggle
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     val shellActivePath = editor.focused().book.active?.path
     val shellCtrl = shellActivePath?.let { lspRouter.controllerFor(it) }
