@@ -18,6 +18,7 @@ import page.app.run.RunActionsController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
 import page.app.state.HistoryActionsController
+import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
 import page.app.ui.IdeMainLayout
@@ -223,25 +224,15 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var fileTreeFocused by workspaceState::fileTreeFocused
     var fileOpConfirm: FileOpConfirmState? by remember { mutableStateOf(null) }
     var pendingTreeFocusTick by remember { mutableStateOf(0) }
-    var pageSettings: PageSettings by remember {
-        mutableStateOf(
-            PageSettings(
-                autoSave = AppSettings.loadAutoSave(),
-                editor = AppSettings.loadEditor(),
-                lsp = AppSettings.loadLsp(),
-                autoInput = AppSettings.loadAutoInput(),
-                ui = AppSettings.loadUi(),
-                run = AppSettings.loadRun(),
-            )
-        )
-    }
-    var palette: GlassPalette by remember { mutableStateOf(pageSettings.ui.palette) }
+    val appState = remember { IdeAppState() }
+    var pageSettings by appState::pageSettings
+    var palette by appState::palette
     LaunchedEffect(pageSettings.ui.sidebarWidth) {
         sidebarWidth = pageSettings.ui.sidebarWidth.dp
     }
-    var paletteToastUntil: Long by remember { mutableStateOf(0L) }
+    var paletteToastUntil by appState::paletteToastUntil
     val autoSaveOptions: AutoSaveOptions = pageSettings.autoSave
-    var settingsDialogOpen by remember { mutableStateOf(false) }
+    var settingsDialogOpen by appState::settingsDialogOpen
     var dropResultToast: DropResultToastState? by remember { mutableStateOf(null) }
     var documentSymbolOpen by layoutUiState::documentSymbolOpen
     var documentSymbolList by layoutUiState::documentSymbolList
