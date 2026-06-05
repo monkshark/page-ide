@@ -53,7 +53,8 @@ internal fun TitleBar(
     onOpenRunDialog: () -> Unit,
     outputOpen: Boolean,
     onOutputToggle: () -> Unit,
-    onOpenSettings: () -> Unit,
+    settingsOpen: Boolean,
+    onToggleSettings: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(36.dp),
@@ -125,10 +126,10 @@ internal fun TitleBar(
                 icon = { tint: Color -> TerminalGlyph(tint = tint) },
             )
             Spacer(Modifier.width(8.dp))
-            TitleBarAction(
+            TitleBarToggle(
                 label = "Settings",
-                enabled = true,
-                onClick = onOpenSettings,
+                selected = settingsOpen,
+                onClick = onToggleSettings,
                 shortcut = "Ctrl+Alt+S",
                 icon = { tint: Color -> SettingsGlyph(tint = tint) },
             )
