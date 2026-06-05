@@ -21,6 +21,7 @@ import page.app.ui.dialog.FileTreePasteDialog
 import page.app.ui.dialog.FileTreeRenameDeleteDialogs
 import page.app.ui.dialog.NavigationPickerDialogs
 import page.app.ui.dialog.PendingCloseDialog
+import page.app.ui.editor.EditorSearchController
 import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
@@ -1062,133 +1063,25 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             else -> pendingClose = PendingClose.App
         }
     }
-    val moveCaretToActiveMatch: (PaneSide, SearchState) -> Unit = { side, s ->
-        val range = s.active
-        if (range != null) {
-            mutatePane(side) {
-                val text = it.editorValue.text
-                val start = range.first.coerceIn(0, text.length)
-                val end = (range.last + 1).coerceIn(start, text.length)
-                it.copy(editorValue = it.editorValue.copy(selection = TextRange(start, end)))
-            }
-        }
-    }
-    val openSearch: () -> Unit = {
-        val pane = focused()
-        val active = pane.book.active
-        if (active != null && FileKinds.classify(active.path).isEditableAsText) {
-            mutateFocused {
-                val current = it.search
-                it.copy(
-                    search = current?.withReplaceVisible(false)
-                        ?: SearchState().withQuery(it.editorValue.text, ""),
-                )
-            }
-        }
-    }
-    val openReplace: () -> Unit = {
-        val pane = focused()
-        val active = pane.book.active
-        if (active != null && FileKinds.classify(active.path).isEditableAsText) {
-            mutateFocused {
-                val current = it.search
-                it.copy(
-                    search = current?.withReplaceVisible(true)
-                        ?: SearchState()
-                            .withQuery(it.editorValue.text, "")
-                            .withReplaceVisible(true),
-                )
-            }
-        }
-    }
-    val closeSearch: (PaneSide) -> Unit = { side ->
-        mutatePane(side) { it.copy(search = null) }
-    }
-    val onQueryChange: (PaneSide, String) -> Unit = { side, q ->
-        val pane = paneOf(side)
-        val updated = (pane.search ?: SearchState()).withQuery(pane.editorValue.text, q)
-        mutatePane(side) { it.copy(search = updated) }
-        moveCaretToActiveMatch(side, updated)
-    }
-    val onToggleCase: (PaneSide) -> Unit = { side ->
-        val pane = paneOf(side)
-        val s = pane.search
-        if (s != null) {
-            val updated = s.withCaseSensitive(pane.editorValue.text, !s.caseSensitive)
-            mutatePane(side) { it.copy(search = updated) }
-            moveCaretToActiveMatch(side, updated)
-        }
-    }
-    val onSearchNext: (PaneSide) -> Unit = { side ->
-        val s = paneOf(side).search
-        if (s != null) {
-            val updated = s.next()
-            mutatePane(side) { it.copy(search = updated) }
-            moveCaretToActiveMatch(side, updated)
-            addSearchQuery(updated.query)
-        }
-    }
-    val onSearchPrev: (PaneSide) -> Unit = { side ->
-        val s = paneOf(side).search
-        if (s != null) {
-            val updated = s.prev()
-            mutatePane(side) { it.copy(search = updated) }
-            moveCaretToActiveMatch(side, updated)
-        }
-    }
-    val onReplaceChange: (PaneSide, String) -> Unit = { side, value ->
-        mutatePane(side) { it.copy(search = it.search?.withReplace(value)) }
-    }
-    val onReplace: (PaneSide) -> Unit = { side ->
-        val pane = paneOf(side)
-        val s = pane.search
-        val range = s?.active
-        if (s != null && range != null) {
-            val text = pane.editorValue.text
-            val caret = pane.editorValue.selection.start
-            val r = Replace.applyCurrent(text, range, s.replace)
-            val retargeted = s.retarget(r.text)
-            val nextIdx = retargeted.matches.indexOfFirst { it.first >= r.caret }
-            val updatedSearch = retargeted.copy(
-                activeMatchIndex = if (nextIdx >= 0) nextIdx
-                else if (retargeted.matches.isNotEmpty()) 0 else -1,
-            )
-            undoTracker(side).markBreak()
-            mutatePane(side) {
-                it.copy(
-                    book = it.book
-                        .pushHistoryOnActive(EditSnapshot(text, caret))
-                        .updateActive(r.text, r.caret),
-                    editorValue = TextFieldValue(r.text, TextRange(r.caret)),
-                    search = updatedSearch,
-                )
-            }
-            moveCaretToActiveMatch(side, updatedSearch)
-            addSearchQuery(s.query)
-            addReplaceText(s.replace)
-        }
-    }
-    val onReplaceAll: (PaneSide) -> Unit = { side ->
-        val pane = paneOf(side)
-        val s = pane.search
-        if (s != null && s.matches.isNotEmpty()) {
-            val text = pane.editorValue.text
-            val caret = pane.editorValue.selection.start
-            val r = Replace.applyAll(text, s.matches, s.replace)
-            undoTracker(side).markBreak()
-            mutatePane(side) {
-                it.copy(
-                    book = it.book
-                        .pushHistoryOnActive(EditSnapshot(text, caret))
-                        .updateActive(r.text, r.caret),
-                    editorValue = TextFieldValue(r.text, TextRange(r.caret)),
-                    search = s.retarget(r.text),
-                )
-            }
-            addSearchQuery(s.query)
-            addReplaceText(s.replace)
-        }
-    }
+    val searchController = EditorSearchController(
+        paneOf = { side -> paneOf(side) },
+        mutatePane = { side, transform -> mutatePane(side, transform) },
+        mutateFocused = { transform -> mutateFocused(transform) },
+        focused = { focused() },
+        undoTracker = { side -> undoTracker(side) },
+        addSearchQuery = addSearchQuery,
+        addReplaceText = addReplaceText,
+    )
+    val openSearch: () -> Unit = { searchController.openSearch() }
+    val openReplace: () -> Unit = { searchController.openReplace() }
+    val closeSearch: (PaneSide) -> Unit = { side -> searchController.closeSearch(side) }
+    val onQueryChange: (PaneSide, String) -> Unit = { side, q -> searchController.onQueryChange(side, q) }
+    val onToggleCase: (PaneSide) -> Unit = { side -> searchController.onToggleCase(side) }
+    val onSearchNext: (PaneSide) -> Unit = { side -> searchController.onSearchNext(side) }
+    val onSearchPrev: (PaneSide) -> Unit = { side -> searchController.onSearchPrev(side) }
+    val onReplaceChange: (PaneSide, String) -> Unit = { side, value -> searchController.onReplaceChange(side, value) }
+    val onReplace: (PaneSide) -> Unit = { side -> searchController.onReplace(side) }
+    val onReplaceAll: (PaneSide) -> Unit = { side -> searchController.onReplaceAll(side) }
 
     val doUndo: () -> Unit = {
         val side = focusedPane
