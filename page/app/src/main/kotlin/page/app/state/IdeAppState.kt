@@ -47,7 +47,6 @@ internal class IdeAppState {
     var fileOpConfirm: FileOpConfirmState? by mutableStateOf(null)
     var pendingTreeFocusTick by mutableStateOf(0)
     var hadFileDialog by mutableStateOf(false)
-    var fileTreeWatcherEpoch by mutableStateOf(0)
 
     var codeActionOpen by mutableStateOf(false)
     var codeActionList by mutableStateOf<List<CodeActionEntry>>(emptyList())

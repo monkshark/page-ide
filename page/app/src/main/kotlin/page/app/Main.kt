@@ -9,6 +9,7 @@ import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.FileTreeContextController
 import page.app.filetree.FileTreeDropController
 import page.app.filetree.LargeCopyDialogState
+import page.app.filetree.rememberFileTreeWatcherController
 import page.app.filetree.RenameRemapController
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
@@ -472,33 +473,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             ),
         )
     }
-    val fileTreeWatcherHolder = remember { java.util.concurrent.atomic.AtomicReference<FileTreeWatcher?>(null) }
-    var fileTreeWatcherEpoch by appState::fileTreeWatcherEpoch
-    LaunchedEffect(rootDir, expanded, fileTreeWatcherEpoch) {
-        val dirs = watchableDirs(rootDir, expanded)
-        if (dirs.isEmpty()) return@LaunchedEffect
-        val watcher = FileTreeWatcher(dirs)
-        if (!watcher.active) { watcher.close(); return@LaunchedEffect }
-        fileTreeWatcherHolder.set(watcher)
-        try {
-            watcher.runLoop { treeRevision++ }
-        } finally {
-            watcher.close()
-            fileTreeWatcherHolder.compareAndSet(watcher, null)
-        }
-    }
-    val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block ->
-        val w = fileTreeWatcherHolder.getAndSet(null)
-        runCatching { w?.close() }
-        if (w != null) {
-            runCatching { Thread.sleep(200L) }
-        }
-        try {
-            block()
-        } finally {
-            fileTreeWatcherEpoch++
-        }
-    }
+    val fileTreeWatcher = rememberFileTreeWatcherController()
+    fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { treeRevision++ })
+    val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block -> fileTreeWatcher.withClosed(block) }
     val historyActionsController = HistoryActionsController(
         history = { historyFile },
         setHistory = { historyFile = it },
