@@ -111,6 +111,7 @@ internal fun IdeMainLayout(
     pageSettings: PageSettings = PageSettings(),
     onSettingsApply: (PageSettings) -> Unit = {},
     onSettingsPanelClose: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     var dragSourcePane: PaneSide? by remember { mutableStateOf(null) }
     val shellActivePath = editor.focused().book.active?.path
@@ -160,6 +161,7 @@ internal fun IdeMainLayout(
             onOpenRunDialog = onOpenRunDialog,
             outputOpen = ui.outputOpen,
             onOutputToggle = { ui.outputOpen = !ui.outputOpen },
+            onOpenSettings = onOpenSettings,
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             FileTreePanel(

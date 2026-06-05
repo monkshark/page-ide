@@ -53,6 +53,7 @@ internal fun TitleBar(
     onOpenRunDialog: () -> Unit,
     outputOpen: Boolean,
     onOutputToggle: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(36.dp),
@@ -122,6 +123,14 @@ internal fun TitleBar(
                 onClick = onTerminalToggle,
                 shortcut = "Ctrl+`",
                 icon = { tint: Color -> TerminalGlyph(tint = tint) },
+            )
+            Spacer(Modifier.width(8.dp))
+            TitleBarAction(
+                label = "Settings",
+                enabled = true,
+                onClick = onOpenSettings,
+                shortcut = "Ctrl+Alt+S",
+                icon = { tint: Color -> SettingsGlyph(tint = tint) },
             )
         }
     }
@@ -389,5 +398,45 @@ private fun OutputGlyph(tint: Color, size: Dp = 14.dp) {
             )
             y += lineH + gap
         }
+    }
+}
+
+@Composable
+private fun SettingsGlyph(tint: Color, size: Dp = 14.dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val cx = w * 0.5f
+        val cy = h * 0.5f
+        val ring = w * 0.26f
+        val strokeW = w * 0.13f
+        val toothInner = ring
+        val toothOuter = w * 0.45f
+        val teeth = 8
+        for (i in 0 until teeth) {
+            val a = (Math.PI * 2.0 / teeth) * i
+            val sx = cx + (toothInner * kotlin.math.cos(a)).toFloat()
+            val sy = cy + (toothInner * kotlin.math.sin(a)).toFloat()
+            val ex = cx + (toothOuter * kotlin.math.cos(a)).toFloat()
+            val ey = cy + (toothOuter * kotlin.math.sin(a)).toFloat()
+            drawLine(
+                color = tint,
+                start = Offset(sx, sy),
+                end = Offset(ex, ey),
+                strokeWidth = strokeW,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
+        drawCircle(
+            color = tint,
+            radius = ring,
+            center = Offset(cx, cy),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeW),
+        )
+        drawCircle(
+            color = tint,
+            radius = w * 0.1f,
+            center = Offset(cx, cy),
+        )
     }
 }

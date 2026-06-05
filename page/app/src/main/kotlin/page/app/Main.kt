@@ -1134,6 +1134,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                         palette = updated.ui.palette
                     },
                     onSettingsPanelClose = { settingsDialogOpen = false },
+                    onOpenSettings = { settingsDialogOpen = true },
                 )
                 if (findInFiles) {
                     FindInFilesDialog(
