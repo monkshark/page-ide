@@ -25,6 +25,7 @@ import page.app.ui.editor.CommandPaletteController
 import page.app.ui.editor.EditorHistoryController
 import page.app.ui.editor.EditorSearchController
 import page.app.ui.editor.EditorTabController
+import page.app.ui.editor.FileMenuController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
@@ -647,88 +648,27 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    val openFile: (java.awt.Frame) -> Unit = { parent ->
-        FileDialogs.open(parent)?.let { picked -> openInTab(picked) }
-    }
-    val saveFile: (java.awt.Frame) -> Unit = { parent ->
-        val pane = focused()
-        val active = pane.book.active
-        if (active != null) {
-            if (FileKinds.classify(active.path).isEditableAsText) {
-                FileDocument.save(active.path, pane.editorValue.text)
-                lspRouter.controllerFor(active.path)?.didSave(active.path, pane.editorValue.text)
-                mutateFocused {
-                    it.copy(
-                        book = it.book
-                            .updateActive(it.editorValue.text, it.editorValue.selection.start)
-                            .markActiveSaved(),
-                    )
-                }
-            }
-        } else {
-            val target = FileDialogs.saveAs(parent)
-            if (target != null) {
-                FileDocument.save(target, pane.editorValue.text)
-                mutateFocused { it.copy(book = it.book.openOrFocus(target, pane.editorValue.text)) }
-            }
-        }
-    }
-    val saveAllDirty: () -> Int = {
-        val pendingByPath = LinkedHashMap<Path, String>()
-        for (side in listOf(PaneSide.PRIMARY, PaneSide.SECONDARY)) {
-            val pane = paneOf(side)
-            val activeIdx = pane.book.activeIndex
-            pane.book.tabs.forEachIndexed { idx, tab ->
-                if (!FileKinds.classify(tab.path).isEditableAsText) return@forEachIndexed
-                val liveText = if (idx == activeIdx) pane.editorValue.text else tab.text
-                if (liveText != tab.savedText) {
-                    pendingByPath[tab.path] = liveText
-                }
-            }
-        }
-        var saved = 0
-        for ((path, text) in pendingByPath) {
-            try {
-                FileDocument.save(path, text)
-                lspRouter.controllerFor(path)?.didSave(path, text)
-                saved += 1
-            } catch (_: java.io.IOException) { }
-        }
-        if (saved > 0) {
-            mutatePane(PaneSide.PRIMARY) { state ->
-                var book = state.book
-                for ((path, text) in pendingByPath) book = book.markPathSaved(path, text)
-                state.copy(book = book)
-            }
-            mutatePane(PaneSide.SECONDARY) { state ->
-                var book = state.book
-                for ((path, text) in pendingByPath) book = book.markPathSaved(path, text)
-                state.copy(book = book)
-            }
-        }
-        saved
-    }
-    val openFolder: (java.awt.Frame) -> Unit = { parent ->
-        FileDialogs.openDirectory(parent)?.let { picked ->
-            PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
-            rootDir = picked
-            expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
-            PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
-        }
-    }
-    val openFolderPath: (Path) -> Unit = { picked ->
+    val openWorkspaceFolder: (Path) -> Unit = { picked ->
         PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
         rootDir = picked
         expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
         PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
     }
-    val newFile: (java.awt.Frame) -> Unit = { parent ->
-        val target = FileDialogs.saveAs(parent)
-        if (target != null) {
-            FileDocument.save(target, "")
-            openInTab(target)
-        }
-    }
+    val fileMenuController = FileMenuController(
+        openInTab = openInTab,
+        focused = { focused() },
+        mutateFocused = { transform -> mutateFocused(transform) },
+        paneOf = { side -> paneOf(side) },
+        mutatePane = { side, transform -> mutatePane(side, transform) },
+        didSave = { path, text -> lspRouter.controllerFor(path)?.didSave(path, text) },
+        openWorkspaceFolder = openWorkspaceFolder,
+    )
+    val openFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.openFile(parent) }
+    val saveFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.saveFile(parent) }
+    val saveAllDirty: () -> Int = { fileMenuController.saveAllDirty() }
+    val openFolder: (java.awt.Frame) -> Unit = { parent -> fileMenuController.openFolder(parent) }
+    val openFolderPath: (Path) -> Unit = { picked -> fileMenuController.openFolderPath(picked) }
+    val newFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.newFile(parent) }
     val copyToClipboard: (String) -> Unit = { text ->
         runCatching {
             val selection = java.awt.datatransfer.StringSelection(text)
