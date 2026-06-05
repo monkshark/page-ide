@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -56,6 +57,8 @@ data class PageSettings(
     val ui: UiOptions = UiOptions.DEFAULT,
     val run: RunOptions = RunOptions.DEFAULT,
 )
+
+val LocalPageSettings = staticCompositionLocalOf { PageSettings() }
 
 private enum class SettingsCategory(val label: String) {
     AUTO_SAVE("AutoSave"),

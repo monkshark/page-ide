@@ -165,7 +165,7 @@ fun EditorPanel(
     jdkVersion: String? = null,
     jdkVersionTooltip: String? = null,
     onJdkVersionClick: (() -> Unit)? = null,
-    pageSettings: PageSettings = PageSettings(),
+    pageSettings: PageSettings = LocalPageSettings.current,
     modifier: Modifier = Modifier,
 ) {
     val isMarkdown = remember(activePath) {

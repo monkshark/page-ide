@@ -69,6 +69,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -1018,7 +1019,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                             }
                         },
                     )
-                } else IdeMainLayout(
+                } else CompositionLocalProvider(LocalPageSettings provides pageSettings) {
+                  IdeMainLayout(
                     workspace = workspaceState,
                     editor = editorWorkspace,
                     ui = layoutUiState,
@@ -1103,7 +1105,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     },
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settingsPanelOpen = settingsDialogOpen,
-                    pageSettings = pageSettings,
                     onSettingsApply = { updated ->
                         pageSettings = updated
                         AppSettings.saveAutoSave(updated.autoSave)
@@ -1116,7 +1117,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     },
                     onSettingsPanelClose = { settingsDialogOpen = false },
                     onToggleSettings = { settingsDialogOpen = !settingsDialogOpen },
-                )
+                  )
+                }
                 if (findInFiles) {
                     FindInFilesDialog(
                         files = findInFilesIndex,
