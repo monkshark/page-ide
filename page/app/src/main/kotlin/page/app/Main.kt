@@ -30,6 +30,7 @@ import page.app.ui.editor.EditorHistoryController
 import page.app.ui.editor.EditorSearchController
 import page.app.ui.editor.EditorTabController
 import page.app.ui.editor.FileMenuController
+import page.app.ui.editor.TabContextController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
@@ -791,41 +792,23 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val requestCloseTab: (PaneSide, Int) -> Unit = { side, idx -> tabController.requestCloseTab(side, idx) }
     val closeManyOnPane: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.closeManyOnPane(side, indices) }
     val requestBatchClose: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.requestBatchClose(side, indices) }
-    val togglePin: (PaneSide, Int) -> Unit = { side, idx ->
-        mutatePane(side) { it.copy(book = it.book.togglePinned(idx)) }
-    }
-    val copyAbsolutePathOfTab: (PaneSide, Int) -> Unit = { side, idx ->
-        paneOf(side).book.tabs.getOrNull(idx)?.let { copyToClipboard(it.path.toAbsolutePath().toString()) }
-    }
-    val copyRelativePathOfTab: (PaneSide, Int) -> Unit = { side, idx ->
-        paneOf(side).book.tabs.getOrNull(idx)?.let {
-            copyToClipboard(FileTreeActions.relativeTo(rootDir, it.path))
-        }
-    }
-    val showInExplorerOfTab: (PaneSide, Int) -> Unit = { side, idx ->
-        paneOf(side).book.tabs.getOrNull(idx)?.let { onRevealInFiles(it.path) }
-    }
-    val renameTabFile: (PaneSide, Int) -> Unit = { side, idx ->
-        paneOf(side).book.tabs.getOrNull(idx)?.let { renameDialog = RenameEntryDialogState(it.path) }
-    }
-    val splitWithTab: (PaneSide, Int) -> Unit = { side, idx ->
-        val tab = paneOf(side).book.tabs.getOrNull(idx)
-        if (tab != null) {
-            if (!splitEnabled) splitEnabled = true
-            val target = if (side == PaneSide.PRIMARY) PaneSide.SECONDARY else PaneSide.PRIMARY
-            mutatePane(target) {
-                it.copy(book = it.book.appendTab(
-                    OpenTab(path = tab.path, text = tab.text, savedText = tab.savedText, caret = tab.caret)
-                ))
-            }
-            focusedPane = target
-        }
-    }
-    val closeActiveTab: () -> Unit = {
-        val side = focusedPane
-        val idx = paneOf(side).book.activeIndex
-        if (idx in paneOf(side).book.tabs.indices) requestCloseTab(side, idx)
-    }
+    val tabContextController = TabContextController(
+        paneOf = { side -> paneOf(side) },
+        mutatePane = { side, transform -> mutatePane(side, transform) },
+        focusedPane = { focusedPane },
+        setFocusedPane = { focusedPane = it },
+        splitEnabled = { splitEnabled },
+        setSplitEnabled = { splitEnabled = it },
+        copyToClipboard = copyToClipboard,
+        relativeTo = { path -> FileTreeActions.relativeTo(rootDir, path) },
+        onRevealInFiles = onRevealInFiles,
+        requestRename = { path -> renameDialog = RenameEntryDialogState(path) },
+        requestCloseTab = { side, idx -> requestCloseTab(side, idx) },
+        requestBatchClose = { side, indices -> requestBatchClose(side, indices) },
+        closeManyOnPane = { side, indices -> closeManyOnPane(side, indices) },
+        moveTabAcross = { side, idx -> editorWorkspace.moveTabAcross(side, idx) },
+    )
+    val closeActiveTab: () -> Unit = { tabContextController.closeActiveTab() }
     val anyDirty: () -> Boolean = {
         primaryPane.book.tabs.any(isUnsavedText) || secondaryPane.book.tabs.any(isUnsavedText)
     }
@@ -870,49 +853,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val doRedo: () -> Unit = { historyController.doRedo() }
 
 
-    val tabContextActionsFor: (PaneSide) -> TabContextActions = { side ->
-        TabContextActions(
-            onClose = { idx -> requestCloseTab(side, idx) },
-            onCloseOthers = { idx ->
-                val pane = paneOf(side)
-                val toClose = pane.book.tabs.indices.filter { i ->
-                    i != idx && !pane.book.tabs[i].isPinned
-                }
-                requestBatchClose(side, toClose)
-            },
-            onCloseToLeft = { idx ->
-                val pane = paneOf(side)
-                val toClose = (0 until idx).filter { i -> !pane.book.tabs[i].isPinned }
-                requestBatchClose(side, toClose)
-            },
-            onCloseToRight = { idx ->
-                val pane = paneOf(side)
-                val toClose = ((idx + 1) until pane.book.tabs.size).filter { i -> !pane.book.tabs[i].isPinned }
-                requestBatchClose(side, toClose)
-            },
-            onCloseAll = {
-                val pane = paneOf(side)
-                val toClose = pane.book.tabs.indices.filter { i -> !pane.book.tabs[i].isPinned }
-                requestBatchClose(side, toClose)
-            },
-            onCloseUnmodified = {
-                val pane = paneOf(side)
-                val toClose = pane.book.tabs.indices.filter { i ->
-                    !pane.book.tabs[i].dirty && !pane.book.tabs[i].isPinned
-                }
-                closeManyOnPane(side, toClose)
-            },
-            onCopyAbsolutePath = { idx -> copyAbsolutePathOfTab(side, idx) },
-            onCopyRelativePath = { idx -> copyRelativePathOfTab(side, idx) },
-            onShowInExplorer = { idx -> showInExplorerOfTab(side, idx) },
-            onTogglePin = { idx -> togglePin(side, idx) },
-            onMoveToOtherPane = if (editorWorkspace.splitEnabled) {
-                { idx -> editorWorkspace.moveTabAcross(side, idx) }
-            } else null,
-            onSplit = { idx -> splitWithTab(side, idx) },
-            onRename = { idx -> renameTabFile(side, idx) },
-        )
-    }
+    val tabContextActionsFor: (PaneSide) -> TabContextActions = { side -> tabContextController.actionsFor(side) }
 
     val paletteController = CommandPaletteController(
         ui = layoutUiState,
