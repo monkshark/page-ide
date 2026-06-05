@@ -7,6 +7,7 @@ import page.app.input.ShortcutAction
 import page.app.input.ShortcutResolver
 import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.FileTreeContextController
+import page.app.filetree.FileTreeDropController
 import page.app.filetree.LargeCopyDialogState
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
@@ -688,43 +689,17 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val onCopyRelativePath: (Path) -> Unit = { path -> fileTreeContextController.onCopyRelativePath(path) }
     val onRenameEntry: (Path) -> Unit = { path -> fileTreeContextController.onRenameEntry(path) }
     val onPasteInto: (Path) -> Unit = { destParent -> fileTreeContextController.onPasteInto(destParent) }
+    val fileTreeDropController = FileTreeDropController(
+        ui = layoutUiState,
+        setDropResultToast = { dropResultToast = it },
+    )
     val showDropResultToast: (String, DropResultToastTone, (() -> Unit)?) -> Unit = { msg, tone, undo ->
-        dropResultToast = DropResultToastState(
-            message = msg,
-            visibleUntilMs = System.currentTimeMillis() + 5000L,
-            tone = tone,
-            undo = undo,
-        )
+        fileTreeDropController.showDropResultToast(msg, tone, undo)
     }
-    val onDropPlanReceived: (TreeDragController.DropPlan) -> Unit = { plan ->
-        val mode = when (plan.mode) {
-            TreeDragController.Mode.Move -> FileTreeClipboard.Mode.Cut
-            TreeDragController.Mode.Copy -> FileTreeClipboard.Mode.Copy
-        }
-        pasteDialog = PasteEntryDialogState(
-            remaining = plan.sources,
-            destParent = plan.target,
-            mode = mode,
-        )
-    }
-    val onExternalDropReceived: (List<Path>, Path) -> Unit = { sources, target ->
-        if (sources.isNotEmpty() && java.nio.file.Files.isDirectory(target)) {
-            pasteDialog = PasteEntryDialogState(
-                remaining = sources,
-                destParent = target,
-                mode = FileTreeClipboard.Mode.Copy,
-            )
-        }
-    }
-    val onDeleteEntry: (Path) -> Unit = { path ->
-        deleteDialog = DeleteEntryDialogState(listOf(path))
-    }
-    val onDeleteEntries: (Set<Path>) -> Unit = { paths ->
-        val pruned = FileTreeActions.pruneRedundantDescendants(paths)
-        if (pruned.isNotEmpty()) {
-            deleteDialog = DeleteEntryDialogState(pruned)
-        }
-    }
+    val onDropPlanReceived: (TreeDragController.DropPlan) -> Unit = { plan -> fileTreeDropController.onDropPlanReceived(plan) }
+    val onExternalDropReceived: (List<Path>, Path) -> Unit = { sources, target -> fileTreeDropController.onExternalDropReceived(sources, target) }
+    val onDeleteEntry: (Path) -> Unit = { path -> fileTreeDropController.onDeleteEntry(path) }
+    val onDeleteEntries: (Set<Path>) -> Unit = { paths -> fileTreeDropController.onDeleteEntries(paths) }
     val remapPathSet: (Set<Path>, Path, Path) -> Set<Path> = { paths, old, new ->
         if (paths.isEmpty()) paths
         else paths.map { p ->
