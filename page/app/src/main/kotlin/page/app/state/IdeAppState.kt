@@ -4,8 +4,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import page.app.AppSettings
+import page.app.DropResultToastState
+import page.app.FileOpConfirmState
 import page.app.HistoryFile
 import page.app.PageSettings
+import page.app.PendingClose
+import page.app.ReferencesQueryState
+import page.editor.IndexedFile
+import page.lsp.CodeActionEntry
+import page.runtime.RunConfigsState
 import page.ui.GlassPalette
 import page.workspace.WorkspaceFile
 
@@ -28,4 +35,27 @@ internal class IdeAppState {
     var historyFile by mutableStateOf(HistoryFile())
     var historyLoaded by mutableStateOf(false)
     var workspaceFile by mutableStateOf(WorkspaceFile())
+
+    var runState: RunConfigsState by mutableStateOf(RunConfigsState())
+    var runDialogOpen by mutableStateOf(false)
+
+    var findInFiles by mutableStateOf(false)
+    var findInFilesIndex by mutableStateOf<List<IndexedFile>>(emptyList())
+    var referencesState: ReferencesQueryState? by mutableStateOf(null)
+
+    var fileOpHistoryVersion by mutableStateOf(0)
+    var fileOpConfirm: FileOpConfirmState? by mutableStateOf(null)
+    var pendingTreeFocusTick by mutableStateOf(0)
+    var hadFileDialog by mutableStateOf(false)
+    var fileTreeWatcherEpoch by mutableStateOf(0)
+
+    var codeActionOpen by mutableStateOf(false)
+    var codeActionList by mutableStateOf<List<CodeActionEntry>>(emptyList())
+    var codeActionUri: String? by mutableStateOf(null)
+    var codeActionText: String? by mutableStateOf(null)
+    var codeActionSelected by mutableStateOf(0)
+
+    var editorFocusVersion by mutableStateOf(0)
+    var pendingClose: PendingClose? by mutableStateOf(null)
+    var dropResultToast: DropResultToastState? by mutableStateOf(null)
 }

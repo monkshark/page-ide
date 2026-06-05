@@ -172,12 +172,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var treeRevision by workspaceState::treeRevision
     var editorScrollByPath by editorWorkspace::editorScrollByPath
     val layoutUiState = remember { LayoutUiState() }
+    val appState = remember { IdeAppState() }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
-    var pendingClose: PendingClose? by remember { mutableStateOf(null) }
+    var pendingClose: PendingClose? by appState::pendingClose
     var quickOpen by layoutUiState::quickOpen
     var quickOpenIndex by layoutUiState::quickOpenIndex
-    var findInFiles by remember { mutableStateOf(false) }
-    var findInFilesIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
+    var findInFiles by appState::findInFiles
+    var findInFilesIndex by appState::findInFilesIndex
     var splitEnabled by editorWorkspace::splitEnabled
     var splitOrientation by editorWorkspace::splitOrientation
     var splitState by editorWorkspace::splitState
@@ -199,8 +200,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     DisposableEffect(terminalManager) {
         onDispose { terminalManager.closeAll() }
     }
-    var runState: RunConfigsState by remember { mutableStateOf(RunConfigsState()) }
-    var runDialogOpen by remember { mutableStateOf(false) }
+    var runState: RunConfigsState by appState::runState
+    var runDialogOpen by appState::runDialogOpen
     var outputOpen by layoutUiState::outputOpen
     var outputHeight: Dp by layoutUiState::outputHeight
     val outputState = remember { OutputPanelState() }
@@ -211,7 +212,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     DisposableEffect(runController) {
         onDispose { runController.stop() }
     }
-    var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
+    var referencesState: ReferencesQueryState? by appState::referencesState
     var referencesHeight: Dp by layoutUiState::referencesHeight
     var createDialog: CreateEntryDialogState? by layoutUiState::createDialog
     var renameDialog: RenameEntryDialogState? by layoutUiState::renameDialog
@@ -220,11 +221,10 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var largeCopyState: LargeCopyDialogState? by layoutUiState::largeCopyState
     val largeCopyScope = rememberCoroutineScope()
     val fileOpHistory = remember { FileOpHistory.Stack() }
-    var fileOpHistoryVersion by remember { mutableStateOf(0) }
+    var fileOpHistoryVersion by appState::fileOpHistoryVersion
     var fileTreeFocused by workspaceState::fileTreeFocused
-    var fileOpConfirm: FileOpConfirmState? by remember { mutableStateOf(null) }
-    var pendingTreeFocusTick by remember { mutableStateOf(0) }
-    val appState = remember { IdeAppState() }
+    var fileOpConfirm: FileOpConfirmState? by appState::fileOpConfirm
+    var pendingTreeFocusTick by appState::pendingTreeFocusTick
     var pageSettings by appState::pageSettings
     var palette by appState::palette
     LaunchedEffect(pageSettings.ui.sidebarWidth) {
@@ -233,17 +233,17 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var paletteToastUntil by appState::paletteToastUntil
     val autoSaveOptions: AutoSaveOptions = pageSettings.autoSave
     var settingsDialogOpen by appState::settingsDialogOpen
-    var dropResultToast: DropResultToastState? by remember { mutableStateOf(null) }
+    var dropResultToast: DropResultToastState? by appState::dropResultToast
     var documentSymbolOpen by layoutUiState::documentSymbolOpen
     var documentSymbolList by layoutUiState::documentSymbolList
     var documentSymbolUri by layoutUiState::documentSymbolUri
     var workspaceSymbolOpen by layoutUiState::workspaceSymbolOpen
-    var codeActionOpen by remember { mutableStateOf(false) }
-    var codeActionList by remember { mutableStateOf<List<CodeActionEntry>>(emptyList()) }
-    var codeActionUri by remember { mutableStateOf<String?>(null) }
-    var codeActionText by remember { mutableStateOf<String?>(null) }
-    var codeActionSelected by remember { mutableStateOf(0) }
-    var editorFocusVersion by remember { mutableStateOf(0) }
+    var codeActionOpen by appState::codeActionOpen
+    var codeActionList by appState::codeActionList
+    var codeActionUri by appState::codeActionUri
+    var codeActionText by appState::codeActionText
+    var codeActionSelected by appState::codeActionSelected
+    var editorFocusVersion by appState::editorFocusVersion
     val lspRouter = rememberLspRouter(workspaceRoot = rootDir)
     val currentLspRouter by rememberUpdatedState(lspRouter)
     registerAllBackends()
@@ -294,7 +294,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
 
     val anyFileDialogOpen = createDialog != null || renameDialog != null || deleteDialog != null ||
         pasteDialog != null || largeCopyState != null || fileOpConfirm != null
-    var hadFileDialog by remember { mutableStateOf(false) }
+    var hadFileDialog by appState::hadFileDialog
     LaunchedEffect(anyFileDialogOpen) {
         if (anyFileDialogOpen) {
             hadFileDialog = true
@@ -467,7 +467,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         )
     }
     val fileTreeWatcherHolder = remember { java.util.concurrent.atomic.AtomicReference<FileTreeWatcher?>(null) }
-    var fileTreeWatcherEpoch by remember { mutableStateOf(0) }
+    var fileTreeWatcherEpoch by appState::fileTreeWatcherEpoch
     LaunchedEffect(rootDir, expanded, fileTreeWatcherEpoch) {
         val dirs = watchableDirs(rootDir, expanded)
         if (dirs.isEmpty()) return@LaunchedEffect
@@ -1268,7 +1268,7 @@ internal data class DeleteEntryDialogState(
     val isMulti: Boolean get() = paths.size > 1
 }
 
-private data class FileOpConfirmState(
+internal data class FileOpConfirmState(
     val isRedo: Boolean,
     val op: FileOpHistory.Op,
 )
