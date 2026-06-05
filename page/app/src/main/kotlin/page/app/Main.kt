@@ -304,11 +304,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    var sessionLoaded by remember { mutableStateOf(false) }
+    var sessionLoaded by appState::sessionLoaded
     var foldByPath by editorWorkspace::foldByPath
-    var historyFile by remember { mutableStateOf(HistoryFile()) }
-    var historyLoaded by remember { mutableStateOf(false) }
-    var workspaceFile by remember { mutableStateOf(WorkspaceFile()) }
+    var historyFile by appState::historyFile
+    var historyLoaded by appState::historyLoaded
+    var workspaceFile by appState::workspaceFile
     LaunchedEffect(rootDir) {
         sessionLoaded = false
         val root = rootDir
