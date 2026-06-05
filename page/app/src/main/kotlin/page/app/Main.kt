@@ -30,6 +30,7 @@ import page.app.ui.editor.EditorSearchController
 import page.app.ui.editor.EditorTabController
 import page.app.ui.editor.FileMenuController
 import page.app.ui.editor.TabContextController
+import page.app.ui.editor.TabOpenController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
@@ -534,47 +535,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         if (path != null) todo.updateFile(path, focusedActiveText)
     }
 
-    val openInTab: (Path) -> Unit = { picked ->
-        val kind = FileKinds.classify(picked)
-        if (kind.isEditableAsText) {
-            FileDocument.loadOrNull(picked)?.let { text ->
-                mutateFocused { it.copy(book = it.book.openOrFocus(picked, text)) }
-                addRecentFile(picked)
-            }
-        } else {
-            mutateFocused { it.copy(book = it.book.openOrFocus(picked, "")) }
-            addRecentFile(picked)
-        }
-    }
-    val openInTabAt: (Path, Int) -> Unit = { picked, offset ->
-        if (FileKinds.classify(picked).isEditableAsText) {
-            val pane = focused()
-            val existing = pane.book.tabs.indexOfFirst { it.path == picked }
-            if (existing >= 0) {
-                val tab = pane.book.tabs[existing]
-                val caret = offset.coerceIn(0, tab.text.length)
-                mutateFocused {
-                    it.copy(
-                        book = it.book.activate(existing).updateActive(tab.text, caret),
-                        editorValue = TextFieldValue(tab.text, TextRange(caret)),
-                    )
-                }
-                addRecentFile(picked)
-            } else {
-                FileDocument.loadOrNull(picked)?.let { text ->
-                    val caret = offset.coerceIn(0, text.length)
-                    mutateFocused {
-                        val opened = it.book.openOrFocus(picked, text)
-                        it.copy(
-                            book = opened.updateActive(text, caret),
-                            editorValue = TextFieldValue(text, TextRange(caret)),
-                        )
-                    }
-                    addRecentFile(picked)
-                }
-            }
-        }
-    }
+    val tabOpenController = TabOpenController(
+        focused = { focused() },
+        mutateFocused = { transform -> mutateFocused(transform) },
+        addRecentFile = addRecentFile,
+    )
+    val openInTab: (Path) -> Unit = { picked -> tabOpenController.openInTab(picked) }
+    val openInTabAt: (Path, Int) -> Unit = { picked, offset -> tabOpenController.openInTabAt(picked, offset) }
 
     val fileOperationsInteractor = remember {
         FileOperationsInteractor(
