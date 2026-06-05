@@ -18,6 +18,7 @@ import page.app.run.RunActionsController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
 import page.app.state.HistoryActionsController
+import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
 import page.app.ui.IdeMainLayout
@@ -171,12 +172,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var treeRevision by workspaceState::treeRevision
     var editorScrollByPath by editorWorkspace::editorScrollByPath
     val layoutUiState = remember { LayoutUiState() }
+    val appState = remember { IdeAppState() }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
-    var pendingClose: PendingClose? by remember { mutableStateOf(null) }
+    var pendingClose: PendingClose? by appState::pendingClose
     var quickOpen by layoutUiState::quickOpen
     var quickOpenIndex by layoutUiState::quickOpenIndex
-    var findInFiles by remember { mutableStateOf(false) }
-    var findInFilesIndex by remember { mutableStateOf<List<IndexedFile>>(emptyList()) }
+    var findInFiles by appState::findInFiles
+    var findInFilesIndex by appState::findInFilesIndex
     var splitEnabled by editorWorkspace::splitEnabled
     var splitOrientation by editorWorkspace::splitOrientation
     var splitState by editorWorkspace::splitState
@@ -198,8 +200,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     DisposableEffect(terminalManager) {
         onDispose { terminalManager.closeAll() }
     }
-    var runState: RunConfigsState by remember { mutableStateOf(RunConfigsState()) }
-    var runDialogOpen by remember { mutableStateOf(false) }
+    var runState: RunConfigsState by appState::runState
+    var runDialogOpen by appState::runDialogOpen
     var outputOpen by layoutUiState::outputOpen
     var outputHeight: Dp by layoutUiState::outputHeight
     val outputState = remember { OutputPanelState() }
@@ -210,7 +212,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     DisposableEffect(runController) {
         onDispose { runController.stop() }
     }
-    var referencesState: ReferencesQueryState? by remember { mutableStateOf(null) }
+    var referencesState: ReferencesQueryState? by appState::referencesState
     var referencesHeight: Dp by layoutUiState::referencesHeight
     var createDialog: CreateEntryDialogState? by layoutUiState::createDialog
     var renameDialog: RenameEntryDialogState? by layoutUiState::renameDialog
@@ -219,40 +221,29 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var largeCopyState: LargeCopyDialogState? by layoutUiState::largeCopyState
     val largeCopyScope = rememberCoroutineScope()
     val fileOpHistory = remember { FileOpHistory.Stack() }
-    var fileOpHistoryVersion by remember { mutableStateOf(0) }
+    var fileOpHistoryVersion by appState::fileOpHistoryVersion
     var fileTreeFocused by workspaceState::fileTreeFocused
-    var fileOpConfirm: FileOpConfirmState? by remember { mutableStateOf(null) }
-    var pendingTreeFocusTick by remember { mutableStateOf(0) }
-    var pageSettings: PageSettings by remember {
-        mutableStateOf(
-            PageSettings(
-                autoSave = AppSettings.loadAutoSave(),
-                editor = AppSettings.loadEditor(),
-                lsp = AppSettings.loadLsp(),
-                autoInput = AppSettings.loadAutoInput(),
-                ui = AppSettings.loadUi(),
-                run = AppSettings.loadRun(),
-            )
-        )
-    }
-    var palette: GlassPalette by remember { mutableStateOf(pageSettings.ui.palette) }
+    var fileOpConfirm: FileOpConfirmState? by appState::fileOpConfirm
+    var pendingTreeFocusTick by appState::pendingTreeFocusTick
+    var pageSettings by appState::pageSettings
+    var palette by appState::palette
     LaunchedEffect(pageSettings.ui.sidebarWidth) {
         sidebarWidth = pageSettings.ui.sidebarWidth.dp
     }
-    var paletteToastUntil: Long by remember { mutableStateOf(0L) }
+    var paletteToastUntil by appState::paletteToastUntil
     val autoSaveOptions: AutoSaveOptions = pageSettings.autoSave
-    var settingsDialogOpen by remember { mutableStateOf(false) }
-    var dropResultToast: DropResultToastState? by remember { mutableStateOf(null) }
+    var settingsDialogOpen by appState::settingsDialogOpen
+    var dropResultToast: DropResultToastState? by appState::dropResultToast
     var documentSymbolOpen by layoutUiState::documentSymbolOpen
     var documentSymbolList by layoutUiState::documentSymbolList
     var documentSymbolUri by layoutUiState::documentSymbolUri
     var workspaceSymbolOpen by layoutUiState::workspaceSymbolOpen
-    var codeActionOpen by remember { mutableStateOf(false) }
-    var codeActionList by remember { mutableStateOf<List<CodeActionEntry>>(emptyList()) }
-    var codeActionUri by remember { mutableStateOf<String?>(null) }
-    var codeActionText by remember { mutableStateOf<String?>(null) }
-    var codeActionSelected by remember { mutableStateOf(0) }
-    var editorFocusVersion by remember { mutableStateOf(0) }
+    var codeActionOpen by appState::codeActionOpen
+    var codeActionList by appState::codeActionList
+    var codeActionUri by appState::codeActionUri
+    var codeActionText by appState::codeActionText
+    var codeActionSelected by appState::codeActionSelected
+    var editorFocusVersion by appState::editorFocusVersion
     val lspRouter = rememberLspRouter(workspaceRoot = rootDir)
     val currentLspRouter by rememberUpdatedState(lspRouter)
     registerAllBackends()
@@ -303,7 +294,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
 
     val anyFileDialogOpen = createDialog != null || renameDialog != null || deleteDialog != null ||
         pasteDialog != null || largeCopyState != null || fileOpConfirm != null
-    var hadFileDialog by remember { mutableStateOf(false) }
+    var hadFileDialog by appState::hadFileDialog
     LaunchedEffect(anyFileDialogOpen) {
         if (anyFileDialogOpen) {
             hadFileDialog = true
@@ -313,11 +304,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    var sessionLoaded by remember { mutableStateOf(false) }
+    var sessionLoaded by appState::sessionLoaded
     var foldByPath by editorWorkspace::foldByPath
-    var historyFile by remember { mutableStateOf(HistoryFile()) }
-    var historyLoaded by remember { mutableStateOf(false) }
-    var workspaceFile by remember { mutableStateOf(WorkspaceFile()) }
+    var historyFile by appState::historyFile
+    var historyLoaded by appState::historyLoaded
+    var workspaceFile by appState::workspaceFile
     LaunchedEffect(rootDir) {
         sessionLoaded = false
         val root = rootDir
@@ -476,7 +467,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         )
     }
     val fileTreeWatcherHolder = remember { java.util.concurrent.atomic.AtomicReference<FileTreeWatcher?>(null) }
-    var fileTreeWatcherEpoch by remember { mutableStateOf(0) }
+    var fileTreeWatcherEpoch by appState::fileTreeWatcherEpoch
     LaunchedEffect(rootDir, expanded, fileTreeWatcherEpoch) {
         val dirs = watchableDirs(rootDir, expanded)
         if (dirs.isEmpty()) return@LaunchedEffect
@@ -535,8 +526,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         mutateFocused = { transform -> mutateFocused(transform) },
         addRecentFile = addRecentFile,
     )
-    val openInTab: (Path) -> Unit = { picked -> tabOpenController.openInTab(picked) }
-    val openInTabAt: (Path, Int) -> Unit = { picked, offset -> tabOpenController.openInTabAt(picked, offset) }
+    val openInTab = tabOpenController::openInTab
+    val openInTabAt = tabOpenController::openInTabAt
 
     val fileOperationsInteractor = remember {
         FileOperationsInteractor(
@@ -577,15 +568,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         getReferences = { referencesState },
         setReferences = { referencesState = it },
     )
-    val jumpToProblem: (Path, Int, Int) -> Unit = { picked, line, character ->
-        lspEditorInterconnector.jumpToProblem(picked, line, character)
-    }
-    val requestReferences: (Path, Int, Int, String) -> Unit = { p, line, char, symbol ->
-        lspEditorInterconnector.requestReferences(p, line, char, symbol)
-    }
-    val applyRename: (RenameWorkspaceEdit) -> Unit = { edit ->
-        lspEditorInterconnector.applyRename(edit)
-    }
+    val jumpToProblem = lspEditorInterconnector::jumpToProblem
+    val requestReferences = lspEditorInterconnector::requestReferences
+    val applyRename = lspEditorInterconnector::applyRename
     LaunchedEffect(lspRouter) {
         lspRouter.applyEditHandler = { edit ->
             java.awt.EventQueue.invokeLater { applyRename(edit) }
@@ -608,12 +593,12 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         didSave = { path, text -> lspRouter.controllerFor(path)?.didSave(path, text) },
         openWorkspaceFolder = openWorkspaceFolder,
     )
-    val openFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.openFile(parent) }
-    val saveFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.saveFile(parent) }
-    val saveAllDirty: () -> Int = { fileMenuController.saveAllDirty() }
-    val openFolder: (java.awt.Frame) -> Unit = { parent -> fileMenuController.openFolder(parent) }
-    val openFolderPath: (Path) -> Unit = { picked -> fileMenuController.openFolderPath(picked) }
-    val newFile: (java.awt.Frame) -> Unit = { parent -> fileMenuController.newFile(parent) }
+    val openFile = fileMenuController::openFile
+    val saveFile = fileMenuController::saveFile
+    val saveAllDirty = fileMenuController::saveAllDirty
+    val openFolder = fileMenuController::openFolder
+    val openFolderPath = fileMenuController::openFolderPath
+    val newFile = fileMenuController::newFile
     val copyToClipboard: (String) -> Unit = { text ->
         runCatching {
             val selection = java.awt.datatransfer.StringSelection(text)
@@ -625,24 +610,22 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         rootDir = { rootDir },
         copyToClipboard = copyToClipboard,
     )
-    val onCreateFileIn: (Path) -> Unit = { parent -> fileTreeContextController.onCreateFileIn(parent) }
-    val onCreateFolderIn: (Path) -> Unit = { parent -> fileTreeContextController.onCreateFolderIn(parent) }
-    val onRevealInFiles: (Path) -> Unit = { path -> fileTreeContextController.onRevealInFiles(path) }
-    val onCopyPath: (Path) -> Unit = { path -> fileTreeContextController.onCopyPath(path) }
-    val onCopyRelativePath: (Path) -> Unit = { path -> fileTreeContextController.onCopyRelativePath(path) }
-    val onRenameEntry: (Path) -> Unit = { path -> fileTreeContextController.onRenameEntry(path) }
-    val onPasteInto: (Path) -> Unit = { destParent -> fileTreeContextController.onPasteInto(destParent) }
+    val onCreateFileIn = fileTreeContextController::onCreateFileIn
+    val onCreateFolderIn = fileTreeContextController::onCreateFolderIn
+    val onRevealInFiles = fileTreeContextController::onRevealInFiles
+    val onCopyPath = fileTreeContextController::onCopyPath
+    val onCopyRelativePath = fileTreeContextController::onCopyRelativePath
+    val onRenameEntry = fileTreeContextController::onRenameEntry
+    val onPasteInto = fileTreeContextController::onPasteInto
     val fileTreeDropController = FileTreeDropController(
         ui = layoutUiState,
         setDropResultToast = { dropResultToast = it },
     )
-    val showDropResultToast: (String, DropResultToastTone, (() -> Unit)?) -> Unit = { msg, tone, undo ->
-        fileTreeDropController.showDropResultToast(msg, tone, undo)
-    }
-    val onDropPlanReceived: (TreeDragController.DropPlan) -> Unit = { plan -> fileTreeDropController.onDropPlanReceived(plan) }
-    val onExternalDropReceived: (List<Path>, Path) -> Unit = { sources, target -> fileTreeDropController.onExternalDropReceived(sources, target) }
-    val onDeleteEntry: (Path) -> Unit = { path -> fileTreeDropController.onDeleteEntry(path) }
-    val onDeleteEntries: (Set<Path>) -> Unit = { paths -> fileTreeDropController.onDeleteEntries(paths) }
+    val showDropResultToast = fileTreeDropController::showDropResultToast
+    val onDropPlanReceived = fileTreeDropController::onDropPlanReceived
+    val onExternalDropReceived = fileTreeDropController::onExternalDropReceived
+    val onDeleteEntry = fileTreeDropController::onDeleteEntry
+    val onDeleteEntries = fileTreeDropController::onDeleteEntries
     val renameRemapController = RenameRemapController(
         getExpanded = { expanded },
         setExpanded = { expanded = it },
@@ -654,8 +637,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         controllerFor = { path -> currentLspRouter.controllerFor(path) },
         languageIdFor = { path -> currentLspRouter.languageIdFor(path) },
     )
-    val remapTreeStateAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTreeStateAfterRename(old, new) }
-    val remapTabsAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTabsAfterRename(old, new) }
+    val remapTreeStateAfterRename = renameRemapController::remapTreeStateAfterRename
+    val remapTabsAfterRename = renameRemapController::remapTabsAfterRename
     val fileOpUndoController = FileOpUndoController(
         fileOpHistory = fileOpHistory,
         paneOf = { side -> paneOf(side) },
@@ -666,10 +649,10 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         onFileOpHistoryChanged = { fileOpHistoryVersion++ },
         onTreeRevision = { treeRevision++ },
     )
-    val readFileTextWithTabs: (Path) -> String? = { p -> fileOpUndoController.readFileTextWithTabs(p) }
-    val applyTextReplace: (Path, String) -> Unit = { path, newText -> fileOpUndoController.applyTextReplace(path, newText) }
-    val onUndoFileOp: () -> Boolean = { fileOpUndoController.onUndoFileOp() }
-    val onRedoFileOp: () -> Boolean = { fileOpUndoController.onRedoFileOp() }
+    val readFileTextWithTabs = fileOpUndoController::readFileTextWithTabs
+    val applyTextReplace = fileOpUndoController::applyTextReplace
+    val onUndoFileOp = fileOpUndoController::onUndoFileOp
+    val onRedoFileOp = fileOpUndoController::onRedoFileOp
     val workspaceEditController = WorkspaceEditController(
         applyRename = applyRename,
         codeActionUri = { codeActionUri },
@@ -678,13 +661,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         readFileText = readFileTextWithTabs,
         applyTextReplace = applyTextReplace,
     )
-    val applyCodeAction: (CodeActionEntry) -> Unit = { action -> workspaceEditController.applyCodeAction(action) }
+    val applyCodeAction = workspaceEditController::applyCodeAction
     val applyFolderPackageSync: (Path, Path, Map<String, String>) -> List<FileOpHistory.RewriteEntry> = { _, newFolder, packageMap ->
         workspaceEditController.applyFolderPackageSync(newFolder, packageMap)
     }
-    val applySingleFileMoveSync: (Path, FolderPackageRename.SingleFileMovePlan) -> List<FileOpHistory.RewriteEntry> = { newPath, plan ->
-        workspaceEditController.applySingleFileMoveSync(newPath, plan)
-    }
+    val applySingleFileMoveSync = workspaceEditController::applySingleFileMoveSync
     val fileTreeActionExecutor = FileTreeActionExecutor(
         scope = largeCopyScope,
         getPasteDialog = { pasteDialog },
@@ -785,16 +766,16 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         addSearchQuery = addSearchQuery,
         addReplaceText = addReplaceText,
     )
-    val openSearch: () -> Unit = { searchController.openSearch() }
-    val openReplace: () -> Unit = { searchController.openReplace() }
-    val closeSearch: (PaneSide) -> Unit = { side -> searchController.closeSearch(side) }
-    val onQueryChange: (PaneSide, String) -> Unit = { side, q -> searchController.onQueryChange(side, q) }
-    val onToggleCase: (PaneSide) -> Unit = { side -> searchController.onToggleCase(side) }
-    val onSearchNext: (PaneSide) -> Unit = { side -> searchController.onSearchNext(side) }
-    val onSearchPrev: (PaneSide) -> Unit = { side -> searchController.onSearchPrev(side) }
-    val onReplaceChange: (PaneSide, String) -> Unit = { side, value -> searchController.onReplaceChange(side, value) }
-    val onReplace: (PaneSide) -> Unit = { side -> searchController.onReplace(side) }
-    val onReplaceAll: (PaneSide) -> Unit = { side -> searchController.onReplaceAll(side) }
+    val openSearch = searchController::openSearch
+    val openReplace = searchController::openReplace
+    val closeSearch = searchController::closeSearch
+    val onQueryChange = searchController::onQueryChange
+    val onToggleCase = searchController::onToggleCase
+    val onSearchNext = searchController::onSearchNext
+    val onSearchPrev = searchController::onSearchPrev
+    val onReplaceChange = searchController::onReplaceChange
+    val onReplace = searchController::onReplace
+    val onReplaceAll = searchController::onReplaceAll
 
     val historyController = EditorHistoryController(
         focusedPane = { focusedPane },
@@ -803,11 +784,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         undoTracker = { side -> undoTracker(side) },
         applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
     )
-    val doUndo: () -> Unit = { historyController.doUndo() }
-    val doRedo: () -> Unit = { historyController.doRedo() }
+    val doUndo = historyController::doUndo
+    val doRedo = historyController::doRedo
 
 
-    val tabContextActionsFor: (PaneSide) -> TabContextActions = { side -> tabContextController.actionsFor(side) }
+    val tabContextActionsFor = tabContextController::actionsFor
 
     val paletteController = CommandPaletteController(
         ui = layoutUiState,
@@ -825,12 +806,12 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             codeActionOpen = open
         },
     )
-    val openQuickOpen: () -> Unit = { paletteController.openQuickOpen() }
-    val jumpProblemRelative: (Boolean) -> Unit = { forward -> paletteController.jumpProblemRelative(forward) }
-    val openDocumentSymbol: () -> Unit = { paletteController.openDocumentSymbol() }
-    val openWorkspaceSymbol: () -> Unit = { paletteController.openWorkspaceSymbol() }
-    val triggerFormat: () -> Unit = { paletteController.triggerFormat() }
-    val triggerCodeAction: () -> Unit = { paletteController.triggerCodeAction() }
+    val openQuickOpen = paletteController::openQuickOpen
+    val jumpProblemRelative = paletteController::jumpProblemRelative
+    val openDocumentSymbol = paletteController::openDocumentSymbol
+    val openWorkspaceSymbol = paletteController::openWorkspaceSymbol
+    val triggerFormat = paletteController::triggerFormat
+    val triggerCodeAction = paletteController::triggerCodeAction
     val openFindInFiles: () -> Unit = {
         val root = rootDir
         if (root != null) {
@@ -1277,7 +1258,7 @@ internal data class DeleteEntryDialogState(
     val isMulti: Boolean get() = paths.size > 1
 }
 
-private data class FileOpConfirmState(
+internal data class FileOpConfirmState(
     val isRedo: Boolean,
     val op: FileOpHistory.Op,
 )
