@@ -9,6 +9,7 @@ import page.app.filetree.FileTreeActionExecutor
 import page.app.filetree.FileTreeContextController
 import page.app.filetree.FileTreeDropController
 import page.app.filetree.LargeCopyDialogState
+import page.app.filetree.RenameRemapController
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
 import page.app.lsp.LspEditorInterconnector
@@ -700,51 +701,19 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val onExternalDropReceived: (List<Path>, Path) -> Unit = { sources, target -> fileTreeDropController.onExternalDropReceived(sources, target) }
     val onDeleteEntry: (Path) -> Unit = { path -> fileTreeDropController.onDeleteEntry(path) }
     val onDeleteEntries: (Set<Path>) -> Unit = { paths -> fileTreeDropController.onDeleteEntries(paths) }
-    val remapPathSet: (Set<Path>, Path, Path) -> Set<Path> = { paths, old, new ->
-        if (paths.isEmpty()) paths
-        else paths.map { p ->
-            when {
-                p == old -> new
-                p.startsWith(old) -> new.resolve(old.relativize(p))
-                else -> p
-            }
-        }.toSet()
-    }
-    val remapTreeStateAfterRename: (Path, Path) -> Unit = { old, new ->
-        expanded = remapPathSet(expanded, old, new)
-        treeSelection = remapPathSet(treeSelection, old, new)
-    }
-    val remapTabsAfterRename: (Path, Path) -> Unit = { old, new ->
-        listOf(PaneSide.PRIMARY, PaneSide.SECONDARY).forEach { side ->
-            mutatePane(side) { pane ->
-                val mapped = pane.book.tabs.map { tab ->
-                    val newPath = when {
-                        tab.path == old -> new
-                        tab.path.startsWith(old) -> new.resolve(old.relativize(tab.path))
-                        else -> null
-                    }
-                    if (newPath != null) tab.copy(path = newPath) else tab
-                }
-                if (mapped == pane.book.tabs) pane
-                else pane.copy(book = pane.book.copy(tabs = mapped))
-            }
-        }
-        val affectedOldPaths = mutableListOf<Path>()
-        val affectedNewPaths = mutableListOf<Pair<Path, String>>()
-        listOf(primaryPane, secondaryPane).forEach { pane ->
-            pane.book.tabs.forEach { tab ->
-                if (tab.path == new || tab.path.startsWith(new)) {
-                    val origin = if (tab.path == new) old else old.resolve(new.relativize(tab.path))
-                    affectedOldPaths.add(origin)
-                    affectedNewPaths.add(tab.path to tab.text)
-                }
-            }
-        }
-        affectedOldPaths.distinct().forEach { currentLspRouter.controllerFor(it)?.didClose(it) }
-        affectedNewPaths.distinctBy { it.first }.forEach { (p, text) ->
-            currentLspRouter.languageIdFor(p)?.let { langId -> currentLspRouter.controllerFor(p)?.didOpen(p, langId, text) }
-        }
-    }
+    val renameRemapController = RenameRemapController(
+        getExpanded = { expanded },
+        setExpanded = { expanded = it },
+        getTreeSelection = { treeSelection },
+        setTreeSelection = { treeSelection = it },
+        mutatePane = { side, transform -> mutatePane(side, transform) },
+        primaryPane = { primaryPane },
+        secondaryPane = { secondaryPane },
+        controllerFor = { path -> currentLspRouter.controllerFor(path) },
+        languageIdFor = { path -> currentLspRouter.languageIdFor(path) },
+    )
+    val remapTreeStateAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTreeStateAfterRename(old, new) }
+    val remapTabsAfterRename: (Path, Path) -> Unit = { old, new -> renameRemapController.remapTabsAfterRename(old, new) }
     val readFileTextWithTabs: (Path) -> String? = { p ->
         paneOf(PaneSide.PRIMARY).book.tabs.firstOrNull { it.path == p }?.text
             ?: paneOf(PaneSide.SECONDARY).book.tabs.firstOrNull { it.path == p }?.text
