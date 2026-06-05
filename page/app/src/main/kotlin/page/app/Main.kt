@@ -17,6 +17,7 @@ import page.app.lsp.WorkspaceEditController
 import page.app.run.RunActionsController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
+import page.app.state.HistoryActionsController
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
 import page.app.ui.IdeMainLayout
@@ -501,21 +502,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             fileTreeWatcherEpoch++
         }
     }
-    val addRecentFile: (Path) -> Unit = { p ->
-        historyFile = historyFile.copy(
-            recentFiles = pushMru(historyFile.recentFiles, p.toString(), HistoryStore.MAX_RECENT_FILES),
-        )
-    }
-    val addSearchQuery: (String) -> Unit = { q ->
-        if (q.isNotBlank()) historyFile = historyFile.copy(
-            searchHistory = pushMru(historyFile.searchHistory, q, HistoryStore.MAX_SEARCH_HISTORY),
-        )
-    }
-    val addReplaceText: (String) -> Unit = { r ->
-        if (r.isNotEmpty()) historyFile = historyFile.copy(
-            replaceHistory = pushMru(historyFile.replaceHistory, r, HistoryStore.MAX_REPLACE_HISTORY),
-        )
-    }
+    val historyActionsController = HistoryActionsController(
+        history = { historyFile },
+        setHistory = { historyFile = it },
+    )
+    val addRecentFile: (Path) -> Unit = { p -> historyActionsController.addRecentFile(p) }
+    val addSearchQuery: (String) -> Unit = { q -> historyActionsController.addSearchQuery(q) }
+    val addReplaceText: (String) -> Unit = { r -> historyActionsController.addReplaceText(r) }
 
     val focusedActivePath = focused().book.active?.path
     val focusedActiveText = focused().editorValue.text
