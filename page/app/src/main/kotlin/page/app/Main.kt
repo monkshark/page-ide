@@ -6,6 +6,7 @@ import page.workspace.sync.PackageSyncEngine
 import page.app.input.ShortcutAction
 import page.app.input.ShortcutResolver
 import page.app.filetree.FileTreeActionExecutor
+import page.app.filetree.FileTreeContextController
 import page.app.filetree.LargeCopyDialogState
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
@@ -675,40 +676,18 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
         }
     }
-    val onCreateFileIn: (Path) -> Unit = { parent ->
-        createDialog = CreateEntryDialogState(parent, CreateEntryKind.FILE)
-    }
-    val onCreateFolderIn: (Path) -> Unit = { parent ->
-        createDialog = CreateEntryDialogState(parent, CreateEntryKind.FOLDER)
-    }
-    val onRevealInFiles: (Path) -> Unit = { path ->
-        val target = if (java.nio.file.Files.isDirectory(path)) path else path.parent
-        if (target != null) {
-            runCatching { java.awt.Desktop.getDesktop().open(target.toFile()) }
-        }
-    }
-    val onCopyPath: (Path) -> Unit = { path ->
-        copyToClipboard(path.toAbsolutePath().toString())
-    }
-    val onCopyRelativePath: (Path) -> Unit = { path ->
-        copyToClipboard(FileTreeActions.relativeTo(rootDir, path))
-    }
-    val onRenameEntry: (Path) -> Unit = { path ->
-        renameDialog = RenameEntryDialogState(path)
-    }
-    val onPasteInto: (Path) -> Unit = { destParent ->
-        val content = FileTreeClipboard.read()
-        if (content != null && content.paths.isNotEmpty()) {
-            val target = if (java.nio.file.Files.isDirectory(destParent)) destParent else destParent.parent
-            if (target != null) {
-                pasteDialog = PasteEntryDialogState(
-                    remaining = content.paths,
-                    destParent = target,
-                    mode = content.mode,
-                )
-            }
-        }
-    }
+    val fileTreeContextController = FileTreeContextController(
+        ui = layoutUiState,
+        rootDir = { rootDir },
+        copyToClipboard = copyToClipboard,
+    )
+    val onCreateFileIn: (Path) -> Unit = { parent -> fileTreeContextController.onCreateFileIn(parent) }
+    val onCreateFolderIn: (Path) -> Unit = { parent -> fileTreeContextController.onCreateFolderIn(parent) }
+    val onRevealInFiles: (Path) -> Unit = { path -> fileTreeContextController.onRevealInFiles(path) }
+    val onCopyPath: (Path) -> Unit = { path -> fileTreeContextController.onCopyPath(path) }
+    val onCopyRelativePath: (Path) -> Unit = { path -> fileTreeContextController.onCopyRelativePath(path) }
+    val onRenameEntry: (Path) -> Unit = { path -> fileTreeContextController.onRenameEntry(path) }
+    val onPasteInto: (Path) -> Unit = { destParent -> fileTreeContextController.onPasteInto(destParent) }
     val showDropResultToast: (String, DropResultToastTone, (() -> Unit)?) -> Unit = { msg, tone, undo ->
         dropResultToast = DropResultToastState(
             message = msg,
