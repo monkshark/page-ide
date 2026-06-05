@@ -16,6 +16,8 @@ import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
 import page.app.ui.IdeMainLayout
 import page.app.ui.PaletteToast
+import page.app.ui.dialog.FileTreeCreateDialog
+import page.app.ui.dialog.FileTreePasteDialog
 import page.app.ui.editor.EditorTabController
 import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
@@ -1887,38 +1889,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
 
 
-    val activeCreateDialog = createDialog
-    if (activeCreateDialog != null) {
-        val isFile = activeCreateDialog.kind == CreateEntryKind.FILE
-        val rel = FileTreeActions.relativeTo(rootDir, activeCreateDialog.parent)
-        val parentLabel = if (rel.isEmpty() || rel == ".") "/" else rel
-        NameInputDialog(
-            title = if (isFile) "New file" else "New folder",
-            label = "$parentLabel  /  name",
-            error = activeCreateDialog.error,
-            onSubmit = { name ->
-                val result = if (isFile) {
-                    FileTreeActions.createFile(activeCreateDialog.parent, name)
-                } else {
-                    FileTreeActions.createFolder(activeCreateDialog.parent, name)
-                }
-                when (result) {
-                    is FileTreeActions.CreateResult.Ok -> {
-                        treeRevision++
-                        expanded = expanded + activeCreateDialog.parent
-                        if (isFile) openInTab(result.path)
-                        fileOpHistory.push(FileOpHistory.CreateOp(result.path, isDirectory = !isFile))
-                        fileOpHistoryVersion++
-                        createDialog = null
-                    }
-                    is FileTreeActions.CreateResult.Err -> {
-                        createDialog = activeCreateDialog.copy(error = result.message)
-                    }
-                }
-            },
-            onDismiss = { createDialog = null },
-        )
-    }
+    FileTreeCreateDialog(
+        workspace = workspaceState,
+        ui = layoutUiState,
+        fileOpHistory = fileOpHistory,
+        openInTab = openInTab,
+        onFileOpHistoryChanged = { fileOpHistoryVersion++ },
+    )
 
     val activeRenameDialog = renameDialog
     val impactScope = rememberCoroutineScope()
@@ -2208,49 +2185,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         )
     }
 
-    val activePasteDialog = pasteDialog
-    if (activePasteDialog != null && activePasteDialog.remaining.isNotEmpty()) {
-        val source = activePasteDialog.remaining.first()
-        val sourceName = source.fileName?.toString() ?: source.toString()
-        val destRel = FileTreeActions.relativeTo(rootDir, activePasteDialog.destParent)
-        val destLabel = if (destRel.isEmpty() || destRel == ".") "/" else destRel
-        val verb = if (activePasteDialog.mode == FileTreeClipboard.Mode.Cut) "Move" else "Copy"
-        val total = activePasteDialog.remaining.size
-        val countSuffix = if (total > 1) "  ($total remaining)" else ""
-        val skipOne: (() -> Unit)? = if (total > 1) {
-            {
-                val cur = activePasteDialog
-                val rest = cur.remaining.drop(1)
-                pasteDialog = if (rest.isEmpty()) null else cur.copy(remaining = rest, error = null)
-                if (rest.isEmpty()) fileTreeActionExecutor.finalizePasteHistory(cur)
-            }
-        } else null
-        val skipAll: (() -> Unit)? = if (total > 1) {
-            {
-                val cur = activePasteDialog
-                pasteDialog = null
-                fileTreeActionExecutor.finalizePasteHistory(cur)
-            }
-        } else null
-        val performPaste: (String, Boolean) -> Unit = { newName, overwriteOnce ->
-            fileTreeActionExecutor.performPaste(newName, overwriteOnce)
-        }
-        NameInputDialog(
-            title = "$verb into $destLabel$countSuffix",
-            label = "$sourceName  →  $destLabel  /  name",
-            initial = sourceName,
-            error = activePasteDialog.error,
-            onSkip = skipOne,
-            onSkipRemaining = skipAll,
-            onOverwrite = { name -> performPaste(name, true) },
-            onOverwriteAll = { name ->
-                pasteDialog = activePasteDialog.copy(overwriteForAll = true)
-                performPaste(name, true)
-            },
-            onSubmit = { newName -> performPaste(newName, false) },
-            onDismiss = { pasteDialog = null },
-        )
-    }
+    FileTreePasteDialog(
+        workspace = workspaceState,
+        ui = layoutUiState,
+        fileTreeActionExecutor = fileTreeActionExecutor,
+    )
 
     val activeLargeCopy = largeCopyState
     if (activeLargeCopy != null) {
