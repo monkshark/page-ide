@@ -9,6 +9,7 @@ import kotlin.io.path.isExecutable
 class GenericLanguageBackend(
     private val definition: LanguageDefinition,
     private val executableFinder: () -> Path? = { null },
+    private val userOverrideFinder: () -> Path? = { null },
     private val envSetup: ((MutableMap<String, String>) -> Unit)? = null,
     private val initializationOptionsProvider: ((Path?) -> Any?)? = null,
 ) : LanguageBackend {
@@ -23,6 +24,12 @@ class GenericLanguageBackend(
         val isWindows = System.getProperty("os.name").orEmpty().lowercase().contains("win")
         val binNames = if (isWindows) definition.lspWindowsBinaries.ifEmpty { definition.lspBinaries }
         else definition.lspBinaries
+
+        val override = userOverrideFinder()
+        if (override != null) {
+            attempted += "override=$override"
+            if (override.exists()) return LanguageBackend.Resolution.Found(override, "user override")
+        }
 
         val installed = executableFinder()
         if (installed != null) {

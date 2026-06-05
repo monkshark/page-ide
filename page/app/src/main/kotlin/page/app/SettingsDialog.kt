@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import page.lsp.LspBackends
 import page.ui.GlassPalette
 
 data class PageSettings(
@@ -342,6 +343,46 @@ private fun LspSection(o: LspOptions, onChange: (LspOptions) -> Unit) {
         checked = o.showInlineDiagnostics,
         onToggle = { onChange(o.copy(showInlineDiagnostics = !o.showInlineDiagnostics)) },
     )
+    Spacer(Modifier.height(16.dp))
+    Text(
+        text = "Server executable overrides",
+        color = MaterialTheme.colorScheme.onSurface,
+        style = LocalTextStyle.current.copy(
+            fontSize = 12.sp,
+            lineHeight = 14.sp,
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
+    )
+    Spacer(Modifier.height(2.dp))
+    Text(
+        text = "Point PAGE at a specific LSP binary. Empty = auto-detect (PAGE installer → PATH).",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = LocalTextStyle.current.copy(
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
+    )
+    Spacer(Modifier.height(8.dp))
+    val backends = remember { LspBackends.all().sortedBy { it.displayName } }
+    for (backend in backends) {
+        PathField(
+            label = backend.displayName,
+            value = o.serverPaths[backend.id].orEmpty(),
+            onChange = { v ->
+                val next = o.serverPaths.toMutableMap()
+                if (v.isBlank()) next.remove(backend.id) else next[backend.id] = v
+                onChange(o.copy(serverPaths = next))
+            },
+        )
+        Spacer(Modifier.height(6.dp))
+    }
 }
 
 @Composable
@@ -490,6 +531,50 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
                     ),
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PathField(label: String, value: String, onChange: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = LocalTextStyle.current.copy(
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                ),
+            ),
+            modifier = Modifier.width(140.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(26.dp)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 11.sp,
+                    lineHeight = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    ),
+                ),
             )
         }
     }
