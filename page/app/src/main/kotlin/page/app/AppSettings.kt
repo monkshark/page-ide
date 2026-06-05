@@ -34,6 +34,7 @@ data class LspOptions(
     val triggerCompletionMidWord: Boolean = true,
     val hoverDelayMs: Int = 500,
     val showInlineDiagnostics: Boolean = true,
+    val serverPaths: Map<String, String> = emptyMap(),
 ) {
     companion object { val DEFAULT = LspOptions() }
 }
@@ -83,6 +84,7 @@ object AppSettings {
     private const val KEY_LSP_MIDWORD = "lsp.triggerCompletionMidWord"
     private const val KEY_LSP_HOVER_MS = "lsp.hoverDelayMs"
     private const val KEY_LSP_INLINE_DIAG = "lsp.showInlineDiagnostics"
+    private const val KEY_LSP_SERVER_PATH_PREFIX = "lsp.serverPath."
 
     private const val KEY_AI_PAIRS = "autoInput.pairs"
     private const val KEY_AI_HTML = "autoInput.htmlTags"
@@ -94,9 +96,12 @@ object AppSettings {
     private const val KEY_RUN_CLEAR_OUTPUT = "run.clearOutputOnRun"
     private const val KEY_RUN_OPEN_TERMINAL = "run.openTerminalOnRun"
 
-    private val settingsPath: Path by lazy {
+    private fun settingsPath(): Path {
+        System.getProperty("page.settings.dir")?.takeIf { it.isNotBlank() }?.let {
+            return Path.of(it).resolve(FILE_NAME)
+        }
         val home = System.getProperty("user.home")?.let(Path::of) ?: Path.of(".")
-        home.resolve(DIR_NAME).resolve(FILE_NAME)
+        return home.resolve(DIR_NAME).resolve(FILE_NAME)
     }
 
     fun loadPalette(default: GlassPalette = GlassPalette.Cool): GlassPalette {
@@ -143,19 +148,33 @@ object AppSettings {
 
     fun loadLsp(default: LspOptions = LspOptions.DEFAULT): LspOptions {
         val p = readAllProperties() ?: return default
+        val serverPaths = p.stringPropertyNames()
+            .filter { it.startsWith(KEY_LSP_SERVER_PATH_PREFIX) }
+            .mapNotNull { key ->
+                val id = key.removePrefix(KEY_LSP_SERVER_PATH_PREFIX)
+                val value = p.getProperty(key)?.trim().orEmpty()
+                if (id.isBlank() || value.isBlank()) null else id to value
+            }
+            .toMap()
         return LspOptions(
             showInlayHints = p.getBoolean(KEY_LSP_INLAY, default.showInlayHints),
             triggerCompletionMidWord = p.getBoolean(KEY_LSP_MIDWORD, default.triggerCompletionMidWord),
             hoverDelayMs = p.getInt(KEY_LSP_HOVER_MS, default.hoverDelayMs, 0, 5000),
             showInlineDiagnostics = p.getBoolean(KEY_LSP_INLINE_DIAG, default.showInlineDiagnostics),
+            serverPaths = serverPaths,
         )
     }
-    fun saveLsp(o: LspOptions) = writeProperties(mapOf(
-        KEY_LSP_INLAY to o.showInlayHints.toString(),
-        KEY_LSP_MIDWORD to o.triggerCompletionMidWord.toString(),
-        KEY_LSP_HOVER_MS to o.hoverDelayMs.toString(),
-        KEY_LSP_INLINE_DIAG to o.showInlineDiagnostics.toString(),
-    ))
+    fun saveLsp(o: LspOptions) = writeProperties(
+        updates = mapOf(
+            KEY_LSP_INLAY to o.showInlayHints.toString(),
+            KEY_LSP_MIDWORD to o.triggerCompletionMidWord.toString(),
+            KEY_LSP_HOVER_MS to o.hoverDelayMs.toString(),
+            KEY_LSP_INLINE_DIAG to o.showInlineDiagnostics.toString(),
+        ) + o.serverPaths
+            .filterValues { it.isNotBlank() }
+            .mapKeys { (id, _) -> "$KEY_LSP_SERVER_PATH_PREFIX$id" },
+        removeKeyPrefix = KEY_LSP_SERVER_PATH_PREFIX,
+    )
 
     fun loadAutoInput(default: AutoInputOptions = AutoInputOptions.DEFAULT): AutoInputOptions {
         val p = readAllProperties() ?: return default
@@ -209,19 +228,24 @@ object AppSettings {
     private fun readProperty(key: String): String? = readAllProperties()?.getProperty(key)
 
     private fun readAllProperties(): Properties? {
-        val path = settingsPath
+        val path = settingsPath()
         if (!Files.exists(path)) return null
         return runCatching {
             Properties().apply { Files.newBufferedReader(path).use(::load) }
         }.getOrNull()
     }
 
-    private fun writeProperties(updates: Map<String, String>) {
+    private fun writeProperties(updates: Map<String, String>, removeKeyPrefix: String? = null) {
         runCatching {
-            val path = settingsPath
+            val path = settingsPath()
             Files.createDirectories(path.parent)
             val props = Properties()
             if (Files.exists(path)) Files.newBufferedReader(path).use(props::load)
+            if (removeKeyPrefix != null) {
+                props.stringPropertyNames()
+                    .filter { it.startsWith(removeKeyPrefix) }
+                    .forEach { props.remove(it) }
+            }
             for ((k, v) in updates) props.setProperty(k, v)
             Files.newBufferedWriter(
                 path,

@@ -21,6 +21,11 @@ internal fun registerAllBackends() {
         LspBackends.register(GenericLanguageBackend(
             definition = def,
             executableFinder = { LspInstallers.forId(def.id)?.executable() },
+            userOverrideFinder = {
+                AppSettings.loadLsp().serverPaths[def.id]
+                    ?.trim()?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { Path.of(it) }.getOrNull() }
+            },
             envSetup = { env ->
                 PageRuntimeEnv.applyTo(env)
                 if (def.id == "java") PageRuntimeEnv.pinJavaRuntime(env)
