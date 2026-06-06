@@ -159,7 +159,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val ideStore = remember { IdeStore() }
     val layoutUiState = remember { LayoutUiState(ideStore) }
     val onIdeEvent = remember { IdeDispatcher(ideStore, IdeEffectHandler()).onEvent }
-    val appState = remember { IdeAppState() }
+    val appState = remember { IdeAppState(ideStore) }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
     var pendingClose: PendingClose? by appState::pendingClose
     var quickOpen by layoutUiState::quickOpen
@@ -524,7 +524,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 applyCodeAction = { action -> applyCodeAction(action) },
                 requestEditorRefocus = {
                     frameRef.value?.requestFocus()
-                    editorFocusVersion += 1
+                    onIdeEvent(IdeEvent.Chrome.BumpEditorFocus)
                 },
                 openSettings = { openSettingsRef.value() },
                 toggleTerminal = { toggleTerminalRef.value() },
@@ -631,7 +631,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             else emptyList()
         },
         requestFrameFocus = { frameRef.value?.requestFocus() },
-        onEditorFocusBump = { editorFocusVersion += 1 },
+        onEditorFocusBump = { onIdeEvent(IdeEvent.Chrome.BumpEditorFocus) },
     )
 
     if (runDialogOpen) {
@@ -640,9 +640,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             workspaceRoot = rootDir,
             onSave = { saved ->
                 runState = saved
-                runDialogOpen = false
+                onIdeEvent(IdeEvent.Chrome.CloseRunDialog)
             },
-            onDismiss = { runDialogOpen = false },
+            onDismiss = { onIdeEvent(IdeEvent.Chrome.CloseRunDialog) },
         )
     }
 

@@ -64,4 +64,48 @@ class ReducerTest {
         val next = reduce(s, IdeEvent.Panel.ResizeSidebar(0.dp))
         assertEquals(s.layout, next.layout)
     }
+
+    @Test
+    fun `settings toggle and explicit open close`() {
+        val s = AppState()
+        val toggled = reduce(s, IdeEvent.Chrome.ToggleSettings)
+        assertTrue(toggled.chrome.settingsDialogOpen)
+        val closed = reduce(toggled, IdeEvent.Chrome.CloseSettings)
+        assertFalse(closed.chrome.settingsDialogOpen)
+        val opened = reduce(closed, IdeEvent.Chrome.OpenSettings)
+        assertTrue(opened.chrome.settingsDialogOpen)
+    }
+
+    @Test
+    fun `run dialog open and close`() {
+        val s = AppState()
+        val opened = reduce(s, IdeEvent.Chrome.OpenRunDialog)
+        assertTrue(opened.chrome.runDialogOpen)
+        val closed = reduce(opened, IdeEvent.Chrome.CloseRunDialog)
+        assertFalse(closed.chrome.runDialogOpen)
+    }
+
+    @Test
+    fun `focus and tree bumps increment counters`() {
+        val s = AppState()
+        val f1 = reduce(s, IdeEvent.Chrome.BumpEditorFocus)
+        val f2 = reduce(f1, IdeEvent.Chrome.BumpEditorFocus)
+        assertEquals(2, f2.chrome.editorFocusVersion)
+        val t1 = reduce(f2, IdeEvent.Chrome.BumpTreeFocus)
+        assertEquals(1, t1.chrome.pendingTreeFocusTick)
+    }
+
+    @Test
+    fun `palette toast carries deadline`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Chrome.ShowPaletteToast(1600L))
+        assertEquals(1600L, next.chrome.paletteToastUntil)
+    }
+
+    @Test
+    fun `chrome event leaves layout slice value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Chrome.OpenSettings)
+        assertEquals(s.layout, next.layout)
+    }
 }

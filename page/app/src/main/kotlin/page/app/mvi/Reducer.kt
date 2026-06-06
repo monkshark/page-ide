@@ -4,6 +4,18 @@ import androidx.compose.ui.unit.dp
 
 internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Panel -> state.copy(layout = reduceLayout(state.layout, event))
+    is IdeEvent.Chrome -> state.copy(chrome = reduceChrome(state.chrome, event))
+}
+
+private fun reduceChrome(s: ChromeState, e: IdeEvent.Chrome): ChromeState = when (e) {
+    IdeEvent.Chrome.OpenSettings -> s.copy(settingsDialogOpen = true)
+    IdeEvent.Chrome.CloseSettings -> s.copy(settingsDialogOpen = false)
+    IdeEvent.Chrome.ToggleSettings -> s.copy(settingsDialogOpen = !s.settingsDialogOpen)
+    IdeEvent.Chrome.OpenRunDialog -> s.copy(runDialogOpen = true)
+    IdeEvent.Chrome.CloseRunDialog -> s.copy(runDialogOpen = false)
+    is IdeEvent.Chrome.ShowPaletteToast -> s.copy(paletteToastUntil = e.untilMs)
+    IdeEvent.Chrome.BumpEditorFocus -> s.copy(editorFocusVersion = s.editorFocusVersion + 1)
+    IdeEvent.Chrome.BumpTreeFocus -> s.copy(pendingTreeFocusTick = s.pendingTreeFocusTick + 1)
 }
 
 private fun reduceLayout(s: LayoutState, e: IdeEvent.Panel): LayoutState = when (e) {

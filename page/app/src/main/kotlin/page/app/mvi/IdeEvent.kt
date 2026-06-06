@@ -4,6 +4,17 @@ import androidx.compose.ui.unit.Dp
 
 internal sealed interface IdeEvent {
 
+    sealed interface Chrome : IdeEvent {
+        data object OpenSettings : Chrome
+        data object CloseSettings : Chrome
+        data object ToggleSettings : Chrome
+        data object OpenRunDialog : Chrome
+        data object CloseRunDialog : Chrome
+        data class ShowPaletteToast(val untilMs: Long) : Chrome
+        data object BumpEditorFocus : Chrome
+        data object BumpTreeFocus : Chrome
+    }
+
     sealed interface Panel : IdeEvent {
         data object ToggleProblems : Panel
         data object CloseProblems : Panel

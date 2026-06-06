@@ -9,15 +9,24 @@ internal class IdeStore(initial: AppState = AppState()) {
     var layout by mutableStateOf(initial.layout)
         private set
 
-    fun snapshot(): AppState = AppState(layout = layout)
+    var chrome by mutableStateOf(initial.chrome)
+        private set
+
+    fun snapshot(): AppState = AppState(layout = layout, chrome = chrome)
 
     fun apply(next: AppState) {
         if (next.layout != layout) layout = next.layout
+        if (next.chrome != chrome) chrome = next.chrome
     }
 
     fun updateLayout(transform: (LayoutState) -> LayoutState) {
         val next = transform(layout)
         if (next != layout) layout = next
+    }
+
+    fun updateChrome(transform: (ChromeState) -> ChromeState) {
+        val next = transform(chrome)
+        if (next != chrome) chrome = next
     }
 }
 
