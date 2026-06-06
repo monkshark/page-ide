@@ -20,8 +20,17 @@ internal data class LayoutState(
     val referencesHeight: Dp = 220.dp,
 )
 
+internal data class ChromeState(
+    val settingsDialogOpen: Boolean = false,
+    val runDialogOpen: Boolean = false,
+    val paletteToastUntil: Long = 0L,
+    val editorFocusVersion: Int = 0,
+    val pendingTreeFocusTick: Int = 0,
+)
+
 internal data class AppState(
     val layout: LayoutState = LayoutState(),
+    val chrome: ChromeState = ChromeState(),
 )
 
 private fun defaultOutputHeight(): Dp {

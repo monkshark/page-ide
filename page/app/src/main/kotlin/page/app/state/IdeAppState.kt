@@ -10,13 +10,14 @@ import page.app.HistoryFile
 import page.app.PageSettings
 import page.app.PendingClose
 import page.app.ReferencesQueryState
+import page.app.mvi.IdeStore
 import page.editor.IndexedFile
 import page.lsp.CodeActionEntry
 import page.runtime.RunConfigsState
 import page.ui.GlassPalette
 import page.workspace.WorkspaceFile
 
-internal class IdeAppState {
+internal class IdeAppState(private val store: IdeStore = IdeStore()) {
     var pageSettings: PageSettings by mutableStateOf(
         PageSettings(
             autoSave = AppSettings.loadAutoSave(),
@@ -28,8 +29,12 @@ internal class IdeAppState {
         ),
     )
     var palette: GlassPalette by mutableStateOf(pageSettings.ui.palette)
-    var paletteToastUntil: Long by mutableStateOf(0L)
-    var settingsDialogOpen by mutableStateOf(false)
+    var paletteToastUntil: Long
+        get() = store.chrome.paletteToastUntil
+        set(value) = store.updateChrome { it.copy(paletteToastUntil = value) }
+    var settingsDialogOpen: Boolean
+        get() = store.chrome.settingsDialogOpen
+        set(value) = store.updateChrome { it.copy(settingsDialogOpen = value) }
 
     var sessionLoaded by mutableStateOf(false)
     var historyFile by mutableStateOf(HistoryFile())
@@ -37,7 +42,9 @@ internal class IdeAppState {
     var workspaceFile by mutableStateOf(WorkspaceFile())
 
     var runState: RunConfigsState by mutableStateOf(RunConfigsState())
-    var runDialogOpen by mutableStateOf(false)
+    var runDialogOpen: Boolean
+        get() = store.chrome.runDialogOpen
+        set(value) = store.updateChrome { it.copy(runDialogOpen = value) }
 
     var findInFiles by mutableStateOf(false)
     var findInFilesIndex by mutableStateOf<List<IndexedFile>>(emptyList())
@@ -45,7 +52,9 @@ internal class IdeAppState {
 
     var fileOpHistoryVersion by mutableStateOf(0)
     var fileOpConfirm: FileOpConfirmState? by mutableStateOf(null)
-    var pendingTreeFocusTick by mutableStateOf(0)
+    var pendingTreeFocusTick: Int
+        get() = store.chrome.pendingTreeFocusTick
+        set(value) = store.updateChrome { it.copy(pendingTreeFocusTick = value) }
     var hadFileDialog by mutableStateOf(false)
 
     var codeActionOpen by mutableStateOf(false)
@@ -54,7 +63,9 @@ internal class IdeAppState {
     var codeActionText: String? by mutableStateOf(null)
     var codeActionSelected by mutableStateOf(0)
 
-    var editorFocusVersion by mutableStateOf(0)
+    var editorFocusVersion: Int
+        get() = store.chrome.editorFocusVersion
+        set(value) = store.updateChrome { it.copy(editorFocusVersion = value) }
     var pendingClose: PendingClose? by mutableStateOf(null)
     var dropResultToast: DropResultToastState? by mutableStateOf(null)
 }
