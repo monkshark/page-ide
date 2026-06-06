@@ -30,11 +30,7 @@ internal class LayoutUiState {
     var terminalHeight: Dp by mutableStateOf(240.dp)
 
     var outputOpen by mutableStateOf(false)
-    var outputHeight: Dp by mutableStateOf(
-        (java.awt.Toolkit.getDefaultToolkit().screenSize.height / 2f)
-            .coerceIn(240f, 1200f)
-            .dp,
-    )
+    var outputHeight: Dp by mutableStateOf(defaultOutputHeight())
 
     var referencesHeight: Dp by mutableStateOf(220.dp)
 
@@ -50,4 +46,11 @@ internal class LayoutUiState {
     var documentSymbolList by mutableStateOf<List<DocumentSymbolEntry>>(emptyList())
     var documentSymbolUri by mutableStateOf("")
     var workspaceSymbolOpen by mutableStateOf(false)
+}
+
+private fun defaultOutputHeight(): Dp {
+    if (java.awt.GraphicsEnvironment.isHeadless()) return 480.dp
+    return (java.awt.Toolkit.getDefaultToolkit().screenSize.height / 2f)
+        .coerceIn(240f, 1200f)
+        .dp
 }
