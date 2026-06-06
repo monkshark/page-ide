@@ -14,6 +14,11 @@ internal class IdeStore(initial: AppState = AppState()) {
     fun apply(next: AppState) {
         if (next.layout != layout) layout = next.layout
     }
+
+    fun updateLayout(transform: (LayoutState) -> LayoutState) {
+        val next = transform(layout)
+        if (next != layout) layout = next
+    }
 }
 
 internal class IdeDispatcher(

@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.*
+import page.app.mvi.IdeEvent
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -108,6 +109,7 @@ internal fun IdeMainLayout(
     workspace: WorkspaceState,
     editor: EditorWorkspaceState,
     ui: LayoutUiState,
+    onEvent: (IdeEvent) -> Unit,
     lspRouter: LspRouter,
     onCloseTab: (PaneSide, Int) -> Unit,
     fileTree: FileTreePanelActions,
@@ -225,7 +227,7 @@ internal fun IdeMainLayout(
             onStopRun = onStopRun,
             onOpenRunDialog = onOpenRunDialog,
             outputOpen = ui.outputOpen,
-            onOutputToggle = { ui.outputOpen = !ui.outputOpen },
+            onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
             settingsOpen = settingsPanelOpen,
             onToggleSettings = onToggleSettings,
         )
@@ -256,7 +258,7 @@ internal fun IdeMainLayout(
                 revision = workspace.treeRevision,
                 modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
             )
-            ResizeHandle(onDeltaDp = { ui.sidebarWidth = (ui.sidebarWidth + it).coerceIn(160.dp, 600.dp) })
+            ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 if (installManagerOpen != null) {
                     InstallManagerPanel(
@@ -318,12 +320,12 @@ internal fun IdeMainLayout(
                                 onWindowShortcut = onWindowShortcut,
                                 onTabDragStart = { dragSourcePane = PaneSide.PRIMARY },
                                 onTabDragEnd = { dragSourcePane = null },
-                                onProblemsToggle = { ui.problemsOpen = !ui.problemsOpen },
+                                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
                                 todoCount = todoItems.size,
-                                onTodoToggle = { ui.todoOpen = !ui.todoOpen },
+                                onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -358,12 +360,12 @@ internal fun IdeMainLayout(
                                 onWindowShortcut = onWindowShortcut,
                                 onTabDragStart = { dragSourcePane = PaneSide.SECONDARY },
                                 onTabDragEnd = { dragSourcePane = null },
-                                onProblemsToggle = { ui.problemsOpen = !ui.problemsOpen },
+                                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
                                 todoCount = todoItems.size,
-                                onTodoToggle = { ui.todoOpen = !ui.todoOpen },
+                                onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -397,12 +399,12 @@ internal fun IdeMainLayout(
                         onReplaceAll = onReplaceAll,
                         onSearchClose = onSearchClose,
                         onWindowShortcut = onWindowShortcut,
-                        onProblemsToggle = { ui.problemsOpen = !ui.problemsOpen },
+                        onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                         onJumpToProblem = onJumpToProblem,
                         onApplyRename = onApplyRename,
                         onRequestReferences = onRequestReferences,
                         todoCount = todoItems.size,
-                        onTodoToggle = { ui.todoOpen = !ui.todoOpen },
+                        onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -435,26 +437,26 @@ internal fun IdeMainLayout(
             ProblemsPanel(
                 diagnostics = lspRouter.allDiagnosticsByUri,
                 onJump = onJumpToProblem,
-                onClose = { ui.problemsOpen = false },
+                onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
                 height = ui.problemsHeight,
-                onResizeDelta = { ui.problemsHeight = (ui.problemsHeight + it).coerceIn(80.dp, 600.dp) },
+                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeProblems(it)) },
                 collapsedKeys = ui.problemsCollapsed,
-                onCollapsedKeysChange = { ui.problemsCollapsed = it },
+                onCollapsedKeysChange = { onEvent(IdeEvent.Panel.ProblemsCollapsedChanged(it)) },
                 fileOrder = ui.problemsFileOrder,
-                onFileOrderChange = { ui.problemsFileOrder = it },
+                onFileOrderChange = { onEvent(IdeEvent.Panel.ProblemsFileOrderChanged(it)) },
             )
         }
         if (ui.todoOpen) {
             TodoPanel(
                 items = todoItems,
                 onJump = onJumpToProblem,
-                onClose = { ui.todoOpen = false },
+                onClose = { onEvent(IdeEvent.Panel.CloseTodo) },
                 height = ui.todoHeight,
-                onResizeDelta = { ui.todoHeight = (ui.todoHeight + it).coerceIn(80.dp, 600.dp) },
+                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTodo(it)) },
                 collapsedKeys = ui.todoCollapsed,
-                onCollapsedKeysChange = { ui.todoCollapsed = it },
+                onCollapsedKeysChange = { onEvent(IdeEvent.Panel.TodoCollapsedChanged(it)) },
                 fileOrder = ui.todoFileOrder,
-                onFileOrderChange = { ui.todoFileOrder = it },
+                onFileOrderChange = { onEvent(IdeEvent.Panel.TodoFileOrderChanged(it)) },
             )
         }
         if (referencesState != null) {
@@ -463,26 +465,26 @@ internal fun IdeMainLayout(
                 onJump = onJumpToProblem,
                 onClose = onReferencesClose,
                 height = ui.referencesHeight,
-                onResizeDelta = { ui.referencesHeight = (ui.referencesHeight + it).coerceIn(80.dp, 600.dp) },
+                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeReferences(it)) },
                 linePreviewFor = linePreviewFor,
             )
         }
         if (ui.terminalOpen) {
             TerminalPanel(
                 manager = terminalManager,
-                onPanelClose = { ui.terminalOpen = false },
+                onPanelClose = { onEvent(IdeEvent.Panel.CloseTerminal) },
                 height = ui.terminalHeight,
-                onResizeDelta = { ui.terminalHeight = (ui.terminalHeight + it).coerceIn(120.dp, 600.dp) },
+                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTerminal(it)) },
             )
         }
         if (ui.outputOpen) {
             OutputPanel(
                 state = outputState,
-                onClose = { ui.outputOpen = false },
+                onClose = { onEvent(IdeEvent.Panel.CloseOutput) },
                 onClear = onOutputClear,
                 onStop = onStopRun,
                 height = ui.outputHeight,
-                onResizeDelta = { ui.outputHeight = (ui.outputHeight + it).coerceIn(120.dp, 1200.dp) },
+                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeOutput(it)) },
             )
         }
     }

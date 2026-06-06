@@ -4,35 +4,63 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import page.app.CreateEntryDialogState
 import page.app.DeleteEntryDialogState
 import page.app.RenameEntryDialogState
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
+import page.app.mvi.IdeStore
 import page.editor.IndexedFile
 import page.lsp.DocumentSymbolEntry
 
-internal class LayoutUiState {
-    var sidebarWidth: Dp by mutableStateOf(260.dp)
+internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
+    var sidebarWidth: Dp
+        get() = store.layout.sidebarWidth
+        set(value) = store.updateLayout { it.copy(sidebarWidth = value) }
 
-    var problemsOpen by mutableStateOf(false)
-    var problemsHeight: Dp by mutableStateOf(220.dp)
-    var problemsCollapsed by mutableStateOf(emptySet<String>())
-    var problemsFileOrder by mutableStateOf(emptyList<String>())
+    var problemsOpen: Boolean
+        get() = store.layout.problemsOpen
+        set(value) = store.updateLayout { it.copy(problemsOpen = value) }
+    var problemsHeight: Dp
+        get() = store.layout.problemsHeight
+        set(value) = store.updateLayout { it.copy(problemsHeight = value) }
+    var problemsCollapsed: Set<String>
+        get() = store.layout.problemsCollapsed
+        set(value) = store.updateLayout { it.copy(problemsCollapsed = value) }
+    var problemsFileOrder: List<String>
+        get() = store.layout.problemsFileOrder
+        set(value) = store.updateLayout { it.copy(problemsFileOrder = value) }
 
-    var todoOpen by mutableStateOf(false)
-    var todoHeight: Dp by mutableStateOf(220.dp)
-    var todoCollapsed by mutableStateOf(emptySet<String>())
-    var todoFileOrder by mutableStateOf(emptyList<String>())
+    var todoOpen: Boolean
+        get() = store.layout.todoOpen
+        set(value) = store.updateLayout { it.copy(todoOpen = value) }
+    var todoHeight: Dp
+        get() = store.layout.todoHeight
+        set(value) = store.updateLayout { it.copy(todoHeight = value) }
+    var todoCollapsed: Set<String>
+        get() = store.layout.todoCollapsed
+        set(value) = store.updateLayout { it.copy(todoCollapsed = value) }
+    var todoFileOrder: List<String>
+        get() = store.layout.todoFileOrder
+        set(value) = store.updateLayout { it.copy(todoFileOrder = value) }
 
-    var terminalOpen by mutableStateOf(false)
-    var terminalHeight: Dp by mutableStateOf(240.dp)
+    var terminalOpen: Boolean
+        get() = store.layout.terminalOpen
+        set(value) = store.updateLayout { it.copy(terminalOpen = value) }
+    var terminalHeight: Dp
+        get() = store.layout.terminalHeight
+        set(value) = store.updateLayout { it.copy(terminalHeight = value) }
 
-    var outputOpen by mutableStateOf(false)
-    var outputHeight: Dp by mutableStateOf(defaultOutputHeight())
+    var outputOpen: Boolean
+        get() = store.layout.outputOpen
+        set(value) = store.updateLayout { it.copy(outputOpen = value) }
+    var outputHeight: Dp
+        get() = store.layout.outputHeight
+        set(value) = store.updateLayout { it.copy(outputHeight = value) }
 
-    var referencesHeight: Dp by mutableStateOf(220.dp)
+    var referencesHeight: Dp
+        get() = store.layout.referencesHeight
+        set(value) = store.updateLayout { it.copy(referencesHeight = value) }
 
     var createDialog: CreateEntryDialogState? by mutableStateOf(null)
     var renameDialog: RenameEntryDialogState? by mutableStateOf(null)
@@ -46,11 +74,4 @@ internal class LayoutUiState {
     var documentSymbolList by mutableStateOf<List<DocumentSymbolEntry>>(emptyList())
     var documentSymbolUri by mutableStateOf("")
     var workspaceSymbolOpen by mutableStateOf(false)
-}
-
-private fun defaultOutputHeight(): Dp {
-    if (java.awt.GraphicsEnvironment.isHeadless()) return 480.dp
-    return (java.awt.Toolkit.getDefaultToolkit().screenSize.height / 2f)
-        .coerceIn(240f, 1200f)
-        .dp
 }
