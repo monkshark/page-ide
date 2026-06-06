@@ -1,10 +1,14 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.dp
+import page.app.EditorScrollSnapshot
+import page.app.PaneSide
+import page.editor.SplitPaneState
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ReducerTest {
@@ -145,5 +149,65 @@ class ReducerTest {
         val next = reduce(s, IdeEvent.Tree.BumpRevision)
         assertEquals(s.layout, next.layout)
         assertEquals(s.chrome, next.chrome)
+    }
+
+    @Test
+    fun `focus pane sets focused side`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.EditorLayout.FocusPane(PaneSide.SECONDARY))
+        assertEquals(PaneSide.SECONDARY, next.editorLayout.focusedPane)
+    }
+
+    @Test
+    fun `disabling split forces focus back to primary`() {
+        val split = reduce(AppState(), IdeEvent.EditorLayout.SetSplitEnabled(true))
+        val focused = reduce(split, IdeEvent.EditorLayout.FocusPane(PaneSide.SECONDARY))
+        assertTrue(focused.editorLayout.splitEnabled)
+        assertEquals(PaneSide.SECONDARY, focused.editorLayout.focusedPane)
+        val collapsed = reduce(focused, IdeEvent.EditorLayout.SetSplitEnabled(false))
+        assertFalse(collapsed.editorLayout.splitEnabled)
+        assertEquals(PaneSide.PRIMARY, collapsed.editorLayout.focusedPane)
+    }
+
+    @Test
+    fun `split state change replaces ratio`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.EditorLayout.SplitStateChanged(SplitPaneState(ratio = 0.3f)))
+        assertEquals(0.3f, next.editorLayout.splitState.ratio)
+    }
+
+    @Test
+    fun `fold change adds and clears entries`() {
+        val s = AppState()
+        val added = reduce(s, IdeEvent.EditorLayout.FoldChanged("a.kt", setOf(1, 2)))
+        assertEquals(setOf(1, 2), added.editorLayout.foldByPath["a.kt"])
+        val cleared = reduce(added, IdeEvent.EditorLayout.FoldChanged("a.kt", emptySet()))
+        assertFalse("a.kt" in cleared.editorLayout.foldByPath)
+    }
+
+    @Test
+    fun `editor scroll change records and dedups`() {
+        val s = AppState()
+        val p = Path.of("a.kt")
+        val snap = EditorScrollSnapshot(vertical = 10, horizontal = 0)
+        val recorded = reduce(s, IdeEvent.EditorScroll.Changed(p, snap))
+        assertEquals(snap, recorded.editorScroll.scrollByPath[p])
+        val again = reduce(recorded, IdeEvent.EditorScroll.Changed(p, snap))
+        assertSame(recorded.editorScroll.scrollByPath, again.editorScroll.scrollByPath)
+    }
+
+    @Test
+    fun `editor scroll cleared removes entry`() {
+        val p = Path.of("a.kt")
+        val recorded = reduce(AppState(), IdeEvent.EditorScroll.Changed(p, EditorScrollSnapshot(5, 5)))
+        val cleared = reduce(recorded, IdeEvent.EditorScroll.Cleared(p))
+        assertFalse(p in cleared.editorScroll.scrollByPath)
+    }
+
+    @Test
+    fun `editor scroll change leaves editor layout slice value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.EditorScroll.Changed(Path.of("a.kt"), EditorScrollSnapshot(1, 1)))
+        assertEquals(s.editorLayout, next.editorLayout)
     }
 }

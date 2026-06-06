@@ -145,12 +145,12 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         PaneSide.PRIMARY -> undoTrackerPrimary
         PaneSide.SECONDARY -> undoTrackerSecondary
     }
-    val editorWorkspace = remember { EditorWorkspaceState(undoTracker = ::undoTracker) }
+    val ideStore = remember { IdeStore() }
+    val editorWorkspace = remember { EditorWorkspaceState(undoTracker = ::undoTracker, store = ideStore) }
     var primaryPane by editorWorkspace::primaryPane
     var secondaryPane by editorWorkspace::secondaryPane
     var focusedPane by editorWorkspace::focusedPane
     val appScope = rememberCoroutineScope()
-    val ideStore = remember { IdeStore() }
     val workspaceState = remember { WorkspaceState(appScope, ideStore) }
     var rootDir by workspaceState::rootDir
     var expanded by workspaceState::expanded
@@ -324,8 +324,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
 
     val onFoldChange: (Path, Set<Int>) -> Unit = { path, lines ->
-        val key = path.toString()
-        foldByPath = if (lines.isEmpty()) foldByPath - key else foldByPath + (key to lines)
+        onIdeEvent(IdeEvent.EditorLayout.FoldChanged(path.toString(), lines))
     }
     val foldedLinesFor: (Path?) -> Set<Int> = { p ->
         p?.let { foldByPath[it.toString()] } ?: emptySet()
@@ -590,7 +589,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     codeAction = app.codeActionPreviewBinding(),
                     editorScrollFor = { p -> editorScrollByPath[p] },
                     onEditorScrollChange = { p, snap ->
-                        editorScrollByPath = EditorScrollMemory.put(editorScrollByPath, p, snap)
+                        onIdeEvent(IdeEvent.EditorScroll.Changed(p, snap))
                     },
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settings = app.settingsBinding(),

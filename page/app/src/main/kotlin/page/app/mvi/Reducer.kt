@@ -1,11 +1,30 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.dp
+import page.app.EditorScrollMemory
+import page.app.PaneSide
 
 internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Panel -> state.copy(layout = reduceLayout(state.layout, event))
     is IdeEvent.Chrome -> state.copy(chrome = reduceChrome(state.chrome, event))
     is IdeEvent.Tree -> state.copy(tree = reduceTree(state.tree, event))
+    is IdeEvent.EditorLayout -> state.copy(editorLayout = reduceEditorLayout(state.editorLayout, event))
+    is IdeEvent.EditorScroll -> state.copy(editorScroll = reduceEditorScroll(state.editorScroll, event))
+}
+
+private fun reduceEditorLayout(s: EditorLayoutState, e: IdeEvent.EditorLayout): EditorLayoutState = when (e) {
+    is IdeEvent.EditorLayout.FocusPane -> s.copy(focusedPane = e.side)
+    is IdeEvent.EditorLayout.SetSplitEnabled ->
+        if (e.enabled) s.copy(splitEnabled = true)
+        else s.copy(splitEnabled = false, focusedPane = PaneSide.PRIMARY)
+    is IdeEvent.EditorLayout.SplitStateChanged -> s.copy(splitState = e.state)
+    is IdeEvent.EditorLayout.FoldChanged ->
+        s.copy(foldByPath = if (e.lines.isEmpty()) s.foldByPath - e.key else s.foldByPath + (e.key to e.lines))
+}
+
+private fun reduceEditorScroll(s: EditorScrollState, e: IdeEvent.EditorScroll): EditorScrollState = when (e) {
+    is IdeEvent.EditorScroll.Changed -> s.copy(scrollByPath = EditorScrollMemory.put(s.scrollByPath, e.path, e.snapshot))
+    is IdeEvent.EditorScroll.Cleared -> s.copy(scrollByPath = EditorScrollMemory.clear(s.scrollByPath, e.path))
 }
 
 private fun reduceTree(s: TreeState, e: IdeEvent.Tree): TreeState = when (e) {

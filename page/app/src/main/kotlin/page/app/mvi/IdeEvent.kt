@@ -1,6 +1,9 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
+import page.app.EditorScrollSnapshot
+import page.app.PaneSide
+import page.editor.SplitPaneState
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -42,5 +45,17 @@ internal sealed interface IdeEvent {
         data class ExpandedChanged(val paths: Set<Path>) : Tree
         data class FocusChanged(val focused: Boolean) : Tree
         data object BumpRevision : Tree
+    }
+
+    sealed interface EditorLayout : IdeEvent {
+        data class FocusPane(val side: PaneSide) : EditorLayout
+        data class SetSplitEnabled(val enabled: Boolean) : EditorLayout
+        data class SplitStateChanged(val state: SplitPaneState) : EditorLayout
+        data class FoldChanged(val key: String, val lines: Set<Int>) : EditorLayout
+    }
+
+    sealed interface EditorScroll : IdeEvent {
+        data class Changed(val path: Path, val snapshot: EditorScrollSnapshot) : EditorScroll
+        data class Cleared(val path: Path) : EditorScroll
     }
 }
