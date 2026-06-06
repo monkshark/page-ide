@@ -19,6 +19,11 @@ import page.app.state.HistoryActionsController
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.app.ui.CodeActionPreviewBinding
+import page.app.ui.EditorSearchActions
+import page.app.ui.FileTreePanelActions
+import page.app.ui.RunPanelBinding
+import page.app.ui.SettingsBinding
 import page.app.ui.editor.CommandPaletteController
 import page.app.ui.editor.EditorHistoryController
 import page.app.ui.editor.EditorSearchController
@@ -463,4 +468,90 @@ internal class AppController(
         closeSearch = { closeSearch(editorWorkspace.focusedPane) },
     )
     val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
+
+    fun fileTreePanelActions(): FileTreePanelActions = FileTreePanelActions(
+        onToggle = toggleExpanded,
+        onOpenFile = openInTab,
+        onCreateFileIn = onCreateFileIn,
+        onCreateFolderIn = onCreateFolderIn,
+        onRenameEntry = onRenameEntry,
+        onDeleteEntry = onDeleteEntry,
+        onDeleteEntries = onDeleteEntries,
+        onRevealInFiles = onRevealInFiles,
+        onCopyPath = onCopyPath,
+        onCopyRelativePath = onCopyRelativePath,
+        onPasteInto = onPasteInto,
+        onDropPlan = onDropPlanReceived,
+        onExternalDrop = onExternalDropReceived,
+        onDropRejected = { msg -> showDropResultToast(msg, DropResultToastTone.Warning, null) },
+        onUndoFileOp = onUndoFileOp,
+        canUndoFileOp = run {
+            appState.fileOpHistoryVersion
+            fileOpHistory.peek() != null
+        },
+        onTreeFocusChanged = { workspaceState.fileTreeFocused = it },
+        pendingTreeFocusTick = appState.pendingTreeFocusTick,
+    )
+
+    fun editorSearchActions(): EditorSearchActions = EditorSearchActions(
+        onQueryChange = onQueryChange,
+        onReplaceChange = onReplaceChange,
+        onToggleCase = onToggleCase,
+        onSearchNext = onSearchNext,
+        onSearchPrev = onSearchPrev,
+        onReplace = onReplace,
+        onReplaceAll = onReplaceAll,
+        onSearchClose = closeSearch,
+    )
+
+    fun runPanelBinding(): RunPanelBinding = RunPanelBinding(
+        runState = appState.runState,
+        onSelectRunConfig = { id -> appState.runState = appState.runState.select(id) },
+        onStartRun = startActiveRun,
+        onStopRun = stopActiveRun,
+        onOpenRunDialog = openRunDialog,
+        runIsRunning = outputState.running,
+        outputState = outputState,
+        onOutputClear = { outputState.clear() },
+    )
+
+    fun codeActionPreviewBinding(): CodeActionPreviewBinding = CodeActionPreviewBinding(
+        visible = appState.codeActionOpen,
+        actions = appState.codeActionList,
+        selected = appState.codeActionSelected,
+        onSelectedChange = {
+            appState.codeActionSelected = it.coerceIn(0, appState.codeActionList.lastIndex.coerceAtLeast(0))
+        },
+        uri = appState.codeActionUri,
+        text = appState.codeActionText,
+        onApply = { action ->
+            appState.codeActionOpen = false
+            if (action.isExecutable) {
+                applyCodeAction(action)
+            }
+            frameProvider()?.requestFocus()
+            appState.editorFocusVersion += 1
+        },
+        onDismiss = {
+            appState.codeActionOpen = false
+            frameProvider()?.requestFocus()
+            appState.editorFocusVersion += 1
+        },
+    )
+
+    fun settingsBinding(): SettingsBinding = SettingsBinding(
+        panelOpen = appState.settingsDialogOpen,
+        onApply = { updated ->
+            appState.pageSettings = updated
+            AppSettings.saveAutoSave(updated.autoSave)
+            AppSettings.saveEditor(updated.editor)
+            AppSettings.saveLsp(updated.lsp)
+            AppSettings.saveAutoInput(updated.autoInput)
+            AppSettings.saveUi(updated.ui)
+            AppSettings.saveRun(updated.run)
+            appState.palette = updated.ui.palette
+        },
+        onPanelClose = { appState.settingsDialogOpen = false },
+        onToggle = { appState.settingsDialogOpen = !appState.settingsDialogOpen },
+    )
 }

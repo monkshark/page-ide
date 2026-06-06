@@ -11,7 +11,10 @@ import page.editor.OpenTab
 import page.editor.TabBook
 import page.editor.UndoGroupTracker
 import page.language.LspRouter
+import page.runtime.CURRENT_FILE_ID
 import page.runtime.RunController
+import page.runtime.RunEvent
+import page.ui.GlassPalette
 import page.workspace.FileOpHistory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -190,5 +193,75 @@ class AppControllerTest {
         h.router = LspRouter(null, h.scope)
         h.controller.requestReferences(path, 0, 0, "sym")
         assertTrue(h.routerProviderCalls > afterFirst, "second call must re-consult the provider (swapped router)")
+    }
+
+    @Test
+    fun `settingsBinding onApply updates pageSettings and palette in memory`() {
+        val h = Harness()
+        val settingsDir = Files.createTempDirectory("appctl-settings")
+        val prior = System.getProperty("page.settings.dir")
+        System.setProperty("page.settings.dir", settingsDir.toString())
+        try {
+            val nextPalette = GlassPalette.values().first { it != h.appState.palette }
+            val updated = h.appState.pageSettings.copy(
+                ui = h.appState.pageSettings.ui.copy(palette = nextPalette),
+            )
+
+            h.controller.settingsBinding().onApply(updated)
+
+            assertEquals(updated, h.appState.pageSettings)
+            assertEquals(nextPalette, h.appState.palette)
+        } finally {
+            if (prior != null) System.setProperty("page.settings.dir", prior)
+            else System.clearProperty("page.settings.dir")
+            settingsDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `settingsBinding onToggle and onPanelClose flip the dialog flag`() {
+        val h = Harness()
+        assertFalse(h.appState.settingsDialogOpen)
+
+        h.controller.settingsBinding().onToggle()
+        assertTrue(h.appState.settingsDialogOpen)
+
+        h.controller.settingsBinding().onPanelClose()
+        assertFalse(h.appState.settingsDialogOpen)
+    }
+
+    @Test
+    fun `runPanelBinding selects a config and mirrors output running state`() {
+        val h = Harness()
+        h.controller.runPanelBinding().onSelectRunConfig(CURRENT_FILE_ID)
+        assertEquals(CURRENT_FILE_ID, h.appState.runState.activeId)
+
+        assertFalse(h.controller.runPanelBinding().runIsRunning)
+        h.outputState.onEvent(RunEvent.Started(command = "echo", args = emptyList(), workingDir = null))
+        assertTrue(h.controller.runPanelBinding().runIsRunning)
+    }
+
+    @Test
+    fun `codeActionPreviewBinding onDismiss hides panel and bumps editor focus`() {
+        val h = Harness()
+        h.appState.codeActionOpen = true
+        val before = h.appState.editorFocusVersion
+
+        h.controller.codeActionPreviewBinding().onDismiss()
+
+        assertFalse(h.appState.codeActionOpen)
+        assertEquals(before + 1, h.appState.editorFocusVersion)
+    }
+
+    @Test
+    fun `fileTreePanelActions reflects undo history and tree focus changes`() {
+        val h = Harness()
+        assertFalse(h.controller.fileTreePanelActions().canUndoFileOp, "empty history: nothing to undo")
+
+        h.fileOpHistory.push(FileOpHistory.RenameOp(Paths.get("/p/A.kt"), Paths.get("/p/B.kt")))
+        assertTrue(h.controller.fileTreePanelActions().canUndoFileOp, "after push: undo available")
+
+        h.controller.fileTreePanelActions().onTreeFocusChanged(true)
+        assertTrue(h.workspaceState.fileTreeFocused)
     }
 }

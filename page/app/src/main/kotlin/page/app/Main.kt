@@ -11,13 +11,8 @@ import page.app.state.EditorWorkspaceState
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
-import page.app.ui.CodeActionPreviewBinding
-import page.app.ui.EditorSearchActions
-import page.app.ui.FileTreePanelActions
 import page.app.ui.IdeMainLayout
 import page.app.ui.PaletteToast
-import page.app.ui.RunPanelBinding
-import page.app.ui.SettingsBinding
 import page.app.ui.dialog.FileTreeCreateDialog
 import page.app.ui.dialog.FileTreePasteDialog
 import page.app.ui.dialog.FileTreeRenameDeleteDialogs
@@ -516,24 +511,10 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    val openFile = app.openFile
-    val saveFile = app.saveFile
     val saveAllDirty = app.saveAllDirty
     val openFolder = app.openFolder
     val openFolderPath = app.openFolderPath
     val newFile = app.newFile
-    val onCreateFileIn = app.onCreateFileIn
-    val onCreateFolderIn = app.onCreateFolderIn
-    val onRevealInFiles = app.onRevealInFiles
-    val onCopyPath = app.onCopyPath
-    val onCopyRelativePath = app.onCopyRelativePath
-    val onRenameEntry = app.onRenameEntry
-    val onPasteInto = app.onPasteInto
-    val showDropResultToast = app.showDropResultToast
-    val onDropPlanReceived = app.onDropPlanReceived
-    val onExternalDropReceived = app.onExternalDropReceived
-    val onDeleteEntry = app.onDeleteEntry
-    val onDeleteEntries = app.onDeleteEntries
     val remapTreeStateAfterRename = app.remapTreeStateAfterRename
     val remapTabsAfterRename = app.remapTabsAfterRename
     val readFileTextWithTabs = app.readFileTextWithTabs
@@ -542,20 +523,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val applyCodeAction = app.applyCodeAction
     val applyFolderPackageSync = app.applyFolderPackageSync
     val fileTreeActionExecutor = app.fileTreeActionExecutor
-    val toggleExpanded = app.toggleExpanded
     val isUnsavedText = app.isUnsavedText
     val closeTabsUnderPath = app.closeTabsUnderPath
     val closeTabAt = app.closeTabAt
     val requestCloseTab = app.requestCloseTab
     val requestExit = app.requestExit
-    val closeSearch = app.closeSearch
-    val onQueryChange = app.onQueryChange
-    val onToggleCase = app.onToggleCase
-    val onSearchNext = app.onSearchNext
-    val onSearchPrev = app.onSearchPrev
-    val onReplaceChange = app.onReplaceChange
-    val onReplace = app.onReplace
-    val onReplaceAll = app.onReplaceAll
     val tabContextActionsFor = app.tabContextActionsFor
     val openDocumentSymbol = app.openDocumentSymbol
     val openWorkspaceSymbol = app.openWorkspaceSymbol
@@ -689,57 +661,15 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     ui = layoutUiState,
                     lspRouter = currentLspRouter,
                     onCloseTab = { side, index -> requestCloseTab(side, index) },
-                    fileTree = FileTreePanelActions(
-                        onToggle = toggleExpanded,
-                        onOpenFile = openInTab,
-                        onCreateFileIn = onCreateFileIn,
-                        onCreateFolderIn = onCreateFolderIn,
-                        onRenameEntry = onRenameEntry,
-                        onDeleteEntry = onDeleteEntry,
-                        onDeleteEntries = onDeleteEntries,
-                        onRevealInFiles = onRevealInFiles,
-                        onCopyPath = onCopyPath,
-                        onCopyRelativePath = onCopyRelativePath,
-                        onPasteInto = onPasteInto,
-                        onDropPlan = onDropPlanReceived,
-                        onExternalDrop = onExternalDropReceived,
-                        onDropRejected = { msg ->
-                            showDropResultToast(msg, DropResultToastTone.Warning, null)
-                        },
-                        onUndoFileOp = onUndoFileOp,
-                        canUndoFileOp = run {
-                            fileOpHistoryVersion
-                            fileOpHistory.peek() != null
-                        },
-                        onTreeFocusChanged = { fileTreeFocused = it },
-                        pendingTreeFocusTick = pendingTreeFocusTick,
-                    ),
-                    search = EditorSearchActions(
-                        onQueryChange = onQueryChange,
-                        onReplaceChange = onReplaceChange,
-                        onToggleCase = onToggleCase,
-                        onSearchNext = onSearchNext,
-                        onSearchPrev = onSearchPrev,
-                        onReplace = onReplace,
-                        onReplaceAll = onReplaceAll,
-                        onSearchClose = closeSearch,
-                    ),
+                    fileTree = app.fileTreePanelActions(),
+                    search = app.editorSearchActions(),
                     onWindowShortcut = handleShortcut,
                     onJumpToProblem = jumpToProblem,
                     onApplyRename = applyRename,
                     todoItems = todoItems,
                     terminalManager = terminalManager,
                     onTerminalToggle = toggleTerminal,
-                    run = RunPanelBinding(
-                        runState = runState,
-                        onSelectRunConfig = { id -> runState = runState.select(id) },
-                        onStartRun = startActiveRun,
-                        onStopRun = stopActiveRun,
-                        onOpenRunDialog = openRunDialog,
-                        runIsRunning = outputState.running,
-                        outputState = outputState,
-                        onOutputClear = { outputState.clear() },
-                    ),
+                    run = app.runPanelBinding(),
                     referencesState = referencesState,
                     onRequestReferences = requestReferences,
                     onReferencesClose = { referencesState = null },
@@ -747,49 +677,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     foldedLinesFor = foldedLinesFor,
                     onFoldChange = onFoldChange,
                     editorFocusVersion = editorFocusVersion,
-                    codeAction = CodeActionPreviewBinding(
-                        visible = codeActionOpen,
-                        actions = codeActionList,
-                        selected = codeActionSelected,
-                        onSelectedChange = {
-                            codeActionSelected = it.coerceIn(0, codeActionList.lastIndex.coerceAtLeast(0))
-                        },
-                        uri = codeActionUri,
-                        text = codeActionText,
-                        onApply = { action ->
-                            codeActionOpen = false
-                            if (action.isExecutable) {
-                                applyCodeAction(action)
-                            }
-                            frameRef.value?.requestFocus()
-                            editorFocusVersion += 1
-                        },
-                        onDismiss = {
-                            codeActionOpen = false
-                            frameRef.value?.requestFocus()
-                            editorFocusVersion += 1
-                        },
-                    ),
+                    codeAction = app.codeActionPreviewBinding(),
                     editorScrollFor = { p -> editorScrollByPath[p] },
                     onEditorScrollChange = { p, snap ->
                         editorScrollByPath = EditorScrollMemory.put(editorScrollByPath, p, snap)
                     },
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
-                    settings = SettingsBinding(
-                        panelOpen = settingsDialogOpen,
-                        onApply = { updated ->
-                            pageSettings = updated
-                            AppSettings.saveAutoSave(updated.autoSave)
-                            AppSettings.saveEditor(updated.editor)
-                            AppSettings.saveLsp(updated.lsp)
-                            AppSettings.saveAutoInput(updated.autoInput)
-                            AppSettings.saveUi(updated.ui)
-                            AppSettings.saveRun(updated.run)
-                            palette = updated.ui.palette
-                        },
-                        onPanelClose = { settingsDialogOpen = false },
-                        onToggle = { settingsDialogOpen = !settingsDialogOpen },
-                    ),
+                    settings = app.settingsBinding(),
                   )
                 }
                 if (findInFiles) {
