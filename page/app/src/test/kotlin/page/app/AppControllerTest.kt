@@ -37,6 +37,7 @@ class AppControllerTest {
         val fileOpHistory = FileOpHistory.Stack()
         val runController = RunController(scope) { }
         val outputState = OutputPanelState()
+        val todo = TodoController(null, scope)
 
         var router: LspRouter = LspRouter(null, scope)
         var routerProviderCalls = 0
@@ -59,6 +60,7 @@ class AppControllerTest {
                 routerProviderCalls++
                 router
             },
+            todoProvider = { todo },
             exitApplication = { exitCalled++ },
             frameProvider = { null },
             copyToClipboard = { clipboard.add(it) },
@@ -263,5 +265,45 @@ class AppControllerTest {
 
         h.controller.fileTreePanelActions().onTreeFocusChanged(true)
         assertTrue(h.workspaceState.fileTreeFocused)
+    }
+
+    @Test
+    fun `onActiveTabChanged syncs the pane editorValue to the active tab`() {
+        val h = Harness()
+        h.setPrimaryTabs(cleanTab(Paths.get("/p/A.kt")), editorText = "stale")
+        assertEquals("stale", h.editorWorkspace.primaryPane.editorValue.text)
+
+        h.controller.onActiveTabChanged(PaneSide.PRIMARY)
+
+        assertEquals("x", h.editorWorkspace.primaryPane.editorValue.text)
+    }
+
+    @Test
+    fun `onSplitEnabledChanged resets focus to primary only when split is off`() {
+        val h = Harness()
+
+        h.editorWorkspace.splitEnabled = true
+        h.editorWorkspace.focusedPane = PaneSide.SECONDARY
+        h.controller.onSplitEnabledChanged()
+        assertEquals(PaneSide.SECONDARY, h.editorWorkspace.focusedPane, "split on: focus untouched")
+
+        h.editorWorkspace.splitEnabled = false
+        h.controller.onSplitEnabledChanged()
+        assertEquals(PaneSide.PRIMARY, h.editorWorkspace.focusedPane, "split off: focus snaps to primary")
+    }
+
+    @Test
+    fun `onFileDialogVisibilityChanged bumps tree focus tick once per open-close cycle`() {
+        val h = Harness()
+        val before = h.appState.pendingTreeFocusTick
+
+        h.controller.onFileDialogVisibilityChanged(false)
+        assertEquals(before, h.appState.pendingTreeFocusTick, "close without prior open: no bump")
+
+        h.controller.onFileDialogVisibilityChanged(true)
+        assertEquals(before, h.appState.pendingTreeFocusTick, "open: not yet")
+
+        h.controller.onFileDialogVisibilityChanged(false)
+        assertEquals(before + 1, h.appState.pendingTreeFocusTick, "close after open: exactly one bump")
     }
 }

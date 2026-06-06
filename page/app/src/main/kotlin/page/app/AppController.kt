@@ -58,12 +58,14 @@ internal class AppController(
     private val undoTracker: (PaneSide) -> UndoGroupTracker,
     private val largeCopyScope: CoroutineScope,
     private val lspRouterProvider: () -> LspRouter,
+    private val todoProvider: () -> TodoController,
     private val exitApplication: () -> Unit,
     private val frameProvider: () -> java.awt.Frame?,
     private val copyToClipboard: (String) -> Unit,
     private val withFileTreeWatcherClosed: (() -> Unit) -> Unit,
 ) {
     private val router: LspRouter get() = lspRouterProvider()
+    private val todo: TodoController get() = todoProvider()
 
     private fun paneOf(side: PaneSide): EditorPaneState = editorWorkspace.paneOf(side)
 
@@ -554,4 +556,56 @@ internal class AppController(
         onPanelClose = { appState.settingsDialogOpen = false },
         onToggle = { appState.settingsDialogOpen = !appState.settingsDialogOpen },
     )
+
+    fun onActiveTabChanged(side: PaneSide) {
+        val pane = paneOf(side)
+        val active = pane.book.active
+        val newValue = if (active != null) {
+            val caret = active.caret.coerceIn(0, active.text.length)
+            TextFieldValue(active.text, TextRange(caret))
+        } else TextFieldValue("")
+        undoTracker(side).reset()
+        setPane(
+            side,
+            pane.copy(
+                editorValue = newValue,
+                search = pane.search?.retarget(newValue.text),
+            ),
+        )
+    }
+
+    fun onSplitEnabledChanged() {
+        if (!editorWorkspace.splitEnabled) editorWorkspace.focusedPane = PaneSide.PRIMARY
+    }
+
+    fun onFileDialogVisibilityChanged(anyOpen: Boolean) {
+        if (anyOpen) {
+            appState.hadFileDialog = true
+        } else if (appState.hadFileDialog) {
+            appState.hadFileDialog = false
+            appState.pendingTreeFocusTick++
+        }
+    }
+
+    fun onActivePathChanged(path: Path?) {
+        if (path == null) return
+        val ctrl = router.controllerFor(path)
+        val langId = router.languageIdFor(path)
+        if (ctrl != null && langId != null) {
+            ctrl.didOpen(path, langId, focused().editorValue.text)
+        }
+    }
+
+    fun onActiveTextChanged(path: Path?, text: String) {
+        if (path == null) return
+        router.controllerFor(path)?.didChange(path, text)
+        todo.updateFile(path, text)
+    }
+
+    fun installApplyEditHandler(post: (() -> Unit) -> Unit) {
+        router.applyEditHandler = { edit ->
+            post { applyRename(edit) }
+            true
+        }
+    }
 }

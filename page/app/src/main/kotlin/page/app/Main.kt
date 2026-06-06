@@ -207,7 +207,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var fileOpHistoryVersion by appState::fileOpHistoryVersion
     var fileTreeFocused by workspaceState::fileTreeFocused
     var fileOpConfirm: FileOpConfirmState? by appState::fileOpConfirm
-    var pendingTreeFocusTick by appState::pendingTreeFocusTick
     var pageSettings by appState::pageSettings
     var palette by appState::palette
     LaunchedEffect(pageSettings.ui.sidebarWidth) {
@@ -231,6 +230,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val currentLspRouter by rememberUpdatedState(lspRouter)
     registerAllBackends()
     val todo = rememberTodoController(workspaceRoot = rootDir)
+    val currentTodo by rememberUpdatedState(todo)
     val todoItems by todo.items
 
     fun paneOf(side: PaneSide): EditorPaneState = editorWorkspace.paneOf(side)
@@ -245,46 +245,53 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
 
     fun focused(): EditorPaneState = editorWorkspace.focused()
 
-    LaunchedEffect(primaryPane.book.activeIndex, primaryPane.book.tabs.size) {
-        val active = primaryPane.book.active
-        val newValue = if (active != null) {
-            val caret = active.caret.coerceIn(0, active.text.length)
-            TextFieldValue(active.text, TextRange(caret))
-        } else TextFieldValue("")
-        undoTrackerPrimary.reset()
-        primaryPane = primaryPane.copy(
-            editorValue = newValue,
-            search = primaryPane.search?.retarget(newValue.text),
+    val fileTreeWatcher = rememberFileTreeWatcherController()
+    fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { treeRevision++ })
+    val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block -> fileTreeWatcher.withClosed(block) }
+    val copyToClipboard: (String) -> Unit = { text ->
+        runCatching {
+            val selection = java.awt.datatransfer.StringSelection(text)
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
+        }
+    }
+    val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
+    val app = remember {
+        AppController(
+            editorWorkspace = editorWorkspace,
+            workspaceState = workspaceState,
+            layoutUiState = layoutUiState,
+            appState = appState,
+            fileOpHistory = fileOpHistory,
+            terminalManagerProvider = { terminalManager },
+            runController = runController,
+            outputState = outputState,
+            undoTracker = ::undoTracker,
+            largeCopyScope = largeCopyScope,
+            lspRouterProvider = { currentLspRouter },
+            todoProvider = { currentTodo },
+            exitApplication = { exitApplication() },
+            frameProvider = { frameRef.value },
+            copyToClipboard = copyToClipboard,
+            withFileTreeWatcherClosed = withFileTreeWatcherClosed,
         )
+    }
+
+    LaunchedEffect(primaryPane.book.activeIndex, primaryPane.book.tabs.size) {
+        app.onActiveTabChanged(PaneSide.PRIMARY)
     }
 
     LaunchedEffect(secondaryPane.book.activeIndex, secondaryPane.book.tabs.size) {
-        val active = secondaryPane.book.active
-        val newValue = if (active != null) {
-            val caret = active.caret.coerceIn(0, active.text.length)
-            TextFieldValue(active.text, TextRange(caret))
-        } else TextFieldValue("")
-        undoTrackerSecondary.reset()
-        secondaryPane = secondaryPane.copy(
-            editorValue = newValue,
-            search = secondaryPane.search?.retarget(newValue.text),
-        )
+        app.onActiveTabChanged(PaneSide.SECONDARY)
     }
 
     LaunchedEffect(splitEnabled) {
-        if (!splitEnabled) focusedPane = PaneSide.PRIMARY
+        app.onSplitEnabledChanged()
     }
 
     val anyFileDialogOpen = createDialog != null || renameDialog != null || deleteDialog != null ||
         pasteDialog != null || largeCopyState != null || fileOpConfirm != null
-    var hadFileDialog by appState::hadFileDialog
     LaunchedEffect(anyFileDialogOpen) {
-        if (anyFileDialogOpen) {
-            hadFileDialog = true
-        } else if (hadFileDialog) {
-            hadFileDialog = false
-            pendingTreeFocusTick++
-        }
+        app.onFileDialogVisibilityChanged(anyFileDialogOpen)
     }
 
     var sessionLoaded by appState::sessionLoaded
@@ -449,55 +456,15 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             ),
         )
     }
-    val fileTreeWatcher = rememberFileTreeWatcherController()
-    fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { treeRevision++ })
-    val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block -> fileTreeWatcher.withClosed(block) }
     val focusedActivePath = focused().book.active?.path
     val focusedActiveText = focused().editorValue.text
     LaunchedEffect(focusedActivePath) {
-        val path = focusedActivePath
-        if (path != null) {
-            val ctrl = currentLspRouter.controllerFor(path)
-            val langId = currentLspRouter.languageIdFor(path)
-            if (ctrl != null && langId != null) {
-                ctrl.didOpen(path, langId, focused().editorValue.text)
-            }
-        }
+        app.onActivePathChanged(focusedActivePath)
     }
     LaunchedEffect(focusedActivePath, focusedActiveText) {
-        val path = focusedActivePath
-        if (path != null) {
-            currentLspRouter.controllerFor(path)?.didChange(path, focusedActiveText)
-        }
-        if (path != null) todo.updateFile(path, focusedActiveText)
+        app.onActiveTextChanged(focusedActivePath, focusedActiveText)
     }
 
-    val copyToClipboard: (String) -> Unit = { text ->
-        runCatching {
-            val selection = java.awt.datatransfer.StringSelection(text)
-            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
-        }
-    }
-    val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
-    val app = remember {
-        AppController(
-            editorWorkspace = editorWorkspace,
-            workspaceState = workspaceState,
-            layoutUiState = layoutUiState,
-            appState = appState,
-            fileOpHistory = fileOpHistory,
-            terminalManagerProvider = { terminalManager },
-            runController = runController,
-            outputState = outputState,
-            undoTracker = ::undoTracker,
-            largeCopyScope = largeCopyScope,
-            lspRouterProvider = { currentLspRouter },
-            exitApplication = { exitApplication() },
-            frameProvider = { frameRef.value },
-            copyToClipboard = copyToClipboard,
-            withFileTreeWatcherClosed = withFileTreeWatcherClosed,
-        )
-    }
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
     val onReplaceInFiles = app.onReplaceInFiles
@@ -505,10 +472,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val requestReferences = app.requestReferences
     val applyRename = app.applyRename
     LaunchedEffect(lspRouter) {
-        lspRouter.applyEditHandler = { edit ->
-            java.awt.EventQueue.invokeLater { applyRename(edit) }
-            true
-        }
+        app.installApplyEditHandler { block -> java.awt.EventQueue.invokeLater(block) }
     }
 
     val saveAllDirty = app.saveAllDirty
