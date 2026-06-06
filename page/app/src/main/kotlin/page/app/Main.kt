@@ -11,6 +11,10 @@ import page.app.state.EditorWorkspaceState
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.app.mvi.IdeDispatcher
+import page.app.mvi.IdeEffectHandler
+import page.app.mvi.IdeEvent
+import page.app.mvi.IdeStore
 import page.app.ui.IdeMainLayout
 import page.app.ui.PaletteToast
 import page.app.ui.dialog.FileTreeCreateDialog
@@ -152,7 +156,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var treeSelection by workspaceState::treeSelection
     var treeRevision by workspaceState::treeRevision
     var editorScrollByPath by editorWorkspace::editorScrollByPath
-    val layoutUiState = remember { LayoutUiState() }
+    val ideStore = remember { IdeStore() }
+    val layoutUiState = remember { LayoutUiState(ideStore) }
+    val onIdeEvent = remember { IdeDispatcher(ideStore, IdeEffectHandler()).onEvent }
     val appState = remember { IdeAppState() }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
     var pendingClose: PendingClose? by appState::pendingClose
@@ -562,6 +568,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     workspace = workspaceState,
                     editor = editorWorkspace,
                     ui = layoutUiState,
+                    onEvent = onIdeEvent,
                     lspRouter = currentLspRouter,
                     onCloseTab = { side, index -> requestCloseTab(side, index) },
                     fileTree = app.fileTreePanelActions(),
