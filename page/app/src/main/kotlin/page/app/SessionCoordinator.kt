@@ -1,0 +1,93 @@
+package page.app
+
+import androidx.compose.ui.unit.dp
+import page.app.state.EditorWorkspaceState
+import page.app.state.LayoutUiState
+import page.app.state.WorkspaceState
+import page.editor.SplitOrientation
+import page.editor.SplitPaneState
+import page.runtime.TerminalManager
+import java.nio.file.Path
+
+internal class SessionCoordinator(
+    private val editorWorkspace: EditorWorkspaceState,
+    private val layoutUiState: LayoutUiState,
+    private val workspaceState: WorkspaceState,
+    private val terminalManagerProvider: () -> TerminalManager,
+) {
+    private val terminalManager: TerminalManager get() = terminalManagerProvider()
+
+    fun restore(root: Path) {
+        val session = runCatching { SessionStore.load(root) }.getOrNull()
+        if (session == null) {
+            editorWorkspace.foldByPath = emptyMap()
+            return
+        }
+        editorWorkspace.primaryPane = editorWorkspace.primaryPane.copy(book = restoreTabBook(session.primary))
+        editorWorkspace.secondaryPane = editorWorkspace.secondaryPane.copy(book = restoreTabBook(session.secondary))
+        editorWorkspace.focusedPane = runCatching { PaneSide.valueOf(session.focusedPane) }
+            .getOrDefault(PaneSide.PRIMARY)
+        editorWorkspace.splitEnabled = session.splitEnabled
+        editorWorkspace.splitOrientation = runCatching { SplitOrientation.valueOf(session.splitOrientation) }
+            .getOrDefault(SplitOrientation.HORIZONTAL)
+        editorWorkspace.splitState = SplitPaneState(ratio = session.splitRatio.coerceIn(0.1f, 0.9f))
+        layoutUiState.sidebarWidth = session.sidebarWidth.coerceIn(160f, 600f).dp
+        layoutUiState.problemsOpen = session.problemsOpen
+        layoutUiState.problemsHeight = session.problemsHeight.coerceIn(120f, 600f).dp
+        layoutUiState.problemsCollapsed = session.problemsCollapsed.toSet()
+        layoutUiState.problemsFileOrder = session.problemsFileOrder
+        layoutUiState.todoOpen = session.todoOpen
+        layoutUiState.todoHeight = session.todoHeight.coerceIn(120f, 600f).dp
+        layoutUiState.todoCollapsed = session.todoCollapsed.toSet()
+        layoutUiState.todoFileOrder = session.todoFileOrder
+        layoutUiState.terminalOpen = session.terminalOpen
+        layoutUiState.terminalHeight = session.terminalHeight.coerceIn(120f, 600f).dp
+        layoutUiState.outputOpen = session.outputOpen
+        layoutUiState.outputHeight = session.outputHeight.coerceIn(120f, 1200f).dp
+        if (session.terminalTabs.isNotEmpty()) {
+            terminalManager.restoreFrom(
+                names = session.terminalTabs.map { it.name },
+                activeIndex = session.terminalActiveIndex,
+                autoStart = true,
+            )
+        }
+        editorWorkspace.foldByPath = session.foldedStartLinesByPath.mapValues { it.value.toSet() }
+        val restoredExpanded = restoreExpandedDirs(session.expandedDirs)
+        if (restoredExpanded.isNotEmpty()) workspaceState.expanded = restoredExpanded
+        editorWorkspace.editorScrollByPath = session.editorScrollByPath
+            .mapNotNull { (s, snap) ->
+                val p = runCatching { Path.of(s) }.getOrNull() ?: return@mapNotNull null
+                p to EditorScrollSnapshot(vertical = snap.vertical, horizontal = snap.horizontal)
+            }
+            .toMap()
+    }
+
+    fun snapshot(): SessionFile = SessionFile(
+        primary = paneSnapshot(editorWorkspace.primaryPane),
+        secondary = paneSnapshot(editorWorkspace.secondaryPane),
+        focusedPane = editorWorkspace.focusedPane.name,
+        splitEnabled = editorWorkspace.splitEnabled,
+        splitOrientation = editorWorkspace.splitOrientation.name,
+        splitRatio = editorWorkspace.splitState.ratio,
+        sidebarWidth = layoutUiState.sidebarWidth.value,
+        problemsOpen = layoutUiState.problemsOpen,
+        problemsHeight = layoutUiState.problemsHeight.value,
+        problemsCollapsed = layoutUiState.problemsCollapsed.toList().sorted(),
+        problemsFileOrder = layoutUiState.problemsFileOrder,
+        todoOpen = layoutUiState.todoOpen,
+        todoHeight = layoutUiState.todoHeight.value,
+        todoCollapsed = layoutUiState.todoCollapsed.toList().sorted(),
+        todoFileOrder = layoutUiState.todoFileOrder,
+        terminalOpen = layoutUiState.terminalOpen,
+        terminalHeight = layoutUiState.terminalHeight.value,
+        terminalTabs = terminalManager.snapshotNames().map { SessionTerminalTab(name = it) },
+        terminalActiveIndex = terminalManager.activeIndex(),
+        outputOpen = layoutUiState.outputOpen,
+        outputHeight = layoutUiState.outputHeight.value,
+        foldedStartLinesByPath = editorWorkspace.foldByPath.mapValues { it.value.toList().sorted() },
+        expandedDirs = workspaceState.expanded.map { it.toString() }.sorted(),
+        editorScrollByPath = editorWorkspace.editorScrollByPath
+            .mapKeys { it.key.toString() }
+            .mapValues { SessionScrollSnapshot(vertical = it.value.vertical, horizontal = it.value.horizontal) },
+    )
+}
