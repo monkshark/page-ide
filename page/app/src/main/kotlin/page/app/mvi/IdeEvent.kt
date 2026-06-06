@@ -1,6 +1,7 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
+import java.nio.file.Path
 
 internal sealed interface IdeEvent {
 
@@ -34,5 +35,12 @@ internal sealed interface IdeEvent {
         data class ProblemsFileOrderChanged(val order: List<String>) : Panel
         data class TodoCollapsedChanged(val keys: Set<String>) : Panel
         data class TodoFileOrderChanged(val order: List<String>) : Panel
+    }
+
+    sealed interface Tree : IdeEvent {
+        data class SelectionChanged(val paths: Set<Path>) : Tree
+        data class ExpandedChanged(val paths: Set<Path>) : Tree
+        data class FocusChanged(val focused: Boolean) : Tree
+        data object BumpRevision : Tree
     }
 }

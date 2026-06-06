@@ -150,13 +150,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var secondaryPane by editorWorkspace::secondaryPane
     var focusedPane by editorWorkspace::focusedPane
     val appScope = rememberCoroutineScope()
-    val workspaceState = remember { WorkspaceState(appScope) }
+    val ideStore = remember { IdeStore() }
+    val workspaceState = remember { WorkspaceState(appScope, ideStore) }
     var rootDir by workspaceState::rootDir
     var expanded by workspaceState::expanded
     var treeSelection by workspaceState::treeSelection
     var treeRevision by workspaceState::treeRevision
     var editorScrollByPath by editorWorkspace::editorScrollByPath
-    val ideStore = remember { IdeStore() }
     val layoutUiState = remember { LayoutUiState(ideStore) }
     val onIdeEvent = remember { IdeDispatcher(ideStore, IdeEffectHandler()).onEvent }
     val appState = remember { IdeAppState(ideStore) }
@@ -251,7 +251,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     fun focused(): EditorPaneState = editorWorkspace.focused()
 
     val fileTreeWatcher = rememberFileTreeWatcherController()
-    fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { treeRevision++ })
+    fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { onIdeEvent(IdeEvent.Tree.BumpRevision) })
     val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block -> fileTreeWatcher.withClosed(block) }
     val copyToClipboard: (String) -> Unit = { text ->
         runCatching {

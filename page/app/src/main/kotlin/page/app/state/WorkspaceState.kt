@@ -8,16 +8,26 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import page.app.mvi.IdeStore
 import java.nio.file.Path
 
-class WorkspaceState(
+internal class WorkspaceState(
     private val scope: CoroutineScope,
+    private val store: IdeStore = IdeStore(),
 ) {
     var rootDir by mutableStateOf<Path?>(null)
-    var expanded by mutableStateOf(emptySet<Path>())
-    var treeSelection by mutableStateOf(emptySet<Path>())
-    var treeRevision by mutableStateOf(0)
-    var fileTreeFocused by mutableStateOf(false)
+    var expanded: Set<Path>
+        get() = store.tree.expanded
+        set(value) = store.updateTree { it.copy(expanded = value) }
+    var treeSelection: Set<Path>
+        get() = store.tree.selection
+        set(value) = store.updateTree { it.copy(selection = value) }
+    var treeRevision: Int
+        get() = store.tree.revision
+        set(value) = store.updateTree { it.copy(revision = value) }
+    var fileTreeFocused: Boolean
+        get() = store.tree.focused
+        set(value) = store.updateTree { it.copy(focused = value) }
 
     private var persistenceLaunched = false
 

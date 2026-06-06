@@ -1,6 +1,7 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.dp
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -107,5 +108,42 @@ class ReducerTest {
         val s = AppState()
         val next = reduce(s, IdeEvent.Chrome.OpenSettings)
         assertEquals(s.layout, next.layout)
+    }
+
+    @Test
+    fun `tree selection and expansion replace sets`() {
+        val s = AppState()
+        val a = Path.of("a")
+        val b = Path.of("b")
+        val selected = reduce(s, IdeEvent.Tree.SelectionChanged(setOf(a, b)))
+        assertEquals(setOf(a, b), selected.tree.selection)
+        val expanded = reduce(selected, IdeEvent.Tree.ExpandedChanged(setOf(a)))
+        assertEquals(setOf(a), expanded.tree.expanded)
+        assertEquals(setOf(a, b), expanded.tree.selection)
+    }
+
+    @Test
+    fun `tree focus change flips flag`() {
+        val s = AppState()
+        val focused = reduce(s, IdeEvent.Tree.FocusChanged(true))
+        assertTrue(focused.tree.focused)
+        val blurred = reduce(focused, IdeEvent.Tree.FocusChanged(false))
+        assertFalse(blurred.tree.focused)
+    }
+
+    @Test
+    fun `bump revision increments`() {
+        val s = AppState()
+        val r1 = reduce(s, IdeEvent.Tree.BumpRevision)
+        val r2 = reduce(r1, IdeEvent.Tree.BumpRevision)
+        assertEquals(2, r2.tree.revision)
+    }
+
+    @Test
+    fun `tree event leaves other slices value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Tree.BumpRevision)
+        assertEquals(s.layout, next.layout)
+        assertEquals(s.chrome, next.chrome)
     }
 }

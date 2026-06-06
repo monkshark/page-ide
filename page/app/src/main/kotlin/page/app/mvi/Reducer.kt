@@ -5,6 +5,14 @@ import androidx.compose.ui.unit.dp
 internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Panel -> state.copy(layout = reduceLayout(state.layout, event))
     is IdeEvent.Chrome -> state.copy(chrome = reduceChrome(state.chrome, event))
+    is IdeEvent.Tree -> state.copy(tree = reduceTree(state.tree, event))
+}
+
+private fun reduceTree(s: TreeState, e: IdeEvent.Tree): TreeState = when (e) {
+    is IdeEvent.Tree.SelectionChanged -> s.copy(selection = e.paths)
+    is IdeEvent.Tree.ExpandedChanged -> s.copy(expanded = e.paths)
+    is IdeEvent.Tree.FocusChanged -> s.copy(focused = e.focused)
+    IdeEvent.Tree.BumpRevision -> s.copy(revision = s.revision + 1)
 }
 
 private fun reduceChrome(s: ChromeState, e: IdeEvent.Chrome): ChromeState = when (e) {

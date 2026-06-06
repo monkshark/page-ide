@@ -2,6 +2,7 @@ package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import java.nio.file.Path
 
 internal data class LayoutState(
     val sidebarWidth: Dp = 260.dp,
@@ -28,9 +29,17 @@ internal data class ChromeState(
     val pendingTreeFocusTick: Int = 0,
 )
 
+internal data class TreeState(
+    val expanded: Set<Path> = emptySet(),
+    val selection: Set<Path> = emptySet(),
+    val revision: Int = 0,
+    val focused: Boolean = false,
+)
+
 internal data class AppState(
     val layout: LayoutState = LayoutState(),
     val chrome: ChromeState = ChromeState(),
+    val tree: TreeState = TreeState(),
 )
 
 private fun defaultOutputHeight(): Dp {

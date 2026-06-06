@@ -12,11 +12,15 @@ internal class IdeStore(initial: AppState = AppState()) {
     var chrome by mutableStateOf(initial.chrome)
         private set
 
-    fun snapshot(): AppState = AppState(layout = layout, chrome = chrome)
+    var tree by mutableStateOf(initial.tree)
+        private set
+
+    fun snapshot(): AppState = AppState(layout = layout, chrome = chrome, tree = tree)
 
     fun apply(next: AppState) {
         if (next.layout != layout) layout = next.layout
         if (next.chrome != chrome) chrome = next.chrome
+        if (next.tree != tree) tree = next.tree
     }
 
     fun updateLayout(transform: (LayoutState) -> LayoutState) {
@@ -27,6 +31,11 @@ internal class IdeStore(initial: AppState = AppState()) {
     fun updateChrome(transform: (ChromeState) -> ChromeState) {
         val next = transform(chrome)
         if (next != chrome) chrome = next
+    }
+
+    fun updateTree(transform: (TreeState) -> TreeState) {
+        val next = transform(tree)
+        if (next != tree) tree = next
     }
 }
 

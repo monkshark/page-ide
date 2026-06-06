@@ -237,7 +237,7 @@ internal fun IdeMainLayout(
                 expanded = workspace.expanded,
                 selection = workspace.treeSelection,
                 onToggle = onToggle,
-                onSelectionChange = { workspace.treeSelection = it },
+                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
                 onOpenFile = onOpenFile,
                 onCreateFile = onCreateFileIn,
                 onCreateFolder = onCreateFolderIn,
