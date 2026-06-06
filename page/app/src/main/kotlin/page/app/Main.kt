@@ -3,22 +3,11 @@ package page.app
 import page.runtime.*
 import page.workspace.*
 import page.app.input.GlobalKeyDispatcher
-import page.app.input.ShortcutDispatchController
-import page.app.filetree.FileOpUndoController
-import page.app.filetree.FileTreeActionExecutor
-import page.app.filetree.FileTreeContextController
-import page.app.filetree.FileTreeDropController
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.rememberFileTreeWatcherController
-import page.app.filetree.RenameRemapController
-import page.app.domain.FileOperationsInteractor
 import page.app.filetree.PasteEntryDialogState
-import page.app.lsp.LspEditorInterconnector
-import page.app.lsp.WorkspaceEditController
-import page.app.run.RunActionsController
 import page.app.state.DebouncedSaver
 import page.app.state.EditorWorkspaceState
-import page.app.state.HistoryActionsController
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -34,14 +23,6 @@ import page.app.ui.dialog.FileTreePasteDialog
 import page.app.ui.dialog.FileTreeRenameDeleteDialogs
 import page.app.ui.dialog.NavigationPickerDialogs
 import page.app.ui.dialog.PendingCloseDialog
-import page.app.ui.editor.CommandPaletteController
-import page.app.ui.editor.EditorHistoryController
-import page.app.ui.editor.EditorSearchController
-import page.app.ui.editor.EditorTabController
-import page.app.ui.editor.FileMenuController
-import page.app.ui.editor.TabContextController
-import page.app.ui.editor.TabOpenController
-import page.app.utils.applyReplaceToBook
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
 import page.app.utils.windowTitle
@@ -476,14 +457,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val fileTreeWatcher = rememberFileTreeWatcherController()
     fileTreeWatcher.WatchLoop(rootDir = rootDir, expanded = expanded, onTreeChanged = { treeRevision++ })
     val withFileTreeWatcherClosed: (() -> Unit) -> Unit = { block -> fileTreeWatcher.withClosed(block) }
-    val historyActionsController = HistoryActionsController(
-        history = { historyFile },
-        setHistory = { historyFile = it },
-    )
-    val addRecentFile: (Path) -> Unit = { p -> historyActionsController.addRecentFile(p) }
-    val addSearchQuery: (String) -> Unit = { q -> historyActionsController.addSearchQuery(q) }
-    val addReplaceText: (String) -> Unit = { r -> historyActionsController.addReplaceText(r) }
-
     val focusedActivePath = focused().book.active?.path
     val focusedActiveText = focused().editorValue.text
     LaunchedEffect(focusedActivePath) {
@@ -504,56 +477,38 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         if (path != null) todo.updateFile(path, focusedActiveText)
     }
 
-    val tabOpenController = TabOpenController(
-        focused = { focused() },
-        mutateFocused = { transform -> mutateFocused(transform) },
-        addRecentFile = addRecentFile,
-    )
-    val openInTab = tabOpenController::openInTab
-    val openInTabAt = tabOpenController::openInTabAt
-
-    val fileOperationsInteractor = remember {
-        FileOperationsInteractor(
-            readFileText = { p -> FileDocument.loadOrNull(p) },
-            applyTextReplace = { p, text -> FileDocument.save(p, text) },
+    val copyToClipboard: (String) -> Unit = { text ->
+        runCatching {
+            val selection = java.awt.datatransfer.StringSelection(text)
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
+        }
+    }
+    val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
+    val app = remember {
+        AppController(
+            editorWorkspace = editorWorkspace,
+            workspaceState = workspaceState,
+            layoutUiState = layoutUiState,
+            appState = appState,
+            fileOpHistory = fileOpHistory,
+            terminalManagerProvider = { terminalManager },
+            runController = runController,
+            outputState = outputState,
+            undoTracker = ::undoTracker,
+            largeCopyScope = largeCopyScope,
+            lspRouterProvider = { currentLspRouter },
+            exitApplication = { exitApplication() },
+            frameProvider = { frameRef.value },
+            copyToClipboard = copyToClipboard,
+            withFileTreeWatcherClosed = withFileTreeWatcherClosed,
         )
     }
-    val onReplaceInFiles: suspend (ReplaceRequest) -> ReplaceOutcome = { req ->
-        val result = fileOperationsInteractor.replaceInFiles(req)
-        if (result.updates.isNotEmpty()) {
-            mutatePane(PaneSide.PRIMARY) { pane ->
-                val newBook = applyReplaceToBook(pane.book, result.updates)
-                if (newBook === pane.book) pane else pane.copy(book = newBook)
-            }
-            mutatePane(PaneSide.SECONDARY) { pane ->
-                val newBook = applyReplaceToBook(pane.book, result.updates)
-                if (newBook === pane.book) pane else pane.copy(book = newBook)
-            }
-            for (side in listOf(PaneSide.PRIMARY, PaneSide.SECONDARY)) {
-                val pane = paneOf(side)
-                val active = pane.book.active ?: continue
-                if (!result.updates.containsKey(active.path)) continue
-                val caret = active.caret.coerceAtMost(active.text.length)
-                setPane(side, pane.copy(editorValue = TextFieldValue(active.text, TextRange(caret))))
-            }
-        }
-        ReplaceOutcome(filesChanged = result.filesChanged, replacements = result.replacements)
-    }
-
-    val lspEditorInterconnector = LspEditorInterconnector(
-        focused = { focused() },
-        paneOf = { side -> paneOf(side) },
-        setPane = { side, value -> setPane(side, value) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        openInTabAt = { picked, offset -> openInTabAt(picked, offset) },
-        controllerFor = { p -> currentLspRouter.controllerFor(p) },
-        applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
-        getReferences = { referencesState },
-        setReferences = { referencesState = it },
-    )
-    val jumpToProblem = lspEditorInterconnector::jumpToProblem
-    val requestReferences = lspEditorInterconnector::requestReferences
-    val applyRename = lspEditorInterconnector::applyRename
+    val openInTab = app.openInTab
+    val openInTabAt = app.openInTabAt
+    val onReplaceInFiles = app.onReplaceInFiles
+    val jumpToProblem = app.jumpToProblem
+    val requestReferences = app.requestReferences
+    val applyRename = app.applyRename
     LaunchedEffect(lspRouter) {
         lspRouter.applyEditHandler = { edit ->
             java.awt.EventQueue.invokeLater { applyRename(edit) }
@@ -561,306 +516,57 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    val openWorkspaceFolder: (Path) -> Unit = { picked ->
-        PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
-        rootDir = picked
-        expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
-        PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
-    }
-    val fileMenuController = FileMenuController(
-        openInTab = openInTab,
-        focused = { focused() },
-        mutateFocused = { transform -> mutateFocused(transform) },
-        paneOf = { side -> paneOf(side) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        didSave = { path, text -> lspRouter.controllerFor(path)?.didSave(path, text) },
-        openWorkspaceFolder = openWorkspaceFolder,
-    )
-    val openFile = fileMenuController::openFile
-    val saveFile = fileMenuController::saveFile
-    val saveAllDirty = fileMenuController::saveAllDirty
-    val openFolder = fileMenuController::openFolder
-    val openFolderPath = fileMenuController::openFolderPath
-    val newFile = fileMenuController::newFile
-    val copyToClipboard: (String) -> Unit = { text ->
-        runCatching {
-            val selection = java.awt.datatransfer.StringSelection(text)
-            java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, null)
-        }
-    }
-    val fileTreeContextController = FileTreeContextController(
-        ui = layoutUiState,
-        rootDir = { rootDir },
-        copyToClipboard = copyToClipboard,
-    )
-    val onCreateFileIn = fileTreeContextController::onCreateFileIn
-    val onCreateFolderIn = fileTreeContextController::onCreateFolderIn
-    val onRevealInFiles = fileTreeContextController::onRevealInFiles
-    val onCopyPath = fileTreeContextController::onCopyPath
-    val onCopyRelativePath = fileTreeContextController::onCopyRelativePath
-    val onRenameEntry = fileTreeContextController::onRenameEntry
-    val onPasteInto = fileTreeContextController::onPasteInto
-    val fileTreeDropController = FileTreeDropController(
-        ui = layoutUiState,
-        setDropResultToast = { dropResultToast = it },
-    )
-    val showDropResultToast = fileTreeDropController::showDropResultToast
-    val onDropPlanReceived = fileTreeDropController::onDropPlanReceived
-    val onExternalDropReceived = fileTreeDropController::onExternalDropReceived
-    val onDeleteEntry = fileTreeDropController::onDeleteEntry
-    val onDeleteEntries = fileTreeDropController::onDeleteEntries
-    val renameRemapController = RenameRemapController(
-        getExpanded = { expanded },
-        setExpanded = { expanded = it },
-        getTreeSelection = { treeSelection },
-        setTreeSelection = { treeSelection = it },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        primaryPane = { primaryPane },
-        secondaryPane = { secondaryPane },
-        controllerFor = { path -> currentLspRouter.controllerFor(path) },
-        languageIdFor = { path -> currentLspRouter.languageIdFor(path) },
-    )
-    val remapTreeStateAfterRename = renameRemapController::remapTreeStateAfterRename
-    val remapTabsAfterRename = renameRemapController::remapTabsAfterRename
-    val fileOpUndoController = FileOpUndoController(
-        fileOpHistory = fileOpHistory,
-        paneOf = { side -> paneOf(side) },
-        setPane = { side, value -> setPane(side, value) },
-        applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
-        remapTabsAfterRename = remapTabsAfterRename,
-        remapTreeStateAfterRename = remapTreeStateAfterRename,
-        onFileOpHistoryChanged = { fileOpHistoryVersion++ },
-        onTreeRevision = { treeRevision++ },
-    )
-    val readFileTextWithTabs = fileOpUndoController::readFileTextWithTabs
-    val applyTextReplace = fileOpUndoController::applyTextReplace
-    val onUndoFileOp = fileOpUndoController::onUndoFileOp
-    val onRedoFileOp = fileOpUndoController::onRedoFileOp
-    val workspaceEditController = WorkspaceEditController(
-        applyRename = applyRename,
-        codeActionUri = { codeActionUri },
-        controllerForUri = { uri -> currentLspRouter.controllerForUri(uri) },
-        rootDir = { rootDir },
-        readFileText = readFileTextWithTabs,
-        applyTextReplace = applyTextReplace,
-    )
-    val applyCodeAction = workspaceEditController::applyCodeAction
-    val applyFolderPackageSync: (Path, Path, Map<String, String>) -> List<FileOpHistory.RewriteEntry> = { _, newFolder, packageMap ->
-        workspaceEditController.applyFolderPackageSync(newFolder, packageMap)
-    }
-    val applySingleFileMoveSync = workspaceEditController::applySingleFileMoveSync
-    val fileTreeActionExecutor = FileTreeActionExecutor(
-        scope = largeCopyScope,
-        getPasteDialog = { pasteDialog },
-        setPasteDialog = { pasteDialog = it },
-        getLargeCopyState = { largeCopyState },
-        setLargeCopyState = { largeCopyState = it },
-        rootDir = { rootDir },
-        readFileText = readFileTextWithTabs,
-        applyFolderPackageSync = applyFolderPackageSync,
-        applySingleFileMoveSync = applySingleFileMoveSync,
-        remapTabsAfterRename = { old, new -> remapTabsAfterRename(old, new) },
-        remapTreeStateAfterRename = { old, new -> remapTreeStateAfterRename(old, new) },
-        controllerFor = { p -> currentLspRouter.controllerFor(p) },
-        withFileTreeWatcherClosed = { block -> withFileTreeWatcherClosed(block) },
-        fileOpHistory = fileOpHistory,
-        bumpHistoryVersion = { fileOpHistoryVersion++ },
-        bumpTreeRevision = { treeRevision++ },
-        showInfoToast = { msg, undo -> showDropResultToast(msg, DropResultToastTone.Info, undo) },
-        onUndoFileOp = { onUndoFileOp() },
-    )
-    val toggleExpanded: (Path, Boolean) -> Unit = { p, recursive ->
-        expanded = when {
-            recursive -> expanded + setOf(p) + page.editor.FileTree.descendantDirs(p)
-            p in expanded -> expanded - setOf(p)
-            else -> expanded + setOf(p) + page.editor.FileTree.singleChildChain(p)
-        }
-    }
-    val isUnsavedText: (OpenTab) -> Boolean = { tab ->
-        tab.dirty && FileKinds.classify(tab.path).isEditableAsText
-    }
-    val saveTabAt: (PaneSide, Int) -> Unit = { side, idx ->
-        val pane = paneOf(side)
-        val tab = pane.book.tabs.getOrNull(idx)
-        if (tab != null && FileKinds.classify(tab.path).isEditableAsText) {
-            val liveText = if (idx == pane.book.activeIndex) pane.editorValue.text else tab.text
-            try {
-                FileDocument.save(tab.path, liveText)
-                for (s in listOf(PaneSide.PRIMARY, PaneSide.SECONDARY)) {
-                    mutatePane(s) { it.copy(book = it.book.markPathSaved(tab.path, liveText)) }
-                }
-            } catch (_: java.io.IOException) { }
-        }
-    }
-    val tabController = EditorTabController(
-        paneOf = { side -> paneOf(side) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        isOpenAnywhere = { p ->
-            primaryPane.book.tabs.any { it.path == p } || secondaryPane.book.tabs.any { it.path == p }
-        },
-        forgetScroll = { p -> editorScrollByPath = EditorScrollMemory.clear(editorScrollByPath, p) },
-        didClose = { p -> currentLspRouter.controllerFor(p)?.didClose(p) },
-        isUnsavedText = { tab -> isUnsavedText(tab) },
-        setPendingClose = { pendingClose = it },
-        autoSaveOnClose = { pageSettings.autoSave.onClose },
-        saveTabAt = { side, idx -> saveTabAt(side, idx) },
-    )
-    val closeTabsUnderPath: (Path) -> Unit = { path -> tabController.closeTabsUnderPath(path) }
-    val closeTabAt: (PaneSide, Int) -> Unit = { side, idx -> tabController.closeTabAt(side, idx) }
-    val requestCloseTab: (PaneSide, Int) -> Unit = { side, idx -> tabController.requestCloseTab(side, idx) }
-    val closeManyOnPane: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.closeManyOnPane(side, indices) }
-    val requestBatchClose: (PaneSide, List<Int>) -> Unit = { side, indices -> tabController.requestBatchClose(side, indices) }
-    val tabContextController = TabContextController(
-        paneOf = { side -> paneOf(side) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        focusedPane = { focusedPane },
-        setFocusedPane = { focusedPane = it },
-        splitEnabled = { splitEnabled },
-        setSplitEnabled = { splitEnabled = it },
-        copyToClipboard = copyToClipboard,
-        relativeTo = { path -> FileTreeActions.relativeTo(rootDir, path) },
-        onRevealInFiles = onRevealInFiles,
-        requestRename = { path -> renameDialog = RenameEntryDialogState(path) },
-        requestCloseTab = { side, idx -> requestCloseTab(side, idx) },
-        requestBatchClose = { side, indices -> requestBatchClose(side, indices) },
-        closeManyOnPane = { side, indices -> closeManyOnPane(side, indices) },
-        moveTabAcross = { side, idx -> editorWorkspace.moveTabAcross(side, idx) },
-    )
-    val closeActiveTab: () -> Unit = { tabContextController.closeActiveTab() }
-    val anyDirty: () -> Boolean = {
-        primaryPane.book.tabs.any(isUnsavedText) || secondaryPane.book.tabs.any(isUnsavedText)
-    }
-    val requestExit: () -> Unit = {
-        when {
-            !anyDirty() -> exitApplication()
-            pageSettings.autoSave.onClose -> {
-                saveAllDirty()
-                exitApplication()
-            }
-            else -> pendingClose = PendingClose.App
-        }
-    }
-    val searchController = EditorSearchController(
-        paneOf = { side -> paneOf(side) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        mutateFocused = { transform -> mutateFocused(transform) },
-        focused = { focused() },
-        undoTracker = { side -> undoTracker(side) },
-        addSearchQuery = addSearchQuery,
-        addReplaceText = addReplaceText,
-    )
-    val openSearch = searchController::openSearch
-    val openReplace = searchController::openReplace
-    val closeSearch = searchController::closeSearch
-    val onQueryChange = searchController::onQueryChange
-    val onToggleCase = searchController::onToggleCase
-    val onSearchNext = searchController::onSearchNext
-    val onSearchPrev = searchController::onSearchPrev
-    val onReplaceChange = searchController::onReplaceChange
-    val onReplace = searchController::onReplace
-    val onReplaceAll = searchController::onReplaceAll
-
-    val historyController = EditorHistoryController(
-        focusedPane = { focusedPane },
-        paneOf = { side -> paneOf(side) },
-        mutatePane = { side, transform -> mutatePane(side, transform) },
-        undoTracker = { side -> undoTracker(side) },
-        applyExternalChange = { uri, text -> currentLspRouter.applyExternalChange(uri, text) },
-    )
-    val doUndo = historyController::doUndo
-    val doRedo = historyController::doRedo
-
-
-    val tabContextActionsFor = tabContextController::actionsFor
-
-    val paletteController = CommandPaletteController(
-        ui = layoutUiState,
-        rootDir = { rootDir },
-        focused = { focused() },
-        controllerFor = { path -> currentLspRouter.controllerFor(path) },
-        allDiagnosticsByUri = { currentLspRouter.allDiagnosticsByUri },
-        jumpToProblem = jumpToProblem,
-        applyRename = applyRename,
-        onCodeActions = { list, uri, text, selected, open ->
-            codeActionList = list
-            codeActionUri = uri
-            codeActionText = text
-            codeActionSelected = selected
-            codeActionOpen = open
-        },
-    )
-    val openQuickOpen = paletteController::openQuickOpen
-    val jumpProblemRelative = paletteController::jumpProblemRelative
-    val openDocumentSymbol = paletteController::openDocumentSymbol
-    val openWorkspaceSymbol = paletteController::openWorkspaceSymbol
-    val triggerFormat = paletteController::triggerFormat
-    val triggerCodeAction = paletteController::triggerCodeAction
-    val openFindInFiles: () -> Unit = {
-        val root = rootDir
-        if (root != null) {
-            findInFilesIndex = ProjectFileIndex.walk(root)
-            findInFiles = true
-        }
-    }
-
-    val cyclePalette: () -> Unit = {
-        val all = GlassPalette.values()
-        palette = all[(all.indexOf(palette) + 1) % all.size]
-        paletteToastUntil = System.currentTimeMillis() + 1600L
-        val root = rootDir
-        if (root != null) {
-            workspaceFile = workspaceFile.copy(palette = palette.name)
-            runCatching { WorkspaceStore.save(root, workspaceFile) }
-        } else {
-            AppSettings.savePalette(palette)
-        }
-    }
-    val frameRef = remember { mutableStateOf<java.awt.Frame?>(null) }
-    val shortcutDispatchController = ShortcutDispatchController(
-        hasSearch = { focused().search != null },
-        cyclePalette = cyclePalette,
-        openFolder = { frameRef.value?.let { openFolder(it) } },
-        openFile = { frameRef.value?.let { openFile(it) } },
-        openSettings = { settingsDialogOpen = true },
-        saveFile = { frameRef.value?.let { saveFile(it) } },
-        closeActiveTab = closeActiveTab,
-        toggleProblems = { problemsOpen = !problemsOpen },
-        toggleTodo = { todoOpen = !todoOpen },
-        toggleFindInFiles = { if (findInFiles) findInFiles = false else openFindInFiles() },
-        openSearch = openSearch,
-        openReplace = openReplace,
-        openQuickOpen = openQuickOpen,
-        openWorkspaceSymbol = openWorkspaceSymbol,
-        openDocumentSymbol = openDocumentSymbol,
-        toggleSplitOrientation = {
-            splitOrientation = if (splitOrientation == SplitOrientation.HORIZONTAL)
-                SplitOrientation.VERTICAL else SplitOrientation.HORIZONTAL
-        },
-        toggleSplit = { splitEnabled = !splitEnabled },
-        requestUndo = {
-            val undoOp = fileOpHistory.peek()
-            if (fileTreeFocused && undoOp != null) {
-                fileOpConfirm = FileOpConfirmState(isRedo = false, op = undoOp)
-            } else {
-                doUndo()
-            }
-        },
-        requestRedo = {
-            val redoOp = fileOpHistory.peekRedo()
-            if (fileTreeFocused && redoOp != null) {
-                fileOpConfirm = FileOpConfirmState(isRedo = true, op = redoOp)
-            } else {
-                doRedo()
-            }
-        },
-        triggerFormat = triggerFormat,
-        triggerCodeAction = triggerCodeAction,
-        activateAdjacentTab = { delta -> editorWorkspace.activateAdjacentTab(delta) },
-        jumpProblemRelative = jumpProblemRelative,
-        refreshTree = { treeRevision++ },
-        closeSearch = { closeSearch(focusedPane) },
-    )
-    val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
+    val openFile = app.openFile
+    val saveFile = app.saveFile
+    val saveAllDirty = app.saveAllDirty
+    val openFolder = app.openFolder
+    val openFolderPath = app.openFolderPath
+    val newFile = app.newFile
+    val onCreateFileIn = app.onCreateFileIn
+    val onCreateFolderIn = app.onCreateFolderIn
+    val onRevealInFiles = app.onRevealInFiles
+    val onCopyPath = app.onCopyPath
+    val onCopyRelativePath = app.onCopyRelativePath
+    val onRenameEntry = app.onRenameEntry
+    val onPasteInto = app.onPasteInto
+    val showDropResultToast = app.showDropResultToast
+    val onDropPlanReceived = app.onDropPlanReceived
+    val onExternalDropReceived = app.onExternalDropReceived
+    val onDeleteEntry = app.onDeleteEntry
+    val onDeleteEntries = app.onDeleteEntries
+    val remapTreeStateAfterRename = app.remapTreeStateAfterRename
+    val remapTabsAfterRename = app.remapTabsAfterRename
+    val readFileTextWithTabs = app.readFileTextWithTabs
+    val onUndoFileOp = app.onUndoFileOp
+    val onRedoFileOp = app.onRedoFileOp
+    val applyCodeAction = app.applyCodeAction
+    val applyFolderPackageSync = app.applyFolderPackageSync
+    val fileTreeActionExecutor = app.fileTreeActionExecutor
+    val toggleExpanded = app.toggleExpanded
+    val isUnsavedText = app.isUnsavedText
+    val closeTabsUnderPath = app.closeTabsUnderPath
+    val closeTabAt = app.closeTabAt
+    val requestCloseTab = app.requestCloseTab
+    val requestExit = app.requestExit
+    val closeSearch = app.closeSearch
+    val onQueryChange = app.onQueryChange
+    val onToggleCase = app.onToggleCase
+    val onSearchNext = app.onSearchNext
+    val onSearchPrev = app.onSearchPrev
+    val onReplaceChange = app.onReplaceChange
+    val onReplace = app.onReplace
+    val onReplaceAll = app.onReplaceAll
+    val tabContextActionsFor = app.tabContextActionsFor
+    val openDocumentSymbol = app.openDocumentSymbol
+    val openWorkspaceSymbol = app.openWorkspaceSymbol
+    val triggerFormat = app.triggerFormat
+    val triggerCodeAction = app.triggerCodeAction
+    val toggleTerminal = app.toggleTerminal
+    val startActiveRun = app.startActiveRun
+    val stopActiveRun = app.stopActiveRun
+    val openRunDialog = app.openRunDialog
+    val openSettings = app.openSettings
+    val handleShortcut = app.handleShortcut
     Window(
         onCloseRequest = requestExit,
         state = windowState,
@@ -897,37 +603,12 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val codeActionOpenRef = rememberUpdatedState(codeActionOpen)
         val codeActionListRef = rememberUpdatedState(codeActionList)
         val codeActionSelectedRef = rememberUpdatedState(codeActionSelected)
-        val runActionsController = RunActionsController(
-            isRunning = { runController.isRunning },
-            isCurrentFileActive = { runState.isCurrentFileActive },
-            buildConfigForActiveFile = {
-                focused().book.active?.path?.let { LanguageRunDefaults.buildConfig(it, rootDir) }
-            },
-            activeRunConfig = { runState.active },
-            startRun = { cfg -> runController.start(cfg) },
-            stopRun = { runController.stop() },
-            autoSaveBeforeRun = { autoSaveOptions.beforeRun },
-            saveAllDirty = { saveAllDirty() },
-            clearOutputOnRun = { pageSettings.run.clearOutputOnRun },
-            clearOutput = { runCatching { outputState.clear() } },
-            openTerminalOnRun = { pageSettings.run.openTerminalOnRun },
-            terminalOpen = { terminalOpen },
-            setTerminalOpen = { terminalOpen = it },
-            ensureTerminalTab = { if (terminalManager.tabs.isEmpty()) terminalManager.newTab() },
-            setOutputOpen = { outputOpen = it },
-            setRunDialogOpen = { runDialogOpen = it },
-        )
-        val toggleTerminal: () -> Unit = { runActionsController.toggleTerminal() }
         val toggleTerminalRef = rememberUpdatedState(toggleTerminal)
-        val startActiveRun: () -> Unit = { runActionsController.startActiveRun() }
-        val stopActiveRun: () -> Unit = { runActionsController.stopActiveRun() }
-        val openRunDialog: () -> Unit = { runActionsController.openRunDialog() }
         val startActiveRunRef = rememberUpdatedState(startActiveRun)
         val stopActiveRunRef = rememberUpdatedState(stopActiveRun)
         val openRunDialogRef = rememberUpdatedState(openRunDialog)
         val saveAllDirtyRef = rememberUpdatedState(saveAllDirty)
         val autoSaveOptionsRef = rememberUpdatedState(autoSaveOptions)
-        val openSettings: () -> Unit = { settingsDialogOpen = true }
         val openSettingsRef = rememberUpdatedState(openSettings)
         DisposableEffect(window) {
             val frame = window
