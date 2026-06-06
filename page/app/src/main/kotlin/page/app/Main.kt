@@ -96,8 +96,6 @@ import page.editor.ProjectFileIndex
 import page.editor.ProjectGrep
 import page.editor.Replace
 import page.editor.SearchState
-import page.editor.SplitOrientation
-import page.editor.SplitPaneState
 import page.editor.SyntaxLexers
 import page.editor.TabBook
 import kotlinx.coroutines.Dispatchers
@@ -183,6 +181,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     DisposableEffect(terminalManager) {
         onDispose { terminalManager.closeAll() }
     }
+    val currentTerminalManager by rememberUpdatedState(terminalManager)
     var runState: RunConfigsState by appState::runState
     var runDialogOpen by appState::runDialogOpen
     var outputOpen by layoutUiState::outputOpen
@@ -262,7 +261,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             layoutUiState = layoutUiState,
             appState = appState,
             fileOpHistory = fileOpHistory,
-            terminalManagerProvider = { terminalManager },
+            terminalManagerProvider = { currentTerminalManager },
             runController = runController,
             outputState = outputState,
             undoTracker = ::undoTracker,
@@ -273,6 +272,14 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             frameProvider = { frameRef.value },
             copyToClipboard = copyToClipboard,
             withFileTreeWatcherClosed = withFileTreeWatcherClosed,
+        )
+    }
+    val sessionCoordinator = remember {
+        SessionCoordinator(
+            editorWorkspace = editorWorkspace,
+            layoutUiState = layoutUiState,
+            workspaceState = workspaceState,
+            terminalManagerProvider = { currentTerminalManager },
         )
     }
 
@@ -306,48 +313,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             sessionLoaded = true
             return@LaunchedEffect
         }
-        val session = runCatching { SessionStore.load(root) }.getOrNull()
-        if (session != null) {
-            primaryPane = primaryPane.copy(book = restoreTabBook(session.primary))
-            secondaryPane = secondaryPane.copy(book = restoreTabBook(session.secondary))
-            focusedPane = runCatching { PaneSide.valueOf(session.focusedPane) }
-                .getOrDefault(PaneSide.PRIMARY)
-            splitEnabled = session.splitEnabled
-            splitOrientation = runCatching { SplitOrientation.valueOf(session.splitOrientation) }
-                .getOrDefault(SplitOrientation.HORIZONTAL)
-            splitState = SplitPaneState(ratio = session.splitRatio.coerceIn(0.1f, 0.9f))
-            sidebarWidth = session.sidebarWidth.coerceIn(160f, 600f).dp
-            problemsOpen = session.problemsOpen
-            problemsHeight = session.problemsHeight.coerceIn(120f, 600f).dp
-            problemsCollapsed = session.problemsCollapsed.toSet()
-            problemsFileOrder = session.problemsFileOrder
-            todoOpen = session.todoOpen
-            todoHeight = session.todoHeight.coerceIn(120f, 600f).dp
-            todoCollapsed = session.todoCollapsed.toSet()
-            todoFileOrder = session.todoFileOrder
-            terminalOpen = session.terminalOpen
-            terminalHeight = session.terminalHeight.coerceIn(120f, 600f).dp
-            outputOpen = session.outputOpen
-            outputHeight = session.outputHeight.coerceIn(120f, 1200f).dp
-            if (session.terminalTabs.isNotEmpty()) {
-                terminalManager.restoreFrom(
-                    names = session.terminalTabs.map { it.name },
-                    activeIndex = session.terminalActiveIndex,
-                    autoStart = true,
-                )
-            }
-            foldByPath = session.foldedStartLinesByPath.mapValues { it.value.toSet() }
-            val restoredExpanded = restoreExpandedDirs(session.expandedDirs)
-            if (restoredExpanded.isNotEmpty()) expanded = restoredExpanded
-            editorScrollByPath = session.editorScrollByPath
-                .mapNotNull { (s, snap) ->
-                    val p = runCatching { java.nio.file.Path.of(s) }.getOrNull() ?: return@mapNotNull null
-                    p to EditorScrollSnapshot(vertical = snap.vertical, horizontal = snap.horizontal)
-                }
-                .toMap()
-        } else {
-            foldByPath = emptyMap()
-        }
+        sessionCoordinator.restore(root)
         sessionLoaded = true
     }
 
@@ -359,34 +325,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         p?.let { foldByPath[it.toString()] } ?: emptySet()
     }
 
-    val sessionSnapshot = SessionFile(
-        primary = paneSnapshot(primaryPane),
-        secondary = paneSnapshot(secondaryPane),
-        focusedPane = focusedPane.name,
-        splitEnabled = splitEnabled,
-        splitOrientation = splitOrientation.name,
-        splitRatio = splitState.ratio,
-        sidebarWidth = sidebarWidth.value,
-        problemsOpen = problemsOpen,
-        problemsHeight = problemsHeight.value,
-        problemsCollapsed = problemsCollapsed.toList().sorted(),
-        problemsFileOrder = problemsFileOrder,
-        todoOpen = todoOpen,
-        todoHeight = todoHeight.value,
-        todoCollapsed = todoCollapsed.toList().sorted(),
-        todoFileOrder = todoFileOrder,
-        terminalOpen = terminalOpen,
-        terminalHeight = terminalHeight.value,
-        terminalTabs = terminalManager.snapshotNames().map { SessionTerminalTab(name = it) },
-        terminalActiveIndex = terminalManager.activeIndex(),
-        outputOpen = outputOpen,
-        outputHeight = outputHeight.value,
-        foldedStartLinesByPath = foldByPath.mapValues { it.value.toList().sorted() },
-        expandedDirs = expanded.map { it.toString() }.sorted(),
-        editorScrollByPath = editorScrollByPath
-            .mapKeys { it.key.toString() }
-            .mapValues { SessionScrollSnapshot(vertical = it.value.vertical, horizontal = it.value.horizontal) },
-    )
+    val sessionSnapshot = sessionCoordinator.snapshot()
     LaunchedEffect(rootDir, sessionLoaded, sessionSnapshot) {
         if (!sessionLoaded) return@LaunchedEffect
         val root = rootDir ?: return@LaunchedEffect
