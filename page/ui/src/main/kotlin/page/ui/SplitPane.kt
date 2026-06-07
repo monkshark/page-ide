@@ -17,10 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -62,8 +67,11 @@ fun SplitPane(
         val firstWeight = ratio.coerceAtLeast(0.0001f)
         val secondWeight = (1f - ratio).coerceAtLeast(0.0001f)
 
-        val onDrag: (Float) -> Unit = { delta ->
-            latestOnChange(latestState.dragBy(delta, effectiveTotal))
+        val currentRatio: () -> Float = { latestState.clamped }
+        val onRatioDrag: (Float, Float) -> Unit = { startRatio, totalDeltaPx ->
+            if (effectiveTotal > 0f) {
+                latestOnChange(latestState.withRatio(startRatio + totalDeltaPx / effectiveTotal))
+            }
         }
 
         when (orientation) {
@@ -73,7 +81,8 @@ fun SplitPane(
                     orientation = orientation,
                     thickness = dividerThickness,
                     color = dividerColor,
-                    onDrag = onDrag,
+                    currentRatio = currentRatio,
+                    onRatioDrag = onRatioDrag,
                 )
                 Box(modifier = Modifier.weight(secondWeight).fillMaxHeight().zIndex(secondZIndex)) { second() }
             }
@@ -83,7 +92,8 @@ fun SplitPane(
                     orientation = orientation,
                     thickness = dividerThickness,
                     color = dividerColor,
-                    onDrag = onDrag,
+                    currentRatio = currentRatio,
+                    onRatioDrag = onRatioDrag,
                 )
                 Box(modifier = Modifier.weight(secondWeight).fillMaxWidth().zIndex(secondZIndex)) { second() }
             }
@@ -96,7 +106,8 @@ private fun Divider(
     orientation: SplitOrientation,
     thickness: Dp,
     color: Color,
-    onDrag: (Float) -> Unit,
+    currentRatio: () -> Float,
+    onRatioDrag: (startRatio: Float, totalDeltaPx: Float) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val isHovered by interaction.collectIsHoveredAsState()
@@ -112,18 +123,31 @@ private fun Divider(
         SplitOrientation.VERTICAL -> Modifier.height(thickness).fillMaxWidth()
     }
 
+    var originInRoot by remember { mutableStateOf(Offset.Zero) }
+    var startRoot by remember { mutableStateOf(Offset.Zero) }
+    var startRatio by remember { mutableStateOf(0f) }
+
     Box(
         modifier = sizeMod
+            .onGloballyPositioned { originInRoot = it.positionInRoot() }
             .pointerHoverIcon(PointerIcon(cursor))
             .hoverable(interaction)
             .pointerInput(orientation) {
-                detectDragGestures(onDrag = { _, drag ->
-                    val delta = when (orientation) {
-                        SplitOrientation.HORIZONTAL -> drag.x
-                        SplitOrientation.VERTICAL -> drag.y
-                    }
-                    onDrag(delta)
-                })
+                detectDragGestures(
+                    onDragStart = { startLocal ->
+                        startRoot = originInRoot + startLocal
+                        startRatio = currentRatio()
+                    },
+                    onDrag = { change, _ ->
+                        val curRoot = originInRoot + change.position
+                        val totalDelta = when (orientation) {
+                            SplitOrientation.HORIZONTAL -> curRoot.x - startRoot.x
+                            SplitOrientation.VERTICAL -> curRoot.y - startRoot.y
+                        }
+                        onRatioDrag(startRatio, totalDelta)
+                        change.consume()
+                    },
+                )
             }
             .background(dragHandleColor),
     )
