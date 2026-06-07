@@ -3,14 +3,12 @@ package page.app.ui.editor
 import page.app.EditorPaneState
 import page.app.PaneSide
 import page.app.TabContextActions
-import page.editor.OpenTab
 import java.nio.file.Path
 
 internal class TabContextController(
     private val paneOf: (PaneSide) -> EditorPaneState,
     private val mutatePane: (PaneSide, (EditorPaneState) -> EditorPaneState) -> Unit,
     private val focusedPane: () -> PaneSide,
-    private val setFocusedPane: (PaneSide) -> Unit,
     private val splitEnabled: () -> Boolean,
     private val setSplitEnabled: (Boolean) -> Unit,
     private val copyToClipboard: (String) -> Unit,
@@ -42,18 +40,8 @@ internal class TabContextController(
         paneOf(side).book.tabs.getOrNull(idx)?.let { requestRename(it.path) }
     }
 
-    private fun splitWithTab(side: PaneSide, idx: Int) {
-        val tab = paneOf(side).book.tabs.getOrNull(idx) ?: return
+    private fun splitWithTab() {
         if (!splitEnabled()) setSplitEnabled(true)
-        val target = if (side == PaneSide.PRIMARY) PaneSide.SECONDARY else PaneSide.PRIMARY
-        mutatePane(target) {
-            it.copy(
-                book = it.book.appendTab(
-                    OpenTab(path = tab.path, text = tab.text, savedText = tab.savedText, caret = tab.caret),
-                ),
-            )
-        }
-        setFocusedPane(target)
     }
 
     fun closeActiveTab() {
@@ -99,7 +87,7 @@ internal class TabContextController(
             } else {
                 null
             },
-            onSplit = { idx -> splitWithTab(side, idx) },
+            onSplit = { splitWithTab() },
             onRename = { idx -> renameTabFile(side, idx) },
         )
     }

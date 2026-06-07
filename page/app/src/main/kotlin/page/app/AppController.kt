@@ -293,7 +293,6 @@ internal class AppController(
         paneOf = { side -> paneOf(side) },
         mutatePane = { side, transform -> mutatePane(side, transform) },
         focusedPane = { editorWorkspace.focusedPane },
-        setFocusedPane = { editorWorkspace.focusedPane = it },
         splitEnabled = { editorWorkspace.splitEnabled },
         setSplitEnabled = { editorWorkspace.splitEnabled = it },
         copyToClipboard = copyToClipboard,
