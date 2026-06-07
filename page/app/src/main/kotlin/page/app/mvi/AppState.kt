@@ -2,6 +2,11 @@ package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import page.app.EditorScrollSnapshot
+import page.app.PaneSide
+import page.editor.SplitOrientation
+import page.editor.SplitPaneState
+import java.nio.file.Path
 
 internal data class LayoutState(
     val sidebarWidth: Dp = 260.dp,
@@ -28,9 +33,31 @@ internal data class ChromeState(
     val pendingTreeFocusTick: Int = 0,
 )
 
+internal data class TreeState(
+    val expanded: Set<Path> = emptySet(),
+    val selection: Set<Path> = emptySet(),
+    val revision: Int = 0,
+    val focused: Boolean = false,
+)
+
+internal data class EditorLayoutState(
+    val focusedPane: PaneSide = PaneSide.PRIMARY,
+    val splitEnabled: Boolean = false,
+    val splitOrientation: SplitOrientation = SplitOrientation.HORIZONTAL,
+    val splitState: SplitPaneState = SplitPaneState(ratio = 0.5f),
+    val foldByPath: Map<String, Set<Int>> = emptyMap(),
+)
+
+internal data class EditorScrollState(
+    val scrollByPath: Map<Path, EditorScrollSnapshot> = emptyMap(),
+)
+
 internal data class AppState(
     val layout: LayoutState = LayoutState(),
     val chrome: ChromeState = ChromeState(),
+    val tree: TreeState = TreeState(),
+    val editorLayout: EditorLayoutState = EditorLayoutState(),
+    val editorScroll: EditorScrollState = EditorScrollState(),
 )
 
 private fun defaultOutputHeight(): Dp {

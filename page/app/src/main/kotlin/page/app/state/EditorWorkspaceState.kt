@@ -7,25 +7,39 @@ import androidx.compose.ui.text.input.TextFieldValue
 import page.app.EditorPaneState
 import page.app.EditorScrollSnapshot
 import page.app.PaneSide
+import page.app.mvi.IdeStore
 import page.editor.EditSnapshot
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.editor.UndoGroupTracker
 import java.nio.file.Path
 
-class EditorWorkspaceState(
+internal class EditorWorkspaceState(
     private val undoTracker: (PaneSide) -> UndoGroupTracker,
+    private val store: IdeStore = IdeStore(),
 ) {
     var primaryPane by mutableStateOf(EditorPaneState())
     var secondaryPane by mutableStateOf(EditorPaneState())
-    var focusedPane by mutableStateOf(PaneSide.PRIMARY)
+    var focusedPane: PaneSide
+        get() = store.editorLayout.focusedPane
+        set(value) = store.updateEditorLayout { it.copy(focusedPane = value) }
 
-    var splitEnabled by mutableStateOf(false)
-    var splitOrientation by mutableStateOf(SplitOrientation.HORIZONTAL)
-    var splitState by mutableStateOf(SplitPaneState(ratio = 0.5f))
+    var splitEnabled: Boolean
+        get() = store.editorLayout.splitEnabled
+        set(value) = store.updateEditorLayout { it.copy(splitEnabled = value) }
+    var splitOrientation: SplitOrientation
+        get() = store.editorLayout.splitOrientation
+        set(value) = store.updateEditorLayout { it.copy(splitOrientation = value) }
+    var splitState: SplitPaneState
+        get() = store.editorLayout.splitState
+        set(value) = store.updateEditorLayout { it.copy(splitState = value) }
 
-    var editorScrollByPath by mutableStateOf(emptyMap<Path, EditorScrollSnapshot>())
-    var foldByPath by mutableStateOf(emptyMap<String, Set<Int>>())
+    var editorScrollByPath: Map<Path, EditorScrollSnapshot>
+        get() = store.editorScroll.scrollByPath
+        set(value) = store.updateEditorScroll { it.copy(scrollByPath = value) }
+    var foldByPath: Map<String, Set<Int>>
+        get() = store.editorLayout.foldByPath
+        set(value) = store.updateEditorLayout { it.copy(foldByPath = value) }
 
     fun paneOf(side: PaneSide): EditorPaneState = when (side) {
         PaneSide.PRIMARY -> primaryPane

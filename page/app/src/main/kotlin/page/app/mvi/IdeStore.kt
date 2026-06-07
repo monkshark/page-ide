@@ -12,11 +12,29 @@ internal class IdeStore(initial: AppState = AppState()) {
     var chrome by mutableStateOf(initial.chrome)
         private set
 
-    fun snapshot(): AppState = AppState(layout = layout, chrome = chrome)
+    var tree by mutableStateOf(initial.tree)
+        private set
+
+    var editorLayout by mutableStateOf(initial.editorLayout)
+        private set
+
+    var editorScroll by mutableStateOf(initial.editorScroll)
+        private set
+
+    fun snapshot(): AppState = AppState(
+        layout = layout,
+        chrome = chrome,
+        tree = tree,
+        editorLayout = editorLayout,
+        editorScroll = editorScroll,
+    )
 
     fun apply(next: AppState) {
         if (next.layout != layout) layout = next.layout
         if (next.chrome != chrome) chrome = next.chrome
+        if (next.tree != tree) tree = next.tree
+        if (next.editorLayout != editorLayout) editorLayout = next.editorLayout
+        if (next.editorScroll != editorScroll) editorScroll = next.editorScroll
     }
 
     fun updateLayout(transform: (LayoutState) -> LayoutState) {
@@ -27,6 +45,21 @@ internal class IdeStore(initial: AppState = AppState()) {
     fun updateChrome(transform: (ChromeState) -> ChromeState) {
         val next = transform(chrome)
         if (next != chrome) chrome = next
+    }
+
+    fun updateTree(transform: (TreeState) -> TreeState) {
+        val next = transform(tree)
+        if (next != tree) tree = next
+    }
+
+    fun updateEditorLayout(transform: (EditorLayoutState) -> EditorLayoutState) {
+        val next = transform(editorLayout)
+        if (next != editorLayout) editorLayout = next
+    }
+
+    fun updateEditorScroll(transform: (EditorScrollState) -> EditorScrollState) {
+        val next = transform(editorScroll)
+        if (next != editorScroll) editorScroll = next
     }
 }
 
