@@ -262,10 +262,16 @@ fun CodeEditor(
     }
 
     val caretBringEnabledLatest by rememberUpdatedState(caretBringIntoViewEnabled)
+    var lastBroughtCaret by remember { mutableStateOf(-1) }
+    var lastBroughtText by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(value.selection.end, layout) {
         if (!caretBringEnabledLatest) return@LaunchedEffect
         val caretTrans = mapping.originalToTransformed(value.selection.end)
         if (caretTrans !in 0..displayText.length) return@LaunchedEffect
+        val caretMoved = value.selection.end != lastBroughtCaret || value.text != lastBroughtText
+        lastBroughtCaret = value.selection.end
+        lastBroughtText = value.text
+        if (!caretMoved) return@LaunchedEffect
         val rect = layout.getCursorRect(caretTrans)
         val marginPx = with(density) { 24.dp.toPx() }
         val expanded = androidx.compose.ui.geometry.Rect(
