@@ -1,10 +1,16 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.dp
+import page.app.CreateEntryDialogState
+import page.app.CreateEntryKind
+import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
 import page.app.PaneSide
+import page.app.PendingClose
+import page.app.RenameEntryDialogState
 import page.editor.SplitPaneState
 import java.nio.file.Path
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -208,6 +214,53 @@ class ReducerTest {
     fun `editor scroll change leaves editor layout slice value-equal`() {
         val s = AppState()
         val next = reduce(s, IdeEvent.EditorScroll.Changed(Path.of("a.kt"), EditorScrollSnapshot(1, 1)))
+        assertEquals(s.editorLayout, next.editorLayout)
+    }
+
+    @Test
+    fun `set create dialog stores and clears state`() {
+        val s = AppState()
+        val state = CreateEntryDialogState(Path.of("dir"), CreateEntryKind.FILE)
+        val opened = reduce(s, IdeEvent.Dialog.SetCreate(state))
+        assertEquals(state, opened.dialogs.createDialog)
+        val cleared = reduce(opened, IdeEvent.Dialog.SetCreate(null))
+        assertNull(cleared.dialogs.createDialog)
+    }
+
+    @Test
+    fun `set rename and delete dialogs are independent`() {
+        val s = AppState()
+        val rename = reduce(s, IdeEvent.Dialog.SetRename(RenameEntryDialogState(Path.of("a"))))
+        val delete = reduce(rename, IdeEvent.Dialog.SetDelete(DeleteEntryDialogState(listOf(Path.of("b")))))
+        assertEquals(Path.of("a"), delete.dialogs.renameDialog?.path)
+        assertEquals(listOf(Path.of("b")), delete.dialogs.deleteDialog?.paths)
+    }
+
+    @Test
+    fun `pending close set and cleared`() {
+        val s = AppState()
+        val pending = reduce(s, IdeEvent.Dialog.SetPendingClose(PendingClose.App))
+        assertEquals(PendingClose.App, pending.dialogs.pendingClose)
+        val cleared = reduce(pending, IdeEvent.Dialog.SetPendingClose(null))
+        assertNull(cleared.dialogs.pendingClose)
+    }
+
+    @Test
+    fun `find in files open and close`() {
+        val s = AppState()
+        val opened = reduce(s, IdeEvent.Dialog.OpenFindInFiles)
+        assertTrue(opened.dialogs.findInFilesOpen)
+        val closed = reduce(opened, IdeEvent.Dialog.CloseFindInFiles)
+        assertFalse(closed.dialogs.findInFilesOpen)
+    }
+
+    @Test
+    fun `dialog event leaves other slices value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Dialog.OpenFindInFiles)
+        assertEquals(s.layout, next.layout)
+        assertEquals(s.chrome, next.chrome)
+        assertEquals(s.tree, next.tree)
         assertEquals(s.editorLayout, next.editorLayout)
     }
 }

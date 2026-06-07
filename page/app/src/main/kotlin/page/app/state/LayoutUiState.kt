@@ -62,10 +62,18 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
         get() = store.layout.referencesHeight
         set(value) = store.updateLayout { it.copy(referencesHeight = value) }
 
-    var createDialog: CreateEntryDialogState? by mutableStateOf(null)
-    var renameDialog: RenameEntryDialogState? by mutableStateOf(null)
-    var deleteDialog: DeleteEntryDialogState? by mutableStateOf(null)
-    var pasteDialog: PasteEntryDialogState? by mutableStateOf(null)
+    var createDialog: CreateEntryDialogState?
+        get() = store.dialogs.createDialog
+        set(value) = store.updateDialogs { it.copy(createDialog = value) }
+    var renameDialog: RenameEntryDialogState?
+        get() = store.dialogs.renameDialog
+        set(value) = store.updateDialogs { it.copy(renameDialog = value) }
+    var deleteDialog: DeleteEntryDialogState?
+        get() = store.dialogs.deleteDialog
+        set(value) = store.updateDialogs { it.copy(deleteDialog = value) }
+    var pasteDialog: PasteEntryDialogState?
+        get() = store.dialogs.pasteDialog
+        set(value) = store.updateDialogs { it.copy(pasteDialog = value) }
     var largeCopyState: LargeCopyDialogState? by mutableStateOf(null)
 
     var quickOpen by mutableStateOf(false)

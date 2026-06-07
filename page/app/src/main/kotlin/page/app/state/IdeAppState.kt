@@ -46,12 +46,16 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
         get() = store.chrome.runDialogOpen
         set(value) = store.updateChrome { it.copy(runDialogOpen = value) }
 
-    var findInFiles by mutableStateOf(false)
+    var findInFiles: Boolean
+        get() = store.dialogs.findInFilesOpen
+        set(value) = store.updateDialogs { it.copy(findInFilesOpen = value) }
     var findInFilesIndex by mutableStateOf<List<IndexedFile>>(emptyList())
     var referencesState: ReferencesQueryState? by mutableStateOf(null)
 
     var fileOpHistoryVersion by mutableStateOf(0)
-    var fileOpConfirm: FileOpConfirmState? by mutableStateOf(null)
+    var fileOpConfirm: FileOpConfirmState?
+        get() = store.dialogs.fileOpConfirm
+        set(value) = store.updateDialogs { it.copy(fileOpConfirm = value) }
     var pendingTreeFocusTick: Int
         get() = store.chrome.pendingTreeFocusTick
         set(value) = store.updateChrome { it.copy(pendingTreeFocusTick = value) }
@@ -66,6 +70,8 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
     var editorFocusVersion: Int
         get() = store.chrome.editorFocusVersion
         set(value) = store.updateChrome { it.copy(editorFocusVersion = value) }
-    var pendingClose: PendingClose? by mutableStateOf(null)
+    var pendingClose: PendingClose?
+        get() = store.dialogs.pendingClose
+        set(value) = store.updateDialogs { it.copy(pendingClose = value) }
     var dropResultToast: DropResultToastState? by mutableStateOf(null)
 }

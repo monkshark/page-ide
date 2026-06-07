@@ -1,8 +1,14 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
+import page.app.CreateEntryDialogState
+import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
+import page.app.FileOpConfirmState
 import page.app.PaneSide
+import page.app.PendingClose
+import page.app.RenameEntryDialogState
+import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitPaneState
 import java.nio.file.Path
 
@@ -57,5 +63,16 @@ internal sealed interface IdeEvent {
     sealed interface EditorScroll : IdeEvent {
         data class Changed(val path: Path, val snapshot: EditorScrollSnapshot) : EditorScroll
         data class Cleared(val path: Path) : EditorScroll
+    }
+
+    sealed interface Dialog : IdeEvent {
+        data class SetCreate(val state: CreateEntryDialogState?) : Dialog
+        data class SetRename(val state: RenameEntryDialogState?) : Dialog
+        data class SetDelete(val state: DeleteEntryDialogState?) : Dialog
+        data class SetPaste(val state: PasteEntryDialogState?) : Dialog
+        data class SetFileOpConfirm(val state: FileOpConfirmState?) : Dialog
+        data class SetPendingClose(val state: PendingClose?) : Dialog
+        data object OpenFindInFiles : Dialog
+        data object CloseFindInFiles : Dialog
     }
 }

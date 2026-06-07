@@ -41,4 +41,25 @@ class IdeStoreTest {
         assertFalse(before === store.layout)
         assertEquals(320.dp, store.layout.sidebarWidth)
     }
+
+    @Test
+    fun `dispatcher writes dialog slice back to store`() {
+        val store = IdeStore()
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+
+        dispatcher.onEvent(IdeEvent.Dialog.OpenFindInFiles)
+
+        Snapshot.sendApplyNotifications()
+        assertTrue(store.dialogs.findInFilesOpen)
+    }
+
+    @Test
+    fun `update dialogs skips write when value-equal`() {
+        val store = IdeStore()
+        val before = store.dialogs
+
+        store.updateDialogs { it.copy() }
+
+        assertSame(before, store.dialogs)
+    }
 }

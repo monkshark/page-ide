@@ -17,11 +17,7 @@ import page.app.mvi.IdeEvent
 import page.app.mvi.IdeStore
 import page.app.ui.IdeMainLayout
 import page.app.ui.PaletteToast
-import page.app.ui.dialog.FileTreeCreateDialog
-import page.app.ui.dialog.FileTreePasteDialog
-import page.app.ui.dialog.FileTreeRenameDeleteDialogs
-import page.app.ui.dialog.NavigationPickerDialogs
-import page.app.ui.dialog.PendingCloseDialog
+import page.app.ui.dialog.AppDialogs
 import page.app.utils.isKotlinSource
 import page.app.utils.offsetToLineChar
 import page.app.utils.windowTitle
@@ -161,7 +157,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val onIdeEvent = remember { IdeDispatcher(ideStore, IdeEffectHandler()).onEvent }
     val appState = remember { IdeAppState(ideStore) }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
-    var pendingClose: PendingClose? by appState::pendingClose
     var quickOpen by layoutUiState::quickOpen
     var quickOpenIndex by layoutUiState::quickOpenIndex
     var findInFiles by appState::findInFiles
@@ -189,7 +184,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
     val currentTerminalManager by rememberUpdatedState(terminalManager)
     var runState: RunConfigsState by appState::runState
-    var runDialogOpen by appState::runDialogOpen
     var outputOpen by layoutUiState::outputOpen
     var outputHeight: Dp by layoutUiState::outputHeight
     val outputState = remember { OutputPanelState() }
@@ -599,11 +593,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     FindInFilesDialog(
                         files = findInFilesIndex,
                         onPickAt = { path, offset ->
-                            findInFiles = false
+                            onIdeEvent(IdeEvent.Dialog.CloseFindInFiles)
                             openInTabAt(path, offset)
                         },
                         onReplace = onReplaceInFiles,
-                        onDismiss = { findInFiles = false },
+                        onDismiss = { onIdeEvent(IdeEvent.Dialog.CloseFindInFiles) },
                     )
                 }
                 PaletteToast(palette = palette, visibleUntilMs = paletteToastUntil)
@@ -619,8 +613,15 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
 
-    NavigationPickerDialogs(
-        ui = layoutUiState,
+    AppDialogs(
+        appState = appState,
+        layoutUiState = layoutUiState,
+        workspaceState = workspaceState,
+        editorWorkspace = editorWorkspace,
+        fileOpHistory = fileOpHistory,
+        lspRouter = lspRouter,
+        fileTreeActionExecutor = fileTreeActionExecutor,
+        onEvent = onIdeEvent,
         openInTab = openInTab,
         jumpToProblem = jumpToProblem,
         workspaceSymbolQuery = { q ->
@@ -630,36 +631,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             else emptyList()
         },
         requestFrameFocus = { frameRef.value?.requestFocus() },
-        onEditorFocusBump = { onIdeEvent(IdeEvent.Chrome.BumpEditorFocus) },
-    )
-
-    if (runDialogOpen) {
-        RunConfigDialog(
-            state = runState,
-            workspaceRoot = rootDir,
-            onSave = { saved ->
-                runState = saved
-                onIdeEvent(IdeEvent.Chrome.CloseRunDialog)
-            },
-            onDismiss = { onIdeEvent(IdeEvent.Chrome.CloseRunDialog) },
-        )
-    }
-
-
-    FileTreeCreateDialog(
-        workspace = workspaceState,
-        ui = layoutUiState,
-        fileOpHistory = fileOpHistory,
-        openInTab = openInTab,
-        onFileOpHistoryChanged = { fileOpHistoryVersion++ },
-    )
-
-    FileTreeRenameDeleteDialogs(
-        workspace = workspaceState,
-        ui = layoutUiState,
-        lspRouter = lspRouter,
-        fileOpHistory = fileOpHistory,
-        jumpToProblem = jumpToProblem,
         applyRename = applyRename,
         remapTabsAfterRename = remapTabsAfterRename,
         remapTreeStateAfterRename = remapTreeStateAfterRename,
@@ -668,47 +639,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         readFileText = readFileTextWithTabs,
         closeTabsUnderPath = closeTabsUnderPath,
         onFileOpHistoryChanged = { fileOpHistoryVersion++ },
-    )
-
-    FileTreePasteDialog(
-        workspace = workspaceState,
-        ui = layoutUiState,
-        fileTreeActionExecutor = fileTreeActionExecutor,
-    )
-
-    val activeLargeCopy = largeCopyState
-    if (activeLargeCopy != null) {
-        LargeCopyDialog(
-            sourceName = activeLargeCopy.sourceName,
-            destName = activeLargeCopy.destName,
-            totalBytes = activeLargeCopy.totalBytes,
-            fileCount = activeLargeCopy.fileCount,
-            bytesCopied = activeLargeCopy.bytesCopied,
-            filesCopied = activeLargeCopy.filesCopied,
-            onCancel = { activeLargeCopy.cancelToken.set(true) },
-        )
-    }
-
-    val activeFileOpConfirm = fileOpConfirm
-    if (activeFileOpConfirm != null) {
-        val verb = if (activeFileOpConfirm.isRedo) "Redo" else "Undo"
-        ConfirmDialog(
-            title = "$verb file operation",
-            message = "$verb '${activeFileOpConfirm.op.describe()}'?",
-            confirmLabel = verb,
-            danger = false,
-            onConfirm = {
-                fileOpConfirm = null
-                if (activeFileOpConfirm.isRedo) onRedoFileOp() else onUndoFileOp()
-            },
-            onDismiss = { fileOpConfirm = null },
-        )
-    }
-
-    PendingCloseDialog(
-        editorWorkspace = editorWorkspace,
-        pendingClose = pendingClose,
-        setPendingClose = { pendingClose = it },
+        onUndoFileOp = onUndoFileOp,
+        onRedoFileOp = onRedoFileOp,
         isUnsavedText = isUnsavedText,
         closeTabAt = closeTabAt,
         didClose = { p -> currentLspRouter.controllerFor(p)?.didClose(p) },
