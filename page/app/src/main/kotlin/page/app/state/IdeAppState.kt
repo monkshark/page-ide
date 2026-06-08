@@ -50,7 +50,9 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
         get() = store.dialogs.findInFilesOpen
         set(value) = store.updateDialogs { it.copy(findInFilesOpen = value) }
     var findInFilesIndex by mutableStateOf<List<IndexedFile>>(emptyList())
-    var referencesState: ReferencesQueryState? by mutableStateOf(null)
+    var referencesState: ReferencesQueryState?
+        get() = store.references.query
+        set(value) = store.updateReferences { it.copy(query = value) }
 
     var fileOpHistoryVersion by mutableStateOf(0)
     var fileOpConfirm: FileOpConfirmState?

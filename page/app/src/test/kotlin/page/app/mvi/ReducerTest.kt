@@ -7,6 +7,7 @@ import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
 import page.app.PaneSide
 import page.app.PendingClose
+import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
@@ -330,6 +331,51 @@ class ReducerTest {
         assertEquals(s.tree, next.tree)
         assertEquals(s.editorLayout, next.editorLayout)
         assertEquals(s.dialogs, next.dialogs)
+    }
+
+    private fun references(symbol: String, loading: Boolean = false) = ReferencesQueryState(
+        symbolName = symbol,
+        originUri = "file:///x.kt",
+        results = emptyList(),
+        isLoading = loading,
+    )
+
+    @Test
+    fun `references result populates and clears query`() {
+        val s = AppState()
+        val query = references("foo", loading = true)
+        val loaded = reduce(s, IdeEvent.Internal.ReferencesResult(query))
+        assertEquals(query, loaded.references.query)
+        val cleared = reduce(loaded, IdeEvent.Internal.ReferencesResult(null))
+        assertNull(cleared.references.query)
+    }
+
+    @Test
+    fun `references close clears query`() {
+        val loaded = reduce(AppState(), IdeEvent.Internal.ReferencesResult(references("foo")))
+        val closed = reduce(loaded, IdeEvent.Lsp.ReferencesClose)
+        assertNull(closed.references.query)
+    }
+
+    @Test
+    fun `effect-driven lsp events leave cold state unchanged`() {
+        val s = reduce(AppState(), IdeEvent.Internal.ReferencesResult(references("foo")))
+        val p = Path.of("a.kt")
+        assertSame(s, reduce(s, IdeEvent.Lsp.RequestReferences(p, 1, 2, "foo")))
+        assertSame(s, reduce(s, IdeEvent.Lsp.JumpToProblem(p, 1, 2)))
+        assertSame(s, reduce(s, IdeEvent.Lsp.ApplyRename(RenameWorkspaceEdit.EMPTY)))
+    }
+
+    @Test
+    fun `references result leaves unrelated slices value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Internal.ReferencesResult(references("foo")))
+        assertEquals(s.layout, next.layout)
+        assertEquals(s.chrome, next.chrome)
+        assertEquals(s.tree, next.tree)
+        assertEquals(s.editorLayout, next.editorLayout)
+        assertEquals(s.dialogs, next.dialogs)
+        assertEquals(s.codeAction, next.codeAction)
     }
 
     @Test
