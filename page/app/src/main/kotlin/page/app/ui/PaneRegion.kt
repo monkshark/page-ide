@@ -130,6 +130,9 @@ internal fun PaneRegion(
             onDragEnd = onTabDragEnd,
             contextActions = tabContextActions,
             showCloseButton = pageSettings.ui.showTabCloseButton,
+            onEmptyAreaClick = if (editor.splitEnabled) {
+                { editor.collapseSplit() }
+            } else null,
         )
         FocusIndicator(visible = isFocused)
         when (kind) {

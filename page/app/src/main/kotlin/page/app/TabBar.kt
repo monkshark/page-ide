@@ -99,6 +99,7 @@ fun TabBar(
     onDragEnd: () -> Unit = {},
     contextActions: TabContextActions? = null,
     showCloseButton: Boolean = true,
+    onEmptyAreaClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
@@ -122,7 +123,11 @@ fun TabBar(
             .onSizeChanged { barWidthPx = it.width },
     ) {
         if (book.tabs.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth())
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (onEmptyAreaClick != null) Modifier.clickable { onEmptyAreaClick() } else Modifier),
+            )
         } else {
             Box(
                 modifier = Modifier
@@ -151,7 +156,10 @@ fun TabBar(
                                 down.position.x + scrollState.value,
                                 tabBounds,
                                 book.tabs.size,
-                            ) ?: return@awaitEachGesture
+                            ) ?: run {
+                                onEmptyAreaClick?.invoke()
+                                return@awaitEachGesture
+                            }
                             val tappedBounds = tabBounds[tappedIndex] ?: return@awaitEachGesture
                             onActivate(tappedIndex)
                             draggingIndex = tappedIndex

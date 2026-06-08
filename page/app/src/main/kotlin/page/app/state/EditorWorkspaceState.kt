@@ -111,4 +111,21 @@ internal class EditorWorkspaceState(
         mutatePane(target) { it.copy(book = it.book.appendTab(tab)) }
         focusedPane = target
     }
+
+    fun collapseSplit() {
+        if (!splitEnabled) return
+        if (primaryPane.book.tabs.isEmpty() && secondaryPane.book.tabs.isNotEmpty()) {
+            primaryPane = secondaryPane
+            secondaryPane = EditorPaneState()
+        }
+        splitEnabled = false
+        focusedPane = PaneSide.PRIMARY
+    }
+
+    fun mergeSplitIfEmptyPane() {
+        if (!splitEnabled) return
+        if (primaryPane.book.tabs.isEmpty() || secondaryPane.book.tabs.isEmpty()) {
+            collapseSplit()
+        }
+    }
 }

@@ -282,6 +282,7 @@ internal class AppController(
         setPendingClose = { appState.pendingClose = it },
         autoSaveOnClose = { appState.pageSettings.autoSave.onClose },
         saveTabAt = { side, idx -> saveTabAt(side, idx) },
+        mergeSplitIfEmptyPane = { editorWorkspace.mergeSplitIfEmptyPane() },
     )
     val closeTabsUnderPath: (Path) -> Unit = { path -> tabController.closeTabsUnderPath(path) }
     val closeTabAt: (PaneSide, Int) -> Unit = { side, idx -> tabController.closeTabAt(side, idx) }
