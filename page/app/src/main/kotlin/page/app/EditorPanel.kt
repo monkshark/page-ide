@@ -81,7 +81,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
-import page.language.LspController
 import page.editor.BracketMatch
 import page.editor.FoldRegions
 import page.editor.Indent
@@ -115,7 +114,6 @@ import page.lsp.enrichForPropertyDecl
 import page.lsp.enrichWithKDocFromDefinition
 import page.lsp.needsKdocEnrichment
 import page.ui.CodeEditor
-import page.ui.CompactDropdown
 import page.ui.CompletionDisplay
 import page.ui.EditorDecoration
 import page.ui.EditorFontFamily
@@ -142,13 +140,6 @@ fun EditorPanel(
     lexer: SyntaxLexer?,
     activePath: Path?,
     diagnostics: List<Diagnostic> = emptyList(),
-    lspStatusText: String? = null,
-    lspActivities: List<LspController.Activity> = emptyList(),
-    onLspStatusClick: (() -> Unit)? = null,
-    onActivityClick: ((LspController.Activity) -> Unit)? = null,
-    onProblemsToggle: (() -> Unit)? = null,
-    todoCount: Int = 0,
-    onTodoToggle: (() -> Unit)? = null,
     onRequestCompletion: ((line: Int, character: Int, triggerCharacter: String?) -> CompletableFuture<CompletionList>)? = null,
     onRequestHover: ((line: Int, character: Int) -> CompletableFuture<HoverInfo?>)? = null,
     onRequestDefinition: ((line: Int, character: Int) -> CompletableFuture<List<DefinitionTarget>>)? = null,
@@ -167,9 +158,6 @@ fun EditorPanel(
     initialVScroll: Int = 0,
     initialHScroll: Int = 0,
     onScrollChange: (vertical: Int, horizontal: Int) -> Unit = { _, _ -> },
-    jdkVersion: String? = null,
-    jdkVersionTooltip: String? = null,
-    onJdkVersionClick: (() -> Unit)? = null,
     pageSettings: PageSettings = LocalPageSettings.current,
     modifier: Modifier = Modifier,
 ) {
@@ -299,9 +287,6 @@ fun EditorPanel(
             if (start >= end) null else start until end
         }
     }
-    val errorCount = diagnostics.count { it.severity == DiagnosticSeverity.ERROR }
-    val warningCount = diagnostics.count { it.severity == DiagnosticSeverity.WARNING }
-
     val diagnosticRanges = remember(value.text, diagnostics) {
         diagnostics.mapNotNull { d ->
             val widened = diagnosticUnderlineRange(
@@ -1349,24 +1334,6 @@ fun EditorPanel(
                 },
             )
         }
-        EditorStatusBar(
-            line = caret.line,
-            col = caret.col,
-            lineCount = buffer.lineCount,
-            charCount = buffer.length,
-            errorCount = errorCount,
-            warningCount = warningCount,
-            lspStatusText = lspStatusText,
-            lspActivities = lspActivities,
-            onLspStatusClick = onLspStatusClick,
-            onActivityClick = onActivityClick,
-            onProblemsToggle = onProblemsToggle,
-            todoCount = todoCount,
-            onTodoToggle = onTodoToggle,
-            jdkVersion = jdkVersion,
-            jdkVersionTooltip = jdkVersionTooltip,
-            onJdkVersionClick = onJdkVersionClick,
-        )
     }
 
     val activeRename = renameRequest
@@ -1861,293 +1828,6 @@ internal class ComposedFoldInlayMapping(
         }
         return foldMapping.transformedToOriginal(offset - shift)
     }
-}
-
-@Composable
-private fun EditorStatusBar(
-    line: Int,
-    col: Int,
-    lineCount: Int,
-    charCount: Int,
-    errorCount: Int = 0,
-    warningCount: Int = 0,
-    lspStatusText: String? = null,
-    lspActivities: List<LspController.Activity> = emptyList(),
-    onLspStatusClick: (() -> Unit)? = null,
-    onActivityClick: ((LspController.Activity) -> Unit)? = null,
-    onProblemsToggle: (() -> Unit)? = null,
-    todoCount: Int = 0,
-    onTodoToggle: (() -> Unit)? = null,
-    jdkVersion: String? = null,
-    jdkVersionTooltip: String? = null,
-    onJdkVersionClick: (() -> Unit)? = null,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().height(28.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            StatusItem("Ln ${line + 1}, Col ${col + 1}")
-            StatusItem("$lineCount lines")
-            StatusItem("$charCount chars")
-            if (errorCount > 0) DiagnosticBadge(
-                count = errorCount,
-                color = Glass.colors.error,
-                label = "errors",
-                onClick = onProblemsToggle,
-            )
-            if (warningCount > 0) DiagnosticBadge(
-                count = warningCount,
-                color = Glass.colors.warn,
-                label = "warnings",
-                onClick = onProblemsToggle,
-            )
-            TodoStatusBadge(
-                count = todoCount,
-                color = MaterialTheme.colorScheme.secondary,
-                onClick = onTodoToggle,
-            )
-            val showActivities = lspActivities.isNotEmpty()
-            val showLifecycle = !lspStatusText.isNullOrBlank()
-            val showJdk = !jdkVersion.isNullOrBlank()
-            if (showActivities || showLifecycle || showJdk) {
-                Box(modifier = Modifier.weight(1f))
-                if (showActivities) {
-                    LspActivitiesItem(activities = lspActivities, onActivityClick = onActivityClick)
-                }
-                if (showLifecycle) {
-                    LspLifecycleItem(text = lspStatusText!!, onClick = onLspStatusClick)
-                }
-                if (showJdk) {
-                    RuntimeVersionItem(label = jdkVersion!!, tooltip = jdkVersionTooltip, onClick = onJdkVersionClick)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
-    val baseColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val color = if (onClick != null) MaterialTheme.colorScheme.primary else baseColor
-    val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = mod) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-        )
-    }
-}
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun RuntimeVersionItem(label: String, tooltip: String? = null, onClick: (() -> Unit)? = null) {
-    val color = if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    if (tooltip != null) {
-        androidx.compose.foundation.TooltipArea(
-            tooltip = {
-                Surface(
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.inverseSurface,
-                ) {
-                    Text(
-                        text = tooltip,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
-                    )
-                }
-            },
-        ) {
-            Text(text = label, modifier = mod, style = MaterialTheme.typography.labelSmall, color = color)
-        }
-    } else {
-        Text(text = label, modifier = mod, style = MaterialTheme.typography.labelSmall, color = color)
-    }
-}
-
-@Composable
-private fun LspActivitiesItem(
-    activities: List<LspController.Activity>,
-    onActivityClick: ((LspController.Activity) -> Unit)? = null,
-) {
-    if (activities.isEmpty()) return
-    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(activities.size) {
-        while (true) {
-            nowMs = System.currentTimeMillis()
-            delay(500)
-        }
-    }
-    var expanded by remember { mutableStateOf(false) }
-    val first = activities.first()
-    val firstElapsed = ((nowMs - first.startedAtMs) / 1000L).coerceAtLeast(0L).toInt()
-    val canExpand = activities.size >= 2
-    val firstClickable = first.installerId != null && onActivityClick != null
-    val rowMod = Modifier.then(
-        when {
-            canExpand -> Modifier.clickable { expanded = !expanded }
-            firstClickable -> Modifier.clickable { onActivityClick!!(first) }
-            else -> Modifier
-        },
-    )
-    Box {
-        Row(
-            modifier = rowMod,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ActivityProgressBar(first.progress)
-            Text(
-                text = if (firstElapsed > 0) "LSP · ${first.label} (${firstElapsed}s)"
-                else "LSP · ${first.label}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (canExpand) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                ) {
-                    Text(
-                        text = "+${activities.size - 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                    )
-                }
-            }
-        }
-        CompactDropdown(
-            expanded = canExpand && expanded,
-            onDismissRequest = { expanded = false },
-            minWidth = 220.dp,
-        ) {
-            Box(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (a in activities) {
-                        val secs = ((nowMs - a.startedAtMs) / 1000L).coerceAtLeast(0L).toInt()
-                        val clickable = a.installerId != null && onActivityClick != null
-                        Row(
-                            modifier = Modifier.then(
-                                if (clickable) Modifier.clickable {
-                                    expanded = false
-                                    onActivityClick!!(a)
-                                } else Modifier,
-                            ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ActivityProgressBar(a.progress)
-                            Text(
-                                text = if (secs > 0) "${a.label} (${secs}s)" else a.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ActivityProgressBar(progress: Float?) {
-    val barMod = Modifier.width(72.dp).height(3.dp)
-    if (progress != null) {
-        val animated by androidx.compose.animation.core.animateFloatAsState(
-            targetValue = progress,
-            animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
-            label = "installProgress",
-        )
-        androidx.compose.material3.LinearProgressIndicator(
-            progress = { animated },
-            modifier = barMod,
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            gapSize = 0.dp,
-            drawStopIndicator = {},
-        )
-    } else {
-        androidx.compose.material3.LinearProgressIndicator(
-            modifier = barMod,
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun DiagnosticBadge(
-    count: Int,
-    color: androidx.compose.ui.graphics.Color,
-    label: String,
-    onClick: (() -> Unit)? = null,
-) {
-    val rowMod = Modifier.then(
-        if (onClick != null) Modifier.clickable { onClick() } else Modifier,
-    )
-    Row(
-        modifier = rowMod,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(color, CircleShape),
-        )
-        Text(
-            text = "$count $label",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun TodoStatusBadge(
-    count: Int,
-    color: androidx.compose.ui.graphics.Color,
-    onClick: (() -> Unit)? = null,
-) {
-    val rowMod = Modifier.then(
-        if (onClick != null) Modifier.clickable { onClick() } else Modifier,
-    )
-    Row(
-        modifier = rowMod,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(color, CircleShape),
-        )
-        Text(
-            text = if (count > 0) "TODO $count" else "TODO",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun StatusItem(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 internal fun keywordInsertText(item: LspCompletionItem): String {

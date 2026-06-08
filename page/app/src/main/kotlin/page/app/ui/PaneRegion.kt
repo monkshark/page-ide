@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,12 +48,9 @@ internal fun PaneRegion(
     onWindowShortcut: (KeyEvent) -> Boolean,
     onTabDragStart: () -> Unit = {},
     onTabDragEnd: () -> Unit = {},
-    onProblemsToggle: () -> Unit = {},
     onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
     onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
     onRequestReferences: (Path, Int, Int, String) -> Unit = { _, _, _, _ -> },
-    todoCount: Int = 0,
-    onTodoToggle: () -> Unit = {},
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
     initialFoldedStartLines: Set<Int> = emptySet(),
@@ -62,44 +58,12 @@ internal fun PaneRegion(
     editorScrollFor: (Path) -> EditorScrollSnapshot? = { null },
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActions: TabContextActions? = null,
-    runtimeVersions: Map<String, String> = emptyMap(),
-    runtimeSources: Map<String, String> = emptyMap(),
-    runtimeBuildFileVersions: Map<String, String> = emptyMap(),
-    onRuntimeClick: ((String) -> Unit)? = null,
     pageSettings: PageSettings = LocalPageSettings.current,
     modifier: Modifier = Modifier,
 ) {
     val active = pane.book.active
     val kind = active?.let { FileKinds.classify(it.path) }
     val activeLexer = active?.path?.let { SyntaxLexers.forPath(it) }
-    val activeExt = remember(active?.path) {
-        active?.path?.fileName?.toString()?.lowercase()?.substringAfterLast('.', "") ?: ""
-    }
-    val runtimeInfo: Triple<String, String, String?>? = remember(activeExt, runtimeVersions, runtimeSources, runtimeBuildFileVersions) {
-        fun build(name: String, key: String, id: String): Triple<String, String, String?> {
-            val ver = runtimeVersions[key] ?: "?"
-            val bfVer = runtimeBuildFileVersions[key]
-            val src = runtimeSources[key]
-            val mismatch = bfVer != null && ver != "?" && !ver.startsWith(bfVer)
-            val label = if (mismatch) "$name $ver ⚠" else "$name $ver"
-            val tooltip = when {
-                mismatch -> "Project requires $bfVer ($src), using $ver"
-                src != null -> "from $src"
-                else -> null
-            }
-            return Triple(label, id, tooltip)
-        }
-        when (activeExt) {
-            "java" -> build("JDK", "java", "jdk")
-            "js", "mjs", "cjs", "ts" -> build("Node", "js", "node")
-            "py" -> build("Python", "py", "python-runtime")
-            "go" -> build("Go", "go", "go-sdk")
-            "c", "cpp", "cc", "cxx", "h", "hpp" -> build("Clang", "cpp", "cpp-toolchain")
-            "rs" -> build("Rust", "rs", "rust-runtime")
-            "cs" -> build(".NET", "cs", "dotnet-runtime")
-            else -> null
-        }
-    }
     Column(
         modifier = modifier.fillMaxSize()
             .pointerInput(side) {
@@ -162,26 +126,6 @@ internal fun PaneRegion(
             } else {
                 val activeCtrl = lspRouter.controllerFor(active.path)
                 val activeDiagnostics = activeCtrl?.diagnosticsFor(active.path).orEmpty()
-                val lspStatusText = lspStatusLineText(lspRouter, active?.path)
-                val ctrlActivities = activeCtrl?.activities?.values
-                    ?.sortedBy { it.startedAtMs }
-                    ?.toList().orEmpty()
-                val globalStarting = lspRouter.startingActivities
-                val installActivities = InstallProgressRegistry.entries.values.map { e ->
-                    val frac = (e.progress as? page.runtime.LspInstaller.Progress.Downloading)
-                        ?.takeIf { it.total > 0 }
-                        ?.let { (it.bytesRead.toFloat() / it.total.toFloat()).coerceIn(0f, 1f) }
-                    LspController.Activity(
-                        kind = "install",
-                        label = "${e.displayName} (installing)",
-                        startedAtMs = e.startedAtMs,
-                        progress = frac,
-                        installerId = e.installerId,
-                    )
-                }
-                val lspActivities = (globalStarting + ctrlActivities + installActivities)
-                    .distinctBy { it.kind + it.label }
-                    .sortedBy { it.startedAtMs }
                 EditorPanel(
                     value = pane.editorValue,
                     onValueChange = { v -> editor.handleEditorChange(side, v) },
@@ -198,15 +142,6 @@ internal fun PaneRegion(
                     lexer = activeLexer,
                     activePath = active?.path,
                     diagnostics = activeDiagnostics,
-                    lspStatusText = lspStatusText,
-                    lspActivities = lspActivities,
-                    onLspStatusClick = { activeCtrl?.openInstallGuide() },
-                    onActivityClick = { act ->
-                        act.installerId?.let { onRuntimeClick?.invoke(it) }
-                    },
-                    onProblemsToggle = onProblemsToggle,
-                    todoCount = todoCount,
-                    onTodoToggle = onTodoToggle,
                     onRequestCompletion = active?.path?.let { p ->
                         activeCtrl?.let { ctrl -> { line, ch, trig -> ctrl.completion(p, pane.editorValue.text, line, ch, trig) } }
                     },
@@ -252,9 +187,6 @@ internal fun PaneRegion(
                     onScrollChange = { v, h ->
                         onEditorScrollChange(active.path, EditorScrollSnapshot(v, h))
                     },
-                    jdkVersion = runtimeInfo?.first,
-                    jdkVersionTooltip = runtimeInfo?.third?.let { "from $it" },
-                    onJdkVersionClick = runtimeInfo?.let { (_, id, _) -> { onRuntimeClick?.invoke(id) } },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
