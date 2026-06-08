@@ -343,12 +343,18 @@ class LspController(
             return
         }
         val ws = workspace ?: return
-        if (ws.isOpen(uri)) {
-            println("[lsp] didChange (already open) $uri")
-            ws.didChange(uri, text)
-        } else {
-            println("[lsp] didOpen $uri (lang=$languageId, ${text.length} chars)")
-            ws.didOpen(uri, languageId, text)
+        scope.launch(Dispatchers.Default) {
+            try {
+                if (ws.isOpen(uri)) {
+                    println("[lsp] didChange (already open) $uri")
+                    ws.didChange(uri, text)
+                } else {
+                    println("[lsp] didOpen $uri (lang=$languageId, ${text.length} chars)")
+                    ws.didOpen(uri, languageId, text)
+                }
+            } catch (t: Throwable) {
+                println("[lsp] didOpen failed for $uri: ${t.message}")
+            }
         }
     }
 
