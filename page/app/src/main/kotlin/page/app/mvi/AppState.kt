@@ -2,8 +2,14 @@ package page.app.mvi
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import page.app.CreateEntryDialogState
+import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
+import page.app.FileOpConfirmState
 import page.app.PaneSide
+import page.app.PendingClose
+import page.app.RenameEntryDialogState
+import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import java.nio.file.Path
@@ -52,12 +58,23 @@ internal data class EditorScrollState(
     val scrollByPath: Map<Path, EditorScrollSnapshot> = emptyMap(),
 )
 
+internal data class DialogState(
+    val createDialog: CreateEntryDialogState? = null,
+    val renameDialog: RenameEntryDialogState? = null,
+    val deleteDialog: DeleteEntryDialogState? = null,
+    val pasteDialog: PasteEntryDialogState? = null,
+    val fileOpConfirm: FileOpConfirmState? = null,
+    val pendingClose: PendingClose? = null,
+    val findInFilesOpen: Boolean = false,
+)
+
 internal data class AppState(
     val layout: LayoutState = LayoutState(),
     val chrome: ChromeState = ChromeState(),
     val tree: TreeState = TreeState(),
     val editorLayout: EditorLayoutState = EditorLayoutState(),
     val editorScroll: EditorScrollState = EditorScrollState(),
+    val dialogs: DialogState = DialogState(),
 )
 
 private fun defaultOutputHeight(): Dp {

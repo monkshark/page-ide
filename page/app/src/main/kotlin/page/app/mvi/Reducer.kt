@@ -10,6 +10,18 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Tree -> state.copy(tree = reduceTree(state.tree, event))
     is IdeEvent.EditorLayout -> state.copy(editorLayout = reduceEditorLayout(state.editorLayout, event))
     is IdeEvent.EditorScroll -> state.copy(editorScroll = reduceEditorScroll(state.editorScroll, event))
+    is IdeEvent.Dialog -> state.copy(dialogs = reduceDialogs(state.dialogs, event))
+}
+
+private fun reduceDialogs(s: DialogState, e: IdeEvent.Dialog): DialogState = when (e) {
+    is IdeEvent.Dialog.SetCreate -> s.copy(createDialog = e.state)
+    is IdeEvent.Dialog.SetRename -> s.copy(renameDialog = e.state)
+    is IdeEvent.Dialog.SetDelete -> s.copy(deleteDialog = e.state)
+    is IdeEvent.Dialog.SetPaste -> s.copy(pasteDialog = e.state)
+    is IdeEvent.Dialog.SetFileOpConfirm -> s.copy(fileOpConfirm = e.state)
+    is IdeEvent.Dialog.SetPendingClose -> s.copy(pendingClose = e.state)
+    IdeEvent.Dialog.OpenFindInFiles -> s.copy(findInFilesOpen = true)
+    IdeEvent.Dialog.CloseFindInFiles -> s.copy(findInFilesOpen = false)
 }
 
 private fun reduceEditorLayout(s: EditorLayoutState, e: IdeEvent.EditorLayout): EditorLayoutState = when (e) {

@@ -110,4 +110,59 @@ class EditorWorkspaceStateTest {
         assertEquals(2, s.primaryPane.book.tabs.size)
         assertEquals(0, s.secondaryPane.book.tabs.size)
     }
+
+    @Test
+    fun mergeDisablesSplitWhenSecondaryEmpties() {
+        val s = newState()
+        s.primaryPane = s.primaryPane.copy(book = bookWith(2, active = 0))
+        s.splitEnabled = true
+        s.focusedPane = PaneSide.SECONDARY
+        s.mergeSplitIfEmptyPane()
+        assertEquals(false, s.splitEnabled)
+        assertEquals(2, s.primaryPane.book.tabs.size)
+        assertEquals(0, s.secondaryPane.book.tabs.size)
+        assertEquals(PaneSide.PRIMARY, s.focusedPane)
+    }
+
+    @Test
+    fun mergePromotesSecondaryWhenPrimaryEmpties() {
+        val s = newState()
+        s.secondaryPane = s.secondaryPane.copy(book = bookWith(2, active = 1))
+        s.splitEnabled = true
+        s.mergeSplitIfEmptyPane()
+        assertEquals(false, s.splitEnabled)
+        assertEquals(2, s.primaryPane.book.tabs.size)
+        assertEquals(0, s.secondaryPane.book.tabs.size)
+        assertEquals(PaneSide.PRIMARY, s.focusedPane)
+    }
+
+    @Test
+    fun mergeIsNoOpWhenBothPanesHaveTabs() {
+        val s = newState()
+        s.primaryPane = s.primaryPane.copy(book = bookWith(1, active = 0))
+        s.secondaryPane = s.secondaryPane.copy(book = bookWith(1, active = 0))
+        s.splitEnabled = true
+        s.mergeSplitIfEmptyPane()
+        assertEquals(true, s.splitEnabled)
+    }
+
+    @Test
+    fun mergeIsNoOpWhenNotSplit() {
+        val s = newState()
+        s.mergeSplitIfEmptyPane()
+        assertEquals(false, s.splitEnabled)
+    }
+
+    @Test
+    fun collapseSplitDisablesAndFocusesPrimary() {
+        val s = newState()
+        s.primaryPane = s.primaryPane.copy(book = bookWith(1, active = 0))
+        s.secondaryPane = s.secondaryPane.copy(book = bookWith(1, active = 0))
+        s.splitEnabled = true
+        s.focusedPane = PaneSide.SECONDARY
+        s.collapseSplit()
+        assertEquals(false, s.splitEnabled)
+        assertEquals(PaneSide.PRIMARY, s.focusedPane)
+        assertEquals(1, s.primaryPane.book.tabs.size)
+    }
 }

@@ -16,6 +16,7 @@ internal class EditorTabController(
     private val setPendingClose: (PendingClose) -> Unit,
     private val autoSaveOnClose: () -> Boolean,
     private val saveTabAt: (PaneSide, Int) -> Unit,
+    private val mergeSplitIfEmptyPane: () -> Unit = {},
 ) {
     private fun disposeClosed(paths: List<Path>) {
         paths.forEach { p ->
@@ -30,6 +31,7 @@ internal class EditorTabController(
         val tab = paneOf(side).book.tabs.getOrNull(idx)
         mutatePane(side) { it.copy(book = it.book.close(idx)) }
         if (tab != null) disposeClosed(listOf(tab.path))
+        mergeSplitIfEmptyPane()
     }
 
     fun closeTabsUnderPath(path: Path) {
@@ -45,6 +47,7 @@ internal class EditorTabController(
             }
             disposeClosed(closedPaths)
         }
+        mergeSplitIfEmptyPane()
     }
 
     fun requestCloseTab(side: PaneSide, idx: Int) {
@@ -67,6 +70,7 @@ internal class EditorTabController(
         val closedPaths = indices.mapNotNull { i -> pane.book.tabs.getOrNull(i)?.path }
         mutatePane(side) { it.copy(book = it.book.closeMany(indices)) }
         disposeClosed(closedPaths)
+        mergeSplitIfEmptyPane()
     }
 
     fun requestBatchClose(side: PaneSide, indices: List<Int>) {
