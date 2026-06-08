@@ -465,6 +465,29 @@ internal fun <T> applyFileOrder(
     return ordered.values.toList()
 }
 
+internal fun diagnosticsInScope(
+    all: Map<String, List<Diagnostic>>,
+    scope: DiagnosticsScope,
+    focusedPath: Path?,
+    openPaths: Set<Path>,
+): Map<String, List<Diagnostic>> {
+    fun uriToPath(uri: String): Path? =
+        runCatching { Path.of(URI(uri)).toAbsolutePath().normalize() }.getOrNull()
+    return when (scope) {
+        DiagnosticsScope.CURRENT_FILE -> {
+            val target = focusedPath?.toAbsolutePath()?.normalize() ?: return emptyMap()
+            all.filterKeys { uriToPath(it) == target }
+        }
+        DiagnosticsScope.OPEN_TABS -> {
+            if (openPaths.isEmpty()) return emptyMap()
+            val normalized = openPaths.mapNotNull {
+                runCatching { it.toAbsolutePath().normalize() }.getOrNull()
+            }.toSet()
+            all.filterKeys { val p = uriToPath(it); p != null && p in normalized }
+        }
+    }
+}
+
 private fun flattenAndSort(diagnostics: Map<String, List<Diagnostic>>): List<ProblemEntry> {
     val acc = mutableListOf<ProblemEntry>()
     for ((uri, list) in diagnostics) {

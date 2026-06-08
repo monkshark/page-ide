@@ -320,12 +320,9 @@ internal fun IdeMainLayout(
                                 onWindowShortcut = onWindowShortcut,
                                 onTabDragStart = { dragSourcePane = PaneSide.PRIMARY },
                                 onTabDragEnd = { dragSourcePane = null },
-                                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
-                                todoCount = todoItems.size,
-                                onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -333,10 +330,6 @@ internal fun IdeMainLayout(
                                 editorScrollFor = editorScrollFor,
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
-                                runtimeVersions = runtimeVersions.value,
-                                runtimeSources = runtimeSources.value,
-                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
-                                onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -360,12 +353,9 @@ internal fun IdeMainLayout(
                                 onWindowShortcut = onWindowShortcut,
                                 onTabDragStart = { dragSourcePane = PaneSide.SECONDARY },
                                 onTabDragEnd = { dragSourcePane = null },
-                                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
-                                todoCount = todoItems.size,
-                                onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -373,10 +363,6 @@ internal fun IdeMainLayout(
                                 editorScrollFor = editorScrollFor,
                                 onEditorScrollChange = onEditorScrollChange,
                                 tabContextActions = tabContextActionsFor(PaneSide.SECONDARY),
-                                runtimeVersions = runtimeVersions.value,
-                                runtimeSources = runtimeSources.value,
-                                runtimeBuildFileVersions = runtimeBuildFileVersions.value,
-                                onRuntimeClick = { id -> runtimeDialogOpen = id },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         },
@@ -399,12 +385,9 @@ internal fun IdeMainLayout(
                         onReplaceAll = onReplaceAll,
                         onSearchClose = onSearchClose,
                         onWindowShortcut = onWindowShortcut,
-                        onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
                         onJumpToProblem = onJumpToProblem,
                         onApplyRename = onApplyRename,
                         onRequestReferences = onRequestReferences,
-                        todoCount = todoItems.size,
-                        onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -412,10 +395,6 @@ internal fun IdeMainLayout(
                         editorScrollFor = editorScrollFor,
                         onEditorScrollChange = onEditorScrollChange,
                         tabContextActions = tabContextActionsFor(PaneSide.PRIMARY),
-                        runtimeVersions = runtimeVersions.value,
-                        runtimeSources = runtimeSources.value,
-                        runtimeBuildFileVersions = runtimeBuildFileVersions.value,
-                        onRuntimeClick = { id -> runtimeDialogOpen = id },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -434,8 +413,16 @@ internal fun IdeMainLayout(
             }
         }
         if (ui.problemsOpen) {
+            val diagnosticsScope = LocalPageSettings.current.lsp.diagnosticsScope
+            val openTabPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs)
+                .map { it.path }.toSet()
             ProblemsPanel(
-                diagnostics = lspRouter.allDiagnosticsByUri,
+                diagnostics = diagnosticsInScope(
+                    all = lspRouter.allDiagnosticsByUri,
+                    scope = diagnosticsScope,
+                    focusedPath = editor.focused().book.active?.path,
+                    openPaths = openTabPaths,
+                ),
                 onJump = onJumpToProblem,
                 onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
                 height = ui.problemsHeight,
@@ -487,6 +474,17 @@ internal fun IdeMainLayout(
                 onResizeDelta = { onEvent(IdeEvent.Panel.ResizeOutput(it)) },
             )
         }
+        GlobalStatusBar(
+            editor = editor,
+            lspRouter = lspRouter,
+            todoCount = todoItems.size,
+            runtimeVersions = runtimeVersions.value,
+            runtimeSources = runtimeSources.value,
+            runtimeBuildFileVersions = runtimeBuildFileVersions.value,
+            onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
+            onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
+            onRuntimeClick = { id -> runtimeDialogOpen = id },
+        )
     }
     if (installGuideOpen && shellCtrl != null) {
         val activeDef = shellActivePath?.let { resolveLanguageForPath(it) }

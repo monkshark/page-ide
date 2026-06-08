@@ -29,11 +29,14 @@ data class EditorOptions(
     companion object { val DEFAULT = EditorOptions() }
 }
 
+enum class DiagnosticsScope { CURRENT_FILE, OPEN_TABS }
+
 data class LspOptions(
     val showInlayHints: Boolean = true,
     val triggerCompletionMidWord: Boolean = true,
     val hoverDelayMs: Int = 500,
     val showInlineDiagnostics: Boolean = true,
+    val diagnosticsScope: DiagnosticsScope = DiagnosticsScope.OPEN_TABS,
     val serverPaths: Map<String, String> = emptyMap(),
 ) {
     companion object { val DEFAULT = LspOptions() }
@@ -84,6 +87,7 @@ object AppSettings {
     private const val KEY_LSP_MIDWORD = "lsp.triggerCompletionMidWord"
     private const val KEY_LSP_HOVER_MS = "lsp.hoverDelayMs"
     private const val KEY_LSP_INLINE_DIAG = "lsp.showInlineDiagnostics"
+    private const val KEY_LSP_DIAG_SCOPE = "lsp.diagnosticsScope"
     private const val KEY_LSP_SERVER_PATH_PREFIX = "lsp.serverPath."
 
     private const val KEY_AI_PAIRS = "autoInput.pairs"
@@ -156,11 +160,15 @@ object AppSettings {
                 if (id.isBlank() || value.isBlank()) null else id to value
             }
             .toMap()
+        val diagnosticsScope = p.getProperty(KEY_LSP_DIAG_SCOPE)?.let { raw ->
+            DiagnosticsScope.values().firstOrNull { it.name.equals(raw, ignoreCase = true) }
+        } ?: default.diagnosticsScope
         return LspOptions(
             showInlayHints = p.getBoolean(KEY_LSP_INLAY, default.showInlayHints),
             triggerCompletionMidWord = p.getBoolean(KEY_LSP_MIDWORD, default.triggerCompletionMidWord),
             hoverDelayMs = p.getInt(KEY_LSP_HOVER_MS, default.hoverDelayMs, 0, 5000),
             showInlineDiagnostics = p.getBoolean(KEY_LSP_INLINE_DIAG, default.showInlineDiagnostics),
+            diagnosticsScope = diagnosticsScope,
             serverPaths = serverPaths,
         )
     }
@@ -170,6 +178,7 @@ object AppSettings {
             KEY_LSP_MIDWORD to o.triggerCompletionMidWord.toString(),
             KEY_LSP_HOVER_MS to o.hoverDelayMs.toString(),
             KEY_LSP_INLINE_DIAG to o.showInlineDiagnostics.toString(),
+            KEY_LSP_DIAG_SCOPE to o.diagnosticsScope.name,
         ) + o.serverPaths
             .filterValues { it.isNotBlank() }
             .mapKeys { (id, _) -> "$KEY_LSP_SERVER_PATH_PREFIX$id" },
