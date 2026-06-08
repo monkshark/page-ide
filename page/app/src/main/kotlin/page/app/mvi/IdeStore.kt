@@ -30,6 +30,9 @@ internal class IdeStore(initial: AppState = AppState()) {
     var references by mutableStateOf(initial.references)
         private set
 
+    var run by mutableStateOf(initial.run)
+        private set
+
     fun snapshot(): AppState = AppState(
         layout = layout,
         chrome = chrome,
@@ -39,6 +42,7 @@ internal class IdeStore(initial: AppState = AppState()) {
         dialogs = dialogs,
         codeAction = codeAction,
         references = references,
+        run = run,
     )
 
     fun apply(next: AppState) {
@@ -50,6 +54,7 @@ internal class IdeStore(initial: AppState = AppState()) {
         if (next.dialogs != dialogs) dialogs = next.dialogs
         if (next.codeAction != codeAction) codeAction = next.codeAction
         if (next.references != references) references = next.references
+        if (next.run != run) run = next.run
     }
 
     fun updateLayout(transform: (LayoutState) -> LayoutState) {
@@ -90,6 +95,11 @@ internal class IdeStore(initial: AppState = AppState()) {
     fun updateReferences(transform: (ReferencesState) -> ReferencesState) {
         val next = transform(references)
         if (next != references) references = next
+    }
+
+    fun updateRun(transform: (RunState) -> RunState) {
+        val next = transform(run)
+        if (next != run) run = next
     }
 }
 

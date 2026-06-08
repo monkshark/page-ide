@@ -61,7 +61,7 @@ internal fun AppDialogs(
             state = appState.runState,
             workspaceRoot = workspaceState.rootDir,
             onSave = { saved ->
-                appState.runState = saved
+                onEvent(IdeEvent.Run.SaveConfigs(saved))
                 onEvent(IdeEvent.Chrome.CloseRunDialog)
             },
             onDismiss = { onEvent(IdeEvent.Chrome.CloseRunDialog) },

@@ -438,12 +438,11 @@ internal class AppController(
             if (tm.tabs.isEmpty()) tm.newTab()
         },
         setOutputOpen = { layoutUiState.outputOpen = it },
-        setRunDialogOpen = { appState.runDialogOpen = it },
     )
     val toggleTerminal: () -> Unit = { runActionsController.toggleTerminal() }
-    val startActiveRun: () -> Unit = { runActionsController.startActiveRun() }
-    val stopActiveRun: () -> Unit = { runActionsController.stopActiveRun() }
-    val openRunDialog: () -> Unit = { runActionsController.openRunDialog() }
+    val startActiveRun: () -> Unit = { dispatch(IdeEvent.Run.Start) }
+    val stopActiveRun: () -> Unit = { dispatch(IdeEvent.Run.Stop) }
+    val openRunDialog: () -> Unit = { dispatch(IdeEvent.Chrome.OpenRunDialog) }
     val openSettings: () -> Unit = { appState.settingsDialogOpen = true }
 
     private val shortcutDispatchController = ShortcutDispatchController(
@@ -529,13 +528,13 @@ internal class AppController(
 
     fun runPanelBinding(): RunPanelBinding = RunPanelBinding(
         runState = appState.runState,
-        onSelectRunConfig = { id -> appState.runState = appState.runState.select(id) },
-        onStartRun = startActiveRun,
-        onStopRun = stopActiveRun,
-        onOpenRunDialog = openRunDialog,
+        onSelectRunConfig = { id -> dispatch(IdeEvent.Run.SelectConfig(id)) },
+        onStartRun = { dispatch(IdeEvent.Run.Start) },
+        onStopRun = { dispatch(IdeEvent.Run.Stop) },
+        onOpenRunDialog = { dispatch(IdeEvent.Chrome.OpenRunDialog) },
         runIsRunning = outputState.running,
         outputState = outputState,
-        onOutputClear = { outputState.clear() },
+        onOutputClear = { dispatch(IdeEvent.Run.ClearOutput) },
     )
 
     fun codeActionPreviewBinding(): CodeActionPreviewBinding = CodeActionPreviewBinding(
@@ -561,6 +560,9 @@ internal class AppController(
             is IdeEvent.Lsp.JumpToProblem -> jumpToProblem(event.path, event.line, event.character)
             is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
             IdeEvent.Lsp.ReferencesClose -> Unit
+            IdeEvent.Run.Start -> runActionsController.startActiveRun()
+            IdeEvent.Run.Stop -> runActionsController.stopActiveRun()
+            IdeEvent.Run.ClearOutput -> runCatching { outputState.clear() }
             else -> Unit
         }
     }

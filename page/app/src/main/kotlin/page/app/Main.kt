@@ -355,8 +355,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     todo.scanWorkspaceAsync()
                 },
                 { root ->
-                    runState = if (root == null) RunConfigsState()
+                    val loaded = if (root == null) RunConfigsState()
                     else runCatching { RunConfigStore.load(root) }.getOrDefault(RunConfigsState())
+                    onIdeEvent(IdeEvent.Internal.RunConfigsChanged(loaded))
                 },
                 { root ->
                     historyLoaded = false

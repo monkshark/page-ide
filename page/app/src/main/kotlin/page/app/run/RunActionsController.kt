@@ -18,7 +18,6 @@ internal class RunActionsController(
     private val setTerminalOpen: (Boolean) -> Unit,
     private val ensureTerminalTab: () -> Unit,
     private val setOutputOpen: (Boolean) -> Unit,
-    private val setRunDialogOpen: (Boolean) -> Unit,
 ) {
     fun toggleTerminal() {
         val next = !terminalOpen()
@@ -45,9 +44,5 @@ internal class RunActionsController(
 
     fun stopActiveRun() {
         stopRun()
-    }
-
-    fun openRunDialog() {
-        setRunDialogOpen(true)
     }
 }

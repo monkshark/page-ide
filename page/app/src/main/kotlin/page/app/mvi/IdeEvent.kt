@@ -13,6 +13,7 @@ import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
+import page.runtime.RunConfigsState
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -97,6 +98,14 @@ internal sealed interface IdeEvent {
         data object ReferencesClose : Lsp
     }
 
+    sealed interface Run : IdeEvent {
+        data class SelectConfig(val id: String) : Run
+        data object Start : Run
+        data object Stop : Run
+        data class SaveConfigs(val state: RunConfigsState) : Run
+        data object ClearOutput : Run
+    }
+
     sealed interface Internal : IdeEvent {
         data class CodeActionsResult(
             val actions: List<CodeActionEntry>,
@@ -107,5 +116,7 @@ internal sealed interface IdeEvent {
         ) : Internal
 
         data class ReferencesResult(val state: ReferencesQueryState?) : Internal
+
+        data class RunConfigsChanged(val state: RunConfigsState) : Internal
     }
 }

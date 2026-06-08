@@ -12,6 +12,8 @@ import page.app.RenameEntryDialogState
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
+import page.runtime.RunConfig
+import page.runtime.RunConfigsState
 import java.nio.file.Path
 import kotlin.test.assertNull
 import kotlin.test.Test
@@ -376,6 +378,61 @@ class ReducerTest {
         assertEquals(s.editorLayout, next.editorLayout)
         assertEquals(s.dialogs, next.dialogs)
         assertEquals(s.codeAction, next.codeAction)
+    }
+
+    private fun runConfigs(vararg ids: String, active: String? = null) = RunConfigsState(
+        configs = ids.map { RunConfig(id = it, name = it, command = "echo $it") },
+        activeId = active,
+    )
+
+    @Test
+    fun `run select config sets active id`() {
+        val s = AppState(run = RunState(runConfigs("a", "b")))
+        val next = reduce(s, IdeEvent.Run.SelectConfig("b"))
+        assertEquals("b", next.run.configs.activeId)
+    }
+
+    @Test
+    fun `run select unknown config is no-op`() {
+        val s = AppState(run = RunState(runConfigs("a", active = "a")))
+        val next = reduce(s, IdeEvent.Run.SelectConfig("zzz"))
+        assertEquals("a", next.run.configs.activeId)
+        assertSame(s.run.configs, next.run.configs)
+    }
+
+    @Test
+    fun `run save configs replaces slice`() {
+        val replacement = runConfigs("x", "y", active = "y")
+        val next = reduce(AppState(), IdeEvent.Run.SaveConfigs(replacement))
+        assertEquals(replacement, next.run.configs)
+    }
+
+    @Test
+    fun `internal run configs changed replaces slice`() {
+        val loaded = runConfigs("p", active = "p")
+        val next = reduce(AppState(), IdeEvent.Internal.RunConfigsChanged(loaded))
+        assertEquals(loaded, next.run.configs)
+    }
+
+    @Test
+    fun `run start stop clear leave cold state unchanged`() {
+        val s = AppState(run = RunState(runConfigs("a", active = "a")))
+        assertSame(s, reduce(s, IdeEvent.Run.Start))
+        assertSame(s, reduce(s, IdeEvent.Run.Stop))
+        assertSame(s, reduce(s, IdeEvent.Run.ClearOutput))
+    }
+
+    @Test
+    fun `run select leaves unrelated slices value-equal`() {
+        val s = AppState(run = RunState(runConfigs("a", "b")))
+        val next = reduce(s, IdeEvent.Run.SelectConfig("b"))
+        assertEquals(s.layout, next.layout)
+        assertEquals(s.chrome, next.chrome)
+        assertEquals(s.tree, next.tree)
+        assertEquals(s.editorLayout, next.editorLayout)
+        assertEquals(s.dialogs, next.dialogs)
+        assertEquals(s.codeAction, next.codeAction)
+        assertEquals(s.references, next.references)
     }
 
     @Test
