@@ -9,6 +9,8 @@ import page.app.PaneSide
 import page.app.PendingClose
 import page.app.RenameEntryDialogState
 import page.editor.SplitPaneState
+import page.lsp.CodeActionEntry
+import page.lsp.RenameWorkspaceEdit
 import java.nio.file.Path
 import kotlin.test.assertNull
 import kotlin.test.Test
@@ -252,6 +254,82 @@ class ReducerTest {
         assertTrue(opened.dialogs.findInFilesOpen)
         val closed = reduce(opened, IdeEvent.Dialog.CloseFindInFiles)
         assertFalse(closed.dialogs.findInFilesOpen)
+    }
+
+    private fun codeAction(title: String) = CodeActionEntry(
+        title = title,
+        kind = null,
+        isPreferred = false,
+        edit = RenameWorkspaceEdit.EMPTY,
+        command = null,
+    )
+
+    @Test
+    fun `code actions result populates slice`() {
+        val s = AppState()
+        val actions = listOf(codeAction("a"), codeAction("b"))
+        val next = reduce(
+            s,
+            IdeEvent.Internal.CodeActionsResult(actions, "file:///x.kt", "text", selected = 1, open = true),
+        )
+        assertTrue(next.codeAction.open)
+        assertEquals(actions, next.codeAction.actions)
+        assertEquals(1, next.codeAction.selected)
+        assertEquals("file:///x.kt", next.codeAction.uri)
+        assertEquals("text", next.codeAction.text)
+    }
+
+    @Test
+    fun `code action selected change clamps to bounds`() {
+        val withActions = reduce(
+            AppState(),
+            IdeEvent.Internal.CodeActionsResult(listOf(codeAction("a"), codeAction("b")), null, null, 0, true),
+        )
+        val high = reduce(withActions, IdeEvent.CodeAction.SelectedChange(99))
+        assertEquals(1, high.codeAction.selected)
+        val low = reduce(withActions, IdeEvent.CodeAction.SelectedChange(-5))
+        assertEquals(0, low.codeAction.selected)
+    }
+
+    @Test
+    fun `code action selected change on empty list stays zero`() {
+        val next = reduce(AppState(), IdeEvent.CodeAction.SelectedChange(3))
+        assertEquals(0, next.codeAction.selected)
+    }
+
+    @Test
+    fun `applying code action closes popup and bumps editor focus`() {
+        val open = reduce(
+            AppState(),
+            IdeEvent.Internal.CodeActionsResult(listOf(codeAction("a")), null, null, 0, true),
+        )
+        val applied = reduce(open, IdeEvent.CodeAction.Apply(codeAction("a")))
+        assertFalse(applied.codeAction.open)
+        assertEquals(open.chrome.editorFocusVersion + 1, applied.chrome.editorFocusVersion)
+    }
+
+    @Test
+    fun `dismissing code action closes popup and bumps editor focus`() {
+        val open = reduce(
+            AppState(),
+            IdeEvent.Internal.CodeActionsResult(listOf(codeAction("a")), null, null, 0, true),
+        )
+        val dismissed = reduce(open, IdeEvent.CodeAction.Dismiss)
+        assertFalse(dismissed.codeAction.open)
+        assertEquals(open.chrome.editorFocusVersion + 1, dismissed.chrome.editorFocusVersion)
+    }
+
+    @Test
+    fun `code action result leaves unrelated slices value-equal`() {
+        val s = AppState()
+        val next = reduce(
+            s,
+            IdeEvent.Internal.CodeActionsResult(listOf(codeAction("a")), null, null, 0, true),
+        )
+        assertEquals(s.layout, next.layout)
+        assertEquals(s.tree, next.tree)
+        assertEquals(s.editorLayout, next.editorLayout)
+        assertEquals(s.dialogs, next.dialogs)
     }
 
     @Test

@@ -12,6 +12,7 @@ import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
+import page.lsp.CodeActionEntry
 import java.nio.file.Path
 
 internal data class LayoutState(
@@ -58,6 +59,14 @@ internal data class EditorScrollState(
     val scrollByPath: Map<Path, EditorScrollSnapshot> = emptyMap(),
 )
 
+internal data class CodeActionState(
+    val open: Boolean = false,
+    val actions: List<CodeActionEntry> = emptyList(),
+    val uri: String? = null,
+    val text: String? = null,
+    val selected: Int = 0,
+)
+
 internal data class DialogState(
     val createDialog: CreateEntryDialogState? = null,
     val renameDialog: RenameEntryDialogState? = null,
@@ -75,6 +84,7 @@ internal data class AppState(
     val editorLayout: EditorLayoutState = EditorLayoutState(),
     val editorScroll: EditorScrollState = EditorScrollState(),
     val dialogs: DialogState = DialogState(),
+    val codeAction: CodeActionState = CodeActionState(),
 )
 
 private fun defaultOutputHeight(): Dp {

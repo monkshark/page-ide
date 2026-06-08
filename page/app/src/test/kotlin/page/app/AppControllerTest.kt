@@ -3,6 +3,9 @@ package page.app
 import androidx.compose.ui.text.input.TextFieldValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import page.app.mvi.IdeDispatcher
+import page.app.mvi.IdeEffectHandler
+import page.app.mvi.IdeStore
 import page.app.state.EditorWorkspaceState
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
@@ -30,10 +33,12 @@ class AppControllerTest {
 
     private class Harness {
         val scope = CoroutineScope(SupervisorJob())
-        val editorWorkspace = EditorWorkspaceState(undoTracker = { UndoGroupTracker() })
-        val workspaceState = WorkspaceState(scope)
-        val layoutUiState = LayoutUiState()
-        val appState = IdeAppState()
+        val store = IdeStore()
+        val editorWorkspace = EditorWorkspaceState(undoTracker = { UndoGroupTracker() }, store = store)
+        val workspaceState = WorkspaceState(scope, store)
+        val layoutUiState = LayoutUiState(store)
+        val appState = IdeAppState(store)
+        val effects = IdeEffectHandler()
         val fileOpHistory = FileOpHistory.Stack()
         val runController = RunController(scope) { }
         val outputState = OutputPanelState()
@@ -65,7 +70,12 @@ class AppControllerTest {
             frameProvider = { null },
             copyToClipboard = { clipboard.add(it) },
             withFileTreeWatcherClosed = { block -> block() },
+            dispatch = IdeDispatcher(store, effects).onEvent,
         )
+
+        init {
+            effects.bind(controller::handleEffect)
+        }
 
         fun setPrimaryTabs(vararg tabs: OpenTab, editorText: String = "") {
             editorWorkspace.primaryPane = editorWorkspace.primaryPane.copy(
@@ -250,6 +260,25 @@ class AppControllerTest {
         val before = h.appState.editorFocusVersion
 
         h.controller.codeActionPreviewBinding().onDismiss()
+
+        assertFalse(h.appState.codeActionOpen)
+        assertEquals(before + 1, h.appState.editorFocusVersion)
+    }
+
+    @Test
+    fun `codeActionPreviewBinding onApply hides panel and bumps editor focus`() {
+        val h = Harness()
+        h.appState.codeActionOpen = true
+        val before = h.appState.editorFocusVersion
+        val nonExecutable = page.lsp.CodeActionEntry(
+            title = "noop",
+            kind = null,
+            isPreferred = false,
+            edit = page.lsp.RenameWorkspaceEdit.EMPTY,
+            command = null,
+        )
+
+        h.controller.codeActionPreviewBinding().onApply(nonExecutable)
 
         assertFalse(h.appState.codeActionOpen)
         assertEquals(before + 1, h.appState.editorFocusVersion)

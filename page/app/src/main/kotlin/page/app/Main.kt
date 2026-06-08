@@ -154,7 +154,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var treeRevision by workspaceState::treeRevision
     var editorScrollByPath by editorWorkspace::editorScrollByPath
     val layoutUiState = remember { LayoutUiState(ideStore) }
-    val onIdeEvent = remember { IdeDispatcher(ideStore, IdeEffectHandler()).onEvent }
+    val ideEffectHandler = remember { IdeEffectHandler() }
+    val onIdeEvent = remember { IdeDispatcher(ideStore, ideEffectHandler).onEvent }
     val appState = remember { IdeAppState(ideStore) }
     var sidebarWidth: Dp by layoutUiState::sidebarWidth
     var quickOpen by layoutUiState::quickOpen
@@ -271,7 +272,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             frameProvider = { frameRef.value },
             copyToClipboard = copyToClipboard,
             withFileTreeWatcherClosed = withFileTreeWatcherClosed,
-        )
+            dispatch = onIdeEvent,
+        ).also { ideEffectHandler.bind(it::handleEffect) }
     }
     val sessionCoordinator = remember {
         SessionCoordinator(

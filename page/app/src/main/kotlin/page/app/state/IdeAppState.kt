@@ -61,11 +61,21 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
         set(value) = store.updateChrome { it.copy(pendingTreeFocusTick = value) }
     var hadFileDialog by mutableStateOf(false)
 
-    var codeActionOpen by mutableStateOf(false)
-    var codeActionList by mutableStateOf<List<CodeActionEntry>>(emptyList())
-    var codeActionUri: String? by mutableStateOf(null)
-    var codeActionText: String? by mutableStateOf(null)
-    var codeActionSelected by mutableStateOf(0)
+    var codeActionOpen: Boolean
+        get() = store.codeAction.open
+        set(value) = store.updateCodeAction { it.copy(open = value) }
+    var codeActionList: List<CodeActionEntry>
+        get() = store.codeAction.actions
+        set(value) = store.updateCodeAction { it.copy(actions = value) }
+    var codeActionUri: String?
+        get() = store.codeAction.uri
+        set(value) = store.updateCodeAction { it.copy(uri = value) }
+    var codeActionText: String?
+        get() = store.codeAction.text
+        set(value) = store.updateCodeAction { it.copy(text = value) }
+    var codeActionSelected: Int
+        get() = store.codeAction.selected
+        set(value) = store.updateCodeAction { it.copy(selected = value) }
 
     var editorFocusVersion: Int
         get() = store.chrome.editorFocusVersion

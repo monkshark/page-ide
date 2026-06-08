@@ -62,4 +62,28 @@ class IdeStoreTest {
 
         assertSame(before, store.dialogs)
     }
+
+    @Test
+    fun `dispatcher writes code action slice back to store`() {
+        val store = IdeStore()
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+
+        dispatcher.onEvent(IdeEvent.Internal.CodeActionsResult(emptyList(), null, null, 0, open = true))
+
+        Snapshot.sendApplyNotifications()
+        assertTrue(store.codeAction.open)
+    }
+
+    @Test
+    fun `effect handler sink receives dispatched event`() {
+        val store = IdeStore()
+        val handler = IdeEffectHandler()
+        val received = mutableListOf<IdeEvent>()
+        handler.bind { event, _, _ -> received.add(event) }
+        val dispatcher = IdeDispatcher(store, handler)
+
+        dispatcher.onEvent(IdeEvent.CodeAction.Dismiss)
+
+        assertEquals(listOf<IdeEvent>(IdeEvent.CodeAction.Dismiss), received)
+    }
 }
