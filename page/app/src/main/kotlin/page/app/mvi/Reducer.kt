@@ -11,6 +11,36 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.EditorLayout -> state.copy(editorLayout = reduceEditorLayout(state.editorLayout, event))
     is IdeEvent.EditorScroll -> state.copy(editorScroll = reduceEditorScroll(state.editorScroll, event))
     is IdeEvent.Dialog -> state.copy(dialogs = reduceDialogs(state.dialogs, event))
+    is IdeEvent.CodeAction -> reduceCodeActionEvent(state, event)
+    is IdeEvent.Internal -> reduceInternal(state, event)
+}
+
+private fun reduceCodeActionEvent(state: AppState, e: IdeEvent.CodeAction): AppState = when (e) {
+    is IdeEvent.CodeAction.SelectedChange -> state.copy(
+        codeAction = state.codeAction.copy(
+            selected = e.index.coerceIn(0, state.codeAction.actions.lastIndex.coerceAtLeast(0)),
+        ),
+    )
+    is IdeEvent.CodeAction.Apply -> state.copy(
+        codeAction = state.codeAction.copy(open = false),
+        chrome = state.chrome.copy(editorFocusVersion = state.chrome.editorFocusVersion + 1),
+    )
+    IdeEvent.CodeAction.Dismiss -> state.copy(
+        codeAction = state.codeAction.copy(open = false),
+        chrome = state.chrome.copy(editorFocusVersion = state.chrome.editorFocusVersion + 1),
+    )
+}
+
+private fun reduceInternal(state: AppState, e: IdeEvent.Internal): AppState = when (e) {
+    is IdeEvent.Internal.CodeActionsResult -> state.copy(
+        codeAction = CodeActionState(
+            actions = e.actions,
+            uri = e.uri,
+            text = e.text,
+            selected = e.selected,
+            open = e.open,
+        ),
+    )
 }
 
 private fun reduceDialogs(s: DialogState, e: IdeEvent.Dialog): DialogState = when (e) {

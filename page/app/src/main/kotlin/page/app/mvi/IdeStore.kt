@@ -24,6 +24,9 @@ internal class IdeStore(initial: AppState = AppState()) {
     var dialogs by mutableStateOf(initial.dialogs)
         private set
 
+    var codeAction by mutableStateOf(initial.codeAction)
+        private set
+
     fun snapshot(): AppState = AppState(
         layout = layout,
         chrome = chrome,
@@ -31,6 +34,7 @@ internal class IdeStore(initial: AppState = AppState()) {
         editorLayout = editorLayout,
         editorScroll = editorScroll,
         dialogs = dialogs,
+        codeAction = codeAction,
     )
 
     fun apply(next: AppState) {
@@ -40,6 +44,7 @@ internal class IdeStore(initial: AppState = AppState()) {
         if (next.editorLayout != editorLayout) editorLayout = next.editorLayout
         if (next.editorScroll != editorScroll) editorScroll = next.editorScroll
         if (next.dialogs != dialogs) dialogs = next.dialogs
+        if (next.codeAction != codeAction) codeAction = next.codeAction
     }
 
     fun updateLayout(transform: (LayoutState) -> LayoutState) {
@@ -70,6 +75,11 @@ internal class IdeStore(initial: AppState = AppState()) {
     fun updateDialogs(transform: (DialogState) -> DialogState) {
         val next = transform(dialogs)
         if (next != dialogs) dialogs = next
+    }
+
+    fun updateCodeAction(transform: (CodeActionState) -> CodeActionState) {
+        val next = transform(codeAction)
+        if (next != codeAction) codeAction = next
     }
 }
 

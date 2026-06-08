@@ -10,6 +10,7 @@ import page.app.PendingClose
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitPaneState
+import page.lsp.CodeActionEntry
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -74,5 +75,21 @@ internal sealed interface IdeEvent {
         data class SetPendingClose(val state: PendingClose?) : Dialog
         data object OpenFindInFiles : Dialog
         data object CloseFindInFiles : Dialog
+    }
+
+    sealed interface CodeAction : IdeEvent {
+        data class SelectedChange(val index: Int) : CodeAction
+        data class Apply(val action: CodeActionEntry) : CodeAction
+        data object Dismiss : CodeAction
+    }
+
+    sealed interface Internal : IdeEvent {
+        data class CodeActionsResult(
+            val actions: List<CodeActionEntry>,
+            val uri: String?,
+            val text: String?,
+            val selected: Int,
+            val open: Boolean,
+        ) : Internal
     }
 }

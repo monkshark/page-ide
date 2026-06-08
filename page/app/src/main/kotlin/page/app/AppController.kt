@@ -16,6 +16,8 @@ import page.app.filetree.RenameRemapController
 import page.app.input.ShortcutDispatchController
 import page.app.lsp.LspEditorInterconnector
 import page.app.lsp.WorkspaceEditController
+import page.app.mvi.AppState
+import page.app.mvi.IdeEvent
 import page.app.run.RunActionsController
 import page.app.state.EditorWorkspaceState
 import page.app.state.HistoryActionsController
@@ -66,6 +68,7 @@ internal class AppController(
     private val frameProvider: () -> java.awt.Frame?,
     private val copyToClipboard: (String) -> Unit,
     private val withFileTreeWatcherClosed: (() -> Unit) -> Unit,
+    private val dispatch: (IdeEvent) -> Unit,
 ) {
     private val router: LspRouter get() = lspRouterProvider()
     private val todo: TodoController get() = todoProvider()
@@ -384,11 +387,7 @@ internal class AppController(
         jumpToProblem = jumpToProblem,
         applyRename = applyRename,
         onCodeActions = { list, uri, text, selected, open ->
-            appState.codeActionList = list
-            appState.codeActionUri = uri
-            appState.codeActionText = text
-            appState.codeActionSelected = selected
-            appState.codeActionOpen = open
+            dispatch(IdeEvent.Internal.CodeActionsResult(list, uri, text, selected, open))
         },
     )
     val openQuickOpen = paletteController::openQuickOpen
@@ -543,25 +542,23 @@ internal class AppController(
         visible = appState.codeActionOpen,
         actions = appState.codeActionList,
         selected = appState.codeActionSelected,
-        onSelectedChange = {
-            appState.codeActionSelected = it.coerceIn(0, appState.codeActionList.lastIndex.coerceAtLeast(0))
-        },
+        onSelectedChange = { dispatch(IdeEvent.CodeAction.SelectedChange(it)) },
         uri = appState.codeActionUri,
         text = appState.codeActionText,
-        onApply = { action ->
-            appState.codeActionOpen = false
-            if (action.isExecutable) {
-                applyCodeAction(action)
-            }
-            frameProvider()?.requestFocus()
-            appState.editorFocusVersion += 1
-        },
-        onDismiss = {
-            appState.codeActionOpen = false
-            frameProvider()?.requestFocus()
-            appState.editorFocusVersion += 1
-        },
+        onApply = { action -> dispatch(IdeEvent.CodeAction.Apply(action)) },
+        onDismiss = { dispatch(IdeEvent.CodeAction.Dismiss) },
     )
+
+    fun handleEffect(event: IdeEvent, @Suppress("UNUSED_PARAMETER") prev: AppState, @Suppress("UNUSED_PARAMETER") next: AppState) {
+        when (event) {
+            is IdeEvent.CodeAction.Apply -> {
+                if (event.action.isExecutable) applyCodeAction(event.action)
+                frameProvider()?.requestFocus()
+            }
+            IdeEvent.CodeAction.Dismiss -> frameProvider()?.requestFocus()
+            else -> Unit
+        }
+    }
 
     fun settingsBinding(): SettingsBinding = SettingsBinding(
         panelOpen = appState.settingsDialogOpen,
