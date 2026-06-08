@@ -348,6 +348,46 @@ private fun LspSection(o: LspOptions, onChange: (LspOptions) -> Unit) {
     )
     Spacer(Modifier.height(16.dp))
     Text(
+        text = "Problems panel scope",
+        color = MaterialTheme.colorScheme.onSurface,
+        style = LocalTextStyle.current.copy(
+            fontSize = 12.sp,
+            lineHeight = 14.sp,
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
+    )
+    Spacer(Modifier.height(2.dp))
+    Text(
+        text = "Which files' errors/warnings the Problems panel lists. Inline squiggles always follow the focused file.",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = LocalTextStyle.current.copy(
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both,
+            ),
+        ),
+    )
+    Spacer(Modifier.height(8.dp))
+    Row {
+        ScopeChip(
+            label = "Current file",
+            selected = o.diagnosticsScope == DiagnosticsScope.CURRENT_FILE,
+            onClick = { onChange(o.copy(diagnosticsScope = DiagnosticsScope.CURRENT_FILE)) },
+        )
+        Spacer(Modifier.width(6.dp))
+        ScopeChip(
+            label = "Open tabs",
+            selected = o.diagnosticsScope == DiagnosticsScope.OPEN_TABS,
+            onClick = { onChange(o.copy(diagnosticsScope = DiagnosticsScope.OPEN_TABS)) },
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+    Text(
         text = "Server executable overrides",
         color = MaterialTheme.colorScheme.onSurface,
         style = LocalTextStyle.current.copy(
@@ -480,6 +520,35 @@ private fun PaletteChip(p: GlassPalette, selected: Boolean, onClick: () -> Unit)
     ) {
         Text(
             text = p.name,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            style = LocalTextStyle.current.copy(
+                fontSize = 11.sp,
+                lineHeight = 11.sp,
+                textAlign = TextAlign.Center,
+                lineHeightStyle = LineHeightStyle(
+                    alignment = LineHeightStyle.Alignment.Center,
+                    trim = LineHeightStyle.Trim.Both,
+                ),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun ScopeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+    else MaterialTheme.colorScheme.surface
+    Box(
+        modifier = Modifier
+            .height(24.dp)
+            .background(bg)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             style = LocalTextStyle.current.copy(
                 fontSize = 11.sp,

@@ -413,8 +413,16 @@ internal fun IdeMainLayout(
             }
         }
         if (ui.problemsOpen) {
+            val diagnosticsScope = LocalPageSettings.current.lsp.diagnosticsScope
+            val openTabPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs)
+                .map { it.path }.toSet()
             ProblemsPanel(
-                diagnostics = lspRouter.allDiagnosticsByUri,
+                diagnostics = diagnosticsInScope(
+                    all = lspRouter.allDiagnosticsByUri,
+                    scope = diagnosticsScope,
+                    focusedPath = editor.focused().book.active?.path,
+                    openPaths = openTabPaths,
+                ),
                 onJump = onJumpToProblem,
                 onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
                 height = ui.problemsHeight,
