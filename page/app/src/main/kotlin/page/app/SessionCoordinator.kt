@@ -1,6 +1,8 @@
 package page.app
 
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -17,14 +19,17 @@ internal class SessionCoordinator(
 ) {
     private val terminalManager: TerminalManager get() = terminalManagerProvider()
 
-    fun restore(root: Path) {
-        val session = runCatching { SessionStore.load(root) }.getOrNull()
+    suspend fun restore(root: Path) {
+        val session = withContext(Dispatchers.IO) { runCatching { SessionStore.load(root) }.getOrNull() }
         if (session == null) {
             editorWorkspace.foldByPath = emptyMap()
             return
         }
-        editorWorkspace.primaryPane = editorWorkspace.primaryPane.copy(book = restoreTabBook(session.primary))
-        editorWorkspace.secondaryPane = editorWorkspace.secondaryPane.copy(book = restoreTabBook(session.secondary))
+        val primaryBook = withContext(Dispatchers.IO) { restoreTabBook(session.primary) }
+        val secondaryBook = withContext(Dispatchers.IO) { restoreTabBook(session.secondary) }
+        val restoredExpanded = withContext(Dispatchers.IO) { restoreExpandedDirs(session.expandedDirs) }
+        editorWorkspace.primaryPane = editorWorkspace.primaryPane.copy(book = primaryBook)
+        editorWorkspace.secondaryPane = editorWorkspace.secondaryPane.copy(book = secondaryBook)
         editorWorkspace.focusedPane = runCatching { PaneSide.valueOf(session.focusedPane) }
             .getOrDefault(PaneSide.PRIMARY)
         editorWorkspace.splitEnabled = session.splitEnabled
@@ -52,7 +57,6 @@ internal class SessionCoordinator(
             )
         }
         editorWorkspace.foldByPath = session.foldedStartLinesByPath.mapValues { it.value.toSet() }
-        val restoredExpanded = restoreExpandedDirs(session.expandedDirs)
         if (restoredExpanded.isNotEmpty()) workspaceState.expanded = restoredExpanded
         editorWorkspace.editorScrollByPath = session.editorScrollByPath
             .mapNotNull { (s, snap) ->

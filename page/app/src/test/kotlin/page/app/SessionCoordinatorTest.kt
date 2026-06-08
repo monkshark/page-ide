@@ -3,6 +3,7 @@ package page.app
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -59,7 +60,7 @@ class SessionCoordinatorTest {
             ),
         )
 
-        coordinator(ws).restore(ws)
+        runBlocking { coordinator(ws).restore(ws) }
 
         assertEquals(PaneSide.SECONDARY, editorWorkspace.focusedPane)
         assertTrue(editorWorkspace.splitEnabled)
@@ -79,7 +80,7 @@ class SessionCoordinatorTest {
         val ws = newWorkspace()
         editorWorkspace.foldByPath = mapOf("stale" to setOf(1))
 
-        coordinator(ws).restore(ws)
+        runBlocking { coordinator(ws).restore(ws) }
 
         assertTrue(editorWorkspace.foldByPath.isEmpty())
         assertFalse(editorWorkspace.splitEnabled)
@@ -121,7 +122,7 @@ class SessionCoordinatorTest {
         )
 
         val coord = coordinator(ws)
-        coord.restore(ws)
+        runBlocking { coord.restore(ws) }
         val snap = coord.snapshot()
 
         assertTrue(snap.splitEnabled)

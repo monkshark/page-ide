@@ -201,7 +201,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var deleteDialog: DeleteEntryDialogState? by layoutUiState::deleteDialog
     var pasteDialog: PasteEntryDialogState? by layoutUiState::pasteDialog
     var largeCopyState: LargeCopyDialogState? by layoutUiState::largeCopyState
-    val largeCopyScope = rememberCoroutineScope()
     val fileOpHistory = remember { FileOpHistory.Stack() }
     var fileOpHistoryVersion by appState::fileOpHistoryVersion
     var fileTreeFocused by workspaceState::fileTreeFocused
@@ -265,7 +264,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runController = runController,
             outputState = outputState,
             undoTracker = ::undoTracker,
-            largeCopyScope = largeCopyScope,
+            appScope = appScope,
             lspRouterProvider = { currentLspRouter },
             todoProvider = { currentTodo },
             exitApplication = { exitApplication() },
