@@ -8,6 +8,8 @@ import page.editor.UndoGroupTracker
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class EditorWorkspaceStateTest {
     private fun newState(): EditorWorkspaceState {
@@ -109,6 +111,25 @@ class EditorWorkspaceStateTest {
         s.moveTabAcross(PaneSide.PRIMARY, 0)
         assertEquals(2, s.primaryPane.book.tabs.size)
         assertEquals(0, s.secondaryPane.book.tabs.size)
+    }
+
+    @Test
+    fun moveTabAcrossCollapsesSplitWhenSourceEmpties() {
+        val s = newState().seed(bookWith(1, active = 0))
+        s.splitEnabled = true
+        s.moveTabAcross(PaneSide.PRIMARY, 0)
+        assertFalse(s.splitEnabled)
+        assertEquals(1, s.primaryPane.book.tabs.size)
+        assertEquals(0, s.secondaryPane.book.tabs.size)
+        assertEquals(PaneSide.PRIMARY, s.focusedPane)
+    }
+
+    @Test
+    fun moveTabAcrossKeepsSplitWhenSourceStillHasTabs() {
+        val s = newState().seed(bookWith(2, active = 0))
+        s.splitEnabled = true
+        s.moveTabAcross(PaneSide.PRIMARY, 0)
+        assertTrue(s.splitEnabled)
     }
 
     @Test
