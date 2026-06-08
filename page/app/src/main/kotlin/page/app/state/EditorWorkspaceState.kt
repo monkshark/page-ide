@@ -110,6 +110,7 @@ internal class EditorWorkspaceState(
         mutatePane(source) { it.copy(book = it.book.close(index)) }
         mutatePane(target) { it.copy(book = it.book.appendTab(tab)) }
         focusedPane = target
+        mergeSplitIfEmptyPane()
     }
 
     fun collapseSplit() {
