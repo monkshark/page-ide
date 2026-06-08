@@ -1040,6 +1040,24 @@ fun EditorPanel(
                     textStyle = textStyle,
                 )
             }
+            fun triggerDefinitionOrReferences(text: String, offset: Int): Boolean {
+                val defCb = onRequestDefinition ?: return false
+                val nav = onGoToDefinition ?: return false
+                val word = wordRangeAt(text, offset) ?: return false
+                val symbolName = text.substring(word.first, word.second)
+                if (isInStringOrComment(tokens, text, offset) || !isRenamableIdentifier(symbolName)) return false
+                val pos = TextBuffer(text).lineColOf(offset)
+                val selfUri = activePath?.toUri()?.toString()
+                val refCb = onRequestReferences
+                defCb(pos.line, pos.col).whenComplete { targets, _ ->
+                    val first = targets?.firstOrNull()
+                    val atDeclaration = first != null && refCb != null && selfUri != null &&
+                        first.uri == selfUri && definitionTargetContains(first, pos.line, pos.col)
+                    if (atDeclaration) refCb!!(pos.line, pos.col, symbolName)
+                    else if (first != null) nav(first)
+                }
+                return true
+            }
             CodeEditor(
                 value = value,
                 onValueChange = onValueChange,
@@ -1070,24 +1088,10 @@ fun EditorPanel(
                     }
                 },
                 onCtrlPress = { origOff ->
-                    val cb = onRequestReferences
-                    if (cb == null) false
-                    else {
-                        val text = latestValue.text
-                        val word = wordRangeAt(text, origOff)
-                        val symbolName = if (word != null) text.substring(word.first, word.second) else ""
-                        if (
-                            !isInStringOrComment(tokens, text, origOff) &&
-                            isRenamableIdentifier(symbolName)
-                        ) {
-                            val pos = TextBuffer(text).lineColOf(origOff)
-                            cb(pos.line, pos.col, symbolName)
-                            true
-                        } else false
-                    }
+                    triggerDefinitionOrReferences(latestValue.text, origOff)
                 },
                 onResolveCtrlHoverLink = { origOff ->
-                    if (onRequestReferences == null) null
+                    if (onRequestDefinition == null) null
                     else {
                         val text = latestValue.text
                         val word = wordRangeAt(text, origOff)
@@ -1205,9 +1209,7 @@ fun EditorPanel(
                         }
                         return@CodeEditor true
                     }
-                    if ((event.key == Key.F12 && event.isShiftPressed && !event.isCtrlPressed) ||
-                        (event.key == Key.B && event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed)
-                    ) {
+                    if (event.key == Key.F12 && event.isShiftPressed && !event.isCtrlPressed) {
                         val cb = onRequestReferences
                         if (cb != null) {
                             val text = value.text
@@ -1220,6 +1222,12 @@ fun EditorPanel(
                                     cb(pos.line, pos.col, symbolName)
                                 }
                             }
+                            return@CodeEditor true
+                        }
+                    }
+                    if (event.key == Key.B && event.isCtrlPressed && !event.isShiftPressed && !event.isAltPressed) {
+                        val caret = value.selection.end.coerceIn(0, value.text.length)
+                        if (triggerDefinitionOrReferences(value.text, caret)) {
                             return@CodeEditor true
                         }
                     }
@@ -1450,6 +1458,13 @@ private val KOTLIN_HARD_KEYWORDS = setOf(
     "super", "this", "throw", "true", "try", "typealias", "typeof", "val", "var",
     "when", "while",
 )
+
+internal fun definitionTargetContains(target: DefinitionTarget, line: Int, character: Int): Boolean {
+    if (line < target.startLine || line > target.endLine) return false
+    if (line == target.startLine && character < target.startCharacter) return false
+    if (line == target.endLine && character > target.endCharacter) return false
+    return true
+}
 
 private fun isRenamableIdentifier(s: String): Boolean {
     if (s.isEmpty()) return false
