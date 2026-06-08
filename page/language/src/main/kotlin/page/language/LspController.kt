@@ -1228,7 +1228,7 @@ class LspController(
             val ws = workspace ?: return@launch
             var opened = 0
             try {
-                java.nio.file.Files.walk(root).use { stream ->
+                val candidates = java.nio.file.Files.walk(root).use { stream ->
                     stream
                         .filter { java.nio.file.Files.isRegularFile(it) }
                         .filter { p ->
@@ -1241,20 +1241,26 @@ class LspController(
                             val rel = root.relativize(p)
                             rel.iterator().asSequence().none { it.toString() in WORKSPACE_AUTO_OPEN_EXCLUDES }
                         }
-                        .forEach { p ->
-                            try {
-                                if (java.nio.file.Files.size(p) > MAX_AUTO_OPEN_BYTES) return@forEach
-                                val uri = p.toUri().toString()
-                                if (ws.isOpen(uri)) return@forEach
-                                val text = java.nio.file.Files.readString(p)
-                                ws.didOpen(uri, backend.id, text)
-                                opened++
-                            } catch (t: Throwable) {
-                                println("[lsp] workspace auto-open failed for $p: ${t.message}")
-                            }
-                        }
+                        .limit(WORKSPACE_AUTO_OPEN_SCAN_LIMIT)
+                        .toList()
                 }
-                println("[lsp] workspace auto-open done — $opened ${backend.id} file(s) under $root")
+                for (p in candidates) {
+                    if (opened >= MAX_AUTO_OPEN_FILES) break
+                    try {
+                        if (java.nio.file.Files.size(p) > MAX_AUTO_OPEN_BYTES) continue
+                        val uri = p.toUri().toString()
+                        if (ws.isOpen(uri)) continue
+                        val text = java.nio.file.Files.readString(p)
+                        ws.didOpen(uri, backend.id, text)
+                        opened++
+                        if (opened % AUTO_OPEN_THROTTLE_BATCH == 0) delay(AUTO_OPEN_THROTTLE_MILLIS)
+                    } catch (t: Throwable) {
+                        println("[lsp] workspace auto-open failed for $p: ${t.message}")
+                    }
+                }
+                val truncated = opened >= MAX_AUTO_OPEN_FILES || candidates.size.toLong() >= WORKSPACE_AUTO_OPEN_SCAN_LIMIT
+                val suffix = if (truncated) " (truncated at cap; remaining files open on demand)" else ""
+                println("[lsp] workspace auto-open done — $opened ${backend.id} file(s) under $root$suffix")
             } catch (t: Throwable) {
                 println("[lsp] workspace walk failed: ${t.message}")
             }
@@ -1393,6 +1399,10 @@ class LspController(
         private const val COMPLETION_CACHE_MAX = 64
         private const val INLAY_HINT_CACHE_MAX = 32
         private const val MAX_AUTO_OPEN_BYTES = 512L * 1024
+        private const val MAX_AUTO_OPEN_FILES = 500
+        private const val WORKSPACE_AUTO_OPEN_SCAN_LIMIT = 4000L
+        private const val AUTO_OPEN_THROTTLE_BATCH = 25
+        private const val AUTO_OPEN_THROTTLE_MILLIS = 15L
         private const val EXTERNAL_SYMBOL_MESSAGE =
             "Cannot rename external library symbols (kotlin-stdlib · dependency jars)"
         private val WORKSPACE_AUTO_OPEN_EXCLUDES = setOf(

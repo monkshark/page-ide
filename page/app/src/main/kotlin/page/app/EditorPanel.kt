@@ -36,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -76,8 +77,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
+import kotlinx.coroutines.withContext
 import page.language.LspController
 import page.editor.BracketMatch
 import page.editor.FoldRegions
@@ -119,6 +122,8 @@ import page.ui.EditorFontFamily
 import page.ui.Glass
 import page.ui.SignatureHelpDisplay
 import page.ui.SyntaxPalette
+
+private const val ASYNC_TOKENIZE_THRESHOLD = 20_000
 
 @Composable
 fun EditorPanel(
@@ -199,8 +204,15 @@ fun EditorPanel(
         parseHexColor(hex)?.let { k.uppercase() to it }
     }.toMap()
 
-    val tokens = remember(value.text, lexer) {
-        lexer?.tokenize(value.text).orEmpty()
+    val sourceText = value.text
+    val tokens by produceState(initialValue = emptyList<Token>(), sourceText, lexer) {
+        val lx = lexer
+        if (lx == null) {
+            this.value = emptyList()
+            return@produceState
+        }
+        if (sourceText.length > ASYNC_TOKENIZE_THRESHOLD) delay(60)
+        this.value = withContext(Dispatchers.Default) { lx.tokenize(sourceText) }
     }
 
     val multiKeywordComments = remember(value.text, tokens) {

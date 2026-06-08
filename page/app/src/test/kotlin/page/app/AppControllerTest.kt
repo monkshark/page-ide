@@ -55,7 +55,7 @@ class AppControllerTest {
             runController = runController,
             outputState = outputState,
             undoTracker = { UndoGroupTracker() },
-            largeCopyScope = scope,
+            appScope = scope,
             lspRouterProvider = {
                 routerProviderCalls++
                 router

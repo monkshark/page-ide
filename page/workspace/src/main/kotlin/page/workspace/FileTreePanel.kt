@@ -29,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -61,10 +63,13 @@ import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import page.editor.FileTree
+import page.editor.TreeNode
 import page.ui.CompactContextMenuRepresentation
 import java.awt.datatransfer.DataFlavor
 import java.io.File
@@ -296,7 +301,15 @@ fun FileTreePanel(
                 if (root == null) {
                     EmptyTreeHint()
                 } else {
-                    val nodes = remember(root, expanded, revision) { FileTree.listTree(root, expanded) }
+                    val rootDir = root
+                    val nodes by produceState(
+                        initialValue = listOf(TreeNode(rootDir, depth = 0, isDirectory = true)),
+                        rootDir,
+                        expanded,
+                        revision,
+                    ) {
+                        value = withContext(Dispatchers.IO) { FileTree.listTree(rootDir, expanded) }
+                    }
                     val visibleOrder = remember(nodes) { nodes.map { it.path } }
 
                     fun activate(path: Path, recursive: Boolean = false) {

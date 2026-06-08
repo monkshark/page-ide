@@ -4,6 +4,9 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import page.app.domain.FileOperationsInteractor
 import page.app.filetree.FileOpUndoController
 import page.app.filetree.FileTreeActionExecutor
@@ -56,7 +59,7 @@ internal class AppController(
     private val runController: RunController,
     private val outputState: OutputPanelState,
     private val undoTracker: (PaneSide) -> UndoGroupTracker,
-    private val largeCopyScope: CoroutineScope,
+    private val appScope: CoroutineScope,
     private val lspRouterProvider: () -> LspRouter,
     private val todoProvider: () -> TodoController,
     private val exitApplication: () -> Unit,
@@ -91,6 +94,7 @@ internal class AppController(
         focused = { focused() },
         mutateFocused = { transform -> mutateFocused(transform) },
         addRecentFile = addRecentFile,
+        scope = appScope,
     )
     val openInTab = tabOpenController::openInTab
     val openInTabAt = tabOpenController::openInTabAt
@@ -139,8 +143,14 @@ internal class AppController(
     private val openWorkspaceFolder: (Path) -> Unit = { picked ->
         PerfRegistry.instance?.begin(StartupPhases.WORKSPACE_OPEN)
         workspaceState.rootDir = picked
-        workspaceState.expanded = setOf(picked) + page.editor.FileTree.singleChildChain(picked)
-        PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
+        workspaceState.expanded = setOf(picked)
+        appScope.launch {
+            val chain = withContext(Dispatchers.IO) { page.editor.FileTree.singleChildChain(picked) }
+            if (workspaceState.rootDir == picked) {
+                workspaceState.expanded = setOf(picked) + chain
+            }
+            PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
+        }
     }
     private val fileMenuController = FileMenuController(
         openInTab = openInTab,
@@ -225,7 +235,7 @@ internal class AppController(
     val applySingleFileMoveSync = workspaceEditController::applySingleFileMoveSync
 
     val fileTreeActionExecutor = FileTreeActionExecutor(
-        scope = largeCopyScope,
+        scope = appScope,
         getPasteDialog = { layoutUiState.pasteDialog },
         setPasteDialog = { layoutUiState.pasteDialog = it },
         getLargeCopyState = { layoutUiState.largeCopyState },
@@ -246,10 +256,22 @@ internal class AppController(
     )
 
     val toggleExpanded: (Path, Boolean) -> Unit = { p, recursive ->
-        workspaceState.expanded = when {
-            recursive -> workspaceState.expanded + setOf(p) + page.editor.FileTree.descendantDirs(p)
-            p in workspaceState.expanded -> workspaceState.expanded - setOf(p)
-            else -> workspaceState.expanded + setOf(p) + page.editor.FileTree.singleChildChain(p)
+        when {
+            p in workspaceState.expanded && !recursive -> {
+                workspaceState.expanded = workspaceState.expanded - setOf(p)
+            }
+            else -> {
+                workspaceState.expanded = workspaceState.expanded + setOf(p)
+                appScope.launch {
+                    val extra = withContext(Dispatchers.IO) {
+                        if (recursive) page.editor.FileTree.descendantDirs(p)
+                        else page.editor.FileTree.singleChildChain(p)
+                    }
+                    if (p in workspaceState.expanded) {
+                        workspaceState.expanded = workspaceState.expanded + extra
+                    }
+                }
+            }
         }
     }
     val isUnsavedText: (OpenTab) -> Boolean = { tab ->
