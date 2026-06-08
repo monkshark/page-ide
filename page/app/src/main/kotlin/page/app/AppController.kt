@@ -137,7 +137,7 @@ internal class AppController(
         controllerFor = { p -> router.controllerFor(p) },
         applyExternalChange = { uri, text -> router.applyExternalChange(uri, text) },
         getReferences = { appState.referencesState },
-        setReferences = { appState.referencesState = it },
+        setReferences = { dispatch(IdeEvent.Internal.ReferencesResult(it)) },
     )
     val jumpToProblem = lspEditorInterconnector::jumpToProblem
     val requestReferences = lspEditorInterconnector::requestReferences
@@ -556,6 +556,11 @@ internal class AppController(
                 frameProvider()?.requestFocus()
             }
             IdeEvent.CodeAction.Dismiss -> frameProvider()?.requestFocus()
+            is IdeEvent.Lsp.RequestReferences ->
+                requestReferences(event.path, event.line, event.character, event.symbol)
+            is IdeEvent.Lsp.JumpToProblem -> jumpToProblem(event.path, event.line, event.character)
+            is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
+            IdeEvent.Lsp.ReferencesClose -> Unit
             else -> Unit
         }
     }

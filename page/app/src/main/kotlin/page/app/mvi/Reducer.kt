@@ -12,7 +12,15 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.EditorScroll -> state.copy(editorScroll = reduceEditorScroll(state.editorScroll, event))
     is IdeEvent.Dialog -> state.copy(dialogs = reduceDialogs(state.dialogs, event))
     is IdeEvent.CodeAction -> reduceCodeActionEvent(state, event)
+    is IdeEvent.Lsp -> reduceLsp(state, event)
     is IdeEvent.Internal -> reduceInternal(state, event)
+}
+
+private fun reduceLsp(state: AppState, e: IdeEvent.Lsp): AppState = when (e) {
+    IdeEvent.Lsp.ReferencesClose -> state.copy(references = state.references.copy(query = null))
+    is IdeEvent.Lsp.RequestReferences,
+    is IdeEvent.Lsp.JumpToProblem,
+    is IdeEvent.Lsp.ApplyRename -> state
 }
 
 private fun reduceCodeActionEvent(state: AppState, e: IdeEvent.CodeAction): AppState = when (e) {
@@ -40,6 +48,9 @@ private fun reduceInternal(state: AppState, e: IdeEvent.Internal): AppState = wh
             selected = e.selected,
             open = e.open,
         ),
+    )
+    is IdeEvent.Internal.ReferencesResult -> state.copy(
+        references = state.references.copy(query = e.state),
     )
 }
 

@@ -8,6 +8,7 @@ import page.app.EditorScrollSnapshot
 import page.app.FileOpConfirmState
 import page.app.PaneSide
 import page.app.PendingClose
+import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitOrientation
@@ -67,6 +68,10 @@ internal data class CodeActionState(
     val selected: Int = 0,
 )
 
+internal data class ReferencesState(
+    val query: ReferencesQueryState? = null,
+)
+
 internal data class DialogState(
     val createDialog: CreateEntryDialogState? = null,
     val renameDialog: RenameEntryDialogState? = null,
@@ -85,6 +90,7 @@ internal data class AppState(
     val editorScroll: EditorScrollState = EditorScrollState(),
     val dialogs: DialogState = DialogState(),
     val codeAction: CodeActionState = CodeActionState(),
+    val references: ReferencesState = ReferencesState(),
 )
 
 private fun defaultOutputHeight(): Dp {

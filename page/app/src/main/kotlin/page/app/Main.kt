@@ -408,7 +408,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val openInTabAt = app.openInTabAt
     val onReplaceInFiles = app.onReplaceInFiles
     val jumpToProblem = app.jumpToProblem
-    val requestReferences = app.requestReferences
     val applyRename = app.applyRename
     LaunchedEffect(lspRouter) {
         app.installApplyEditHandler { block -> java.awt.EventQueue.invokeLater(block) }
@@ -568,15 +567,19 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     fileTree = app.fileTreePanelActions(),
                     search = app.editorSearchActions(),
                     onWindowShortcut = handleShortcut,
-                    onJumpToProblem = jumpToProblem,
-                    onApplyRename = applyRename,
+                    onJumpToProblem = { path, line, character ->
+                        onIdeEvent(IdeEvent.Lsp.JumpToProblem(path, line, character))
+                    },
+                    onApplyRename = { edit -> onIdeEvent(IdeEvent.Lsp.ApplyRename(edit)) },
                     todoItems = todoItems,
                     terminalManager = terminalManager,
                     onTerminalToggle = toggleTerminal,
                     run = app.runPanelBinding(),
                     referencesState = referencesState,
-                    onRequestReferences = requestReferences,
-                    onReferencesClose = { referencesState = null },
+                    onRequestReferences = { path, line, character, symbol ->
+                        onIdeEvent(IdeEvent.Lsp.RequestReferences(path, line, character, symbol))
+                    },
+                    onReferencesClose = { onIdeEvent(IdeEvent.Lsp.ReferencesClose) },
                     linePreviewFor = { uri, line -> currentLspRouter.controllerForUri(uri)?.linePreviewFor(uri, line) },
                     foldedLinesFor = foldedLinesFor,
                     onFoldChange = onFoldChange,

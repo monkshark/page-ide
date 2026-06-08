@@ -7,10 +7,12 @@ import page.app.EditorScrollSnapshot
 import page.app.FileOpConfirmState
 import page.app.PaneSide
 import page.app.PendingClose
+import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
+import page.lsp.RenameWorkspaceEdit
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -83,6 +85,18 @@ internal sealed interface IdeEvent {
         data object Dismiss : CodeAction
     }
 
+    sealed interface Lsp : IdeEvent {
+        data class RequestReferences(
+            val path: Path,
+            val line: Int,
+            val character: Int,
+            val symbol: String,
+        ) : Lsp
+        data class JumpToProblem(val path: Path, val line: Int, val character: Int) : Lsp
+        data class ApplyRename(val edit: RenameWorkspaceEdit) : Lsp
+        data object ReferencesClose : Lsp
+    }
+
     sealed interface Internal : IdeEvent {
         data class CodeActionsResult(
             val actions: List<CodeActionEntry>,
@@ -91,5 +105,7 @@ internal sealed interface IdeEvent {
             val selected: Int,
             val open: Boolean,
         ) : Internal
+
+        data class ReferencesResult(val state: ReferencesQueryState?) : Internal
     }
 }

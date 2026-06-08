@@ -75,6 +75,23 @@ class IdeStoreTest {
     }
 
     @Test
+    fun `dispatcher writes references slice back to store`() {
+        val store = IdeStore()
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+        val query = page.app.ReferencesQueryState(
+            symbolName = "foo",
+            originUri = "file:///x.kt",
+            results = emptyList(),
+            isLoading = true,
+        )
+
+        dispatcher.onEvent(IdeEvent.Internal.ReferencesResult(query))
+
+        Snapshot.sendApplyNotifications()
+        assertEquals(query, store.references.query)
+    }
+
+    @Test
     fun `effect handler sink receives dispatched event`() {
         val store = IdeStore()
         val handler = IdeEffectHandler()
