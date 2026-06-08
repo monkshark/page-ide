@@ -75,5 +75,15 @@ class AppSettingsLspPathTest {
     fun defaultsWhenNoFile() {
         val loaded = AppSettings.loadLsp()
         assertTrue(loaded.serverPaths.isEmpty())
+        assertEquals(DiagnosticsScope.OPEN_TABS, loaded.diagnosticsScope)
+    }
+
+    @Test
+    fun diagnosticsScopeRoundTrip() {
+        AppSettings.saveLsp(LspOptions(diagnosticsScope = DiagnosticsScope.CURRENT_FILE))
+
+        val loaded = AppSettings.loadLsp()
+
+        assertEquals(DiagnosticsScope.CURRENT_FILE, loaded.diagnosticsScope)
     }
 }
