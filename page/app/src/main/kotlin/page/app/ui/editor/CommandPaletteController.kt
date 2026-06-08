@@ -146,7 +146,7 @@ internal class CommandPaletteController(
                             println("[lsp] codeAction normalize ▶ \"${entry.title}\" — KLS edit 보정됨 (import \\n 보강)")
                             entry.copy(edit = normalized)
                         } else entry
-                    }
+                    }.sortedByDescending { it.isExecutable }
                     val selected = list.indexOfFirst { it.isPreferred }.coerceAtLeast(0)
                     val open = list.isNotEmpty()
                     onCodeActions(list, snapshotUri, snapshotText, selected, open)
