@@ -16,6 +16,7 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Lsp -> reduceLsp(state, event)
     is IdeEvent.Run -> reduceRun(state, event)
     is IdeEvent.Palette -> reducePalette(state, event)
+    is IdeEvent.Search -> state
     is IdeEvent.Settings -> state
     is IdeEvent.Internal -> reduceInternal(state, event)
 }

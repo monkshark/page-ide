@@ -117,6 +117,19 @@ internal sealed interface IdeEvent {
         data object ToggleFindInFiles : Palette
     }
 
+    sealed interface Search : IdeEvent {
+        data object Open : Search
+        data object OpenReplace : Search
+        data class Close(val side: PaneSide) : Search
+        data class QueryChange(val side: PaneSide, val query: String) : Search
+        data class ReplaceChange(val side: PaneSide, val value: String) : Search
+        data class ToggleCase(val side: PaneSide) : Search
+        data class Next(val side: PaneSide) : Search
+        data class Prev(val side: PaneSide) : Search
+        data class ReplaceOne(val side: PaneSide) : Search
+        data class ReplaceAll(val side: PaneSide) : Search
+    }
+
     sealed interface Settings : IdeEvent {
         data class Apply(val settings: PageSettings) : Settings
     }

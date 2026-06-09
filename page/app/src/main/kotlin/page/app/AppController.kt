@@ -357,16 +357,16 @@ internal class AppController(
         addSearchQuery = addSearchQuery,
         addReplaceText = addReplaceText,
     )
-    val openSearch = searchController::openSearch
-    val openReplace = searchController::openReplace
-    val closeSearch = searchController::closeSearch
-    val onQueryChange = searchController::onQueryChange
-    val onToggleCase = searchController::onToggleCase
-    val onSearchNext = searchController::onSearchNext
-    val onSearchPrev = searchController::onSearchPrev
-    val onReplaceChange = searchController::onReplaceChange
-    val onReplace = searchController::onReplace
-    val onReplaceAll = searchController::onReplaceAll
+    val openSearch: () -> Unit = { dispatch(IdeEvent.Search.Open) }
+    val openReplace: () -> Unit = { dispatch(IdeEvent.Search.OpenReplace) }
+    val closeSearch: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Close(side)) }
+    val onQueryChange: (PaneSide, String) -> Unit = { side, q -> dispatch(IdeEvent.Search.QueryChange(side, q)) }
+    val onToggleCase: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ToggleCase(side)) }
+    val onSearchNext: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Next(side)) }
+    val onSearchPrev: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Prev(side)) }
+    val onReplaceChange: (PaneSide, String) -> Unit = { side, v -> dispatch(IdeEvent.Search.ReplaceChange(side, v)) }
+    val onReplace: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ReplaceOne(side)) }
+    val onReplaceAll: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ReplaceAll(side)) }
 
     private val historyController = EditorHistoryController(
         focusedPane = { editorWorkspace.focusedPane },
@@ -544,6 +544,16 @@ internal class AppController(
             is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
             IdeEvent.Lsp.ReferencesClose -> Unit
             is IdeEvent.Settings.Apply -> persistSettings(event.settings)
+            IdeEvent.Search.Open -> searchController.openSearch()
+            IdeEvent.Search.OpenReplace -> searchController.openReplace()
+            is IdeEvent.Search.Close -> searchController.closeSearch(event.side)
+            is IdeEvent.Search.QueryChange -> searchController.onQueryChange(event.side, event.query)
+            is IdeEvent.Search.ReplaceChange -> searchController.onReplaceChange(event.side, event.value)
+            is IdeEvent.Search.ToggleCase -> searchController.onToggleCase(event.side)
+            is IdeEvent.Search.Next -> searchController.onSearchNext(event.side)
+            is IdeEvent.Search.Prev -> searchController.onSearchPrev(event.side)
+            is IdeEvent.Search.ReplaceOne -> searchController.onReplace(event.side)
+            is IdeEvent.Search.ReplaceAll -> searchController.onReplaceAll(event.side)
             IdeEvent.Run.Start -> runActionsController.startActiveRun()
             IdeEvent.Run.Stop -> runActionsController.stopActiveRun()
             IdeEvent.Run.ClearOutput -> runCatching { outputState.clear() }

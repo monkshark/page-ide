@@ -139,6 +139,23 @@ class AppControllerTest {
     }
 
     @Test
+    fun `search seam opens search and applies a query change through dispatch`() {
+        val h = Harness()
+        h.setPrimaryTabs(cleanTab(Paths.get("/p/A.kt")), editorText = "foo bar foo")
+
+        h.controller.openSearch()
+        assertTrue(h.editorWorkspace.primaryPane.search != null, "openSearch must initialize search state")
+
+        h.controller.onQueryChange(PaneSide.PRIMARY, "foo")
+        val search = h.editorWorkspace.primaryPane.search
+        assertEquals("foo", search?.query)
+        assertEquals(2, search?.matches?.size)
+
+        h.controller.closeSearch(PaneSide.PRIMARY)
+        assertNull(h.editorWorkspace.primaryPane.search, "closeSearch must clear search state")
+    }
+
+    @Test
     fun `toggleExpanded adds then removes the directory`() {
         val h = Harness()
         val dir = Files.createTempDirectory("appctl-tree")
