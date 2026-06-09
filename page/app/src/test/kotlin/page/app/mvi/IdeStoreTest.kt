@@ -122,6 +122,18 @@ class IdeStoreTest {
     }
 
     @Test
+    fun `dispatcher advances palette in chrome slice`() {
+        val first = page.ui.GlassPalette.values().first()
+        val store = IdeStore(AppState(chrome = ChromeState(palette = first)))
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+
+        dispatcher.onEvent(IdeEvent.Palette.Cycle)
+
+        Snapshot.sendApplyNotifications()
+        assertEquals(page.ui.GlassPalette.values()[1], store.chrome.palette)
+    }
+
+    @Test
     fun `effect handler sink receives dispatched event`() {
         val store = IdeStore()
         val handler = IdeEffectHandler()

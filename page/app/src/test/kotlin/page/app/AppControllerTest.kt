@@ -174,9 +174,9 @@ class AppControllerTest {
     }
 
     @Test
-    fun `openFindInFiles is a no-op without a root and opens with one`() {
+    fun `toggleFindInFiles is a no-op without a root and toggles open then closed with one`() {
         val h = Harness()
-        h.controller.openFindInFiles()
+        h.controller.toggleFindInFiles()
         assertFalse(h.appState.findInFiles, "no root: must not open")
 
         val root = Files.createTempDirectory("appctl-find")
@@ -184,12 +184,37 @@ class AppControllerTest {
             Files.writeString(root.resolve("A.kt"), "x")
             h.workspaceState.rootDir = root
 
-            h.controller.openFindInFiles()
+            h.controller.toggleFindInFiles()
 
-            assertTrue(h.appState.findInFiles)
+            assertTrue(h.appState.findInFiles, "with root: opens and walks the index")
             assertTrue(h.appState.findInFilesIndex.isNotEmpty())
+
+            h.controller.toggleFindInFiles()
+
+            assertFalse(h.appState.findInFiles, "toggling again closes")
         } finally {
             root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `cyclePalette persists to AppSettings when there is no root`() {
+        val h = Harness()
+        val settingsDir = Files.createTempDirectory("appctl-palette")
+        val prior = System.getProperty("page.settings.dir")
+        System.setProperty("page.settings.dir", settingsDir.toString())
+        try {
+            val before = h.appState.palette
+
+            h.controller.cyclePalette()
+
+            val advanced = h.appState.palette
+            assertTrue(advanced != before, "palette should advance")
+            assertEquals(advanced, AppSettings.loadUi().palette, "no root: palette persisted to AppSettings")
+        } finally {
+            if (prior != null) System.setProperty("page.settings.dir", prior)
+            else System.clearProperty("page.settings.dir")
+            settingsDir.toFile().deleteRecursively()
         }
     }
 

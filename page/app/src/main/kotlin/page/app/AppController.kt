@@ -390,32 +390,15 @@ internal class AppController(
             dispatch(IdeEvent.Internal.CodeActionsResult(list, uri, text, selected, open))
         },
     )
-    val openQuickOpen = paletteController::openQuickOpen
+    val openQuickOpen: () -> Unit = { dispatch(IdeEvent.Palette.QuickOpen) }
     val jumpProblemRelative = paletteController::jumpProblemRelative
-    val openDocumentSymbol = paletteController::openDocumentSymbol
-    val openWorkspaceSymbol = paletteController::openWorkspaceSymbol
-    val triggerFormat = paletteController::triggerFormat
-    val triggerCodeAction = paletteController::triggerCodeAction
+    val openDocumentSymbol: () -> Unit = { dispatch(IdeEvent.Palette.DocumentSymbol) }
+    val openWorkspaceSymbol: () -> Unit = { dispatch(IdeEvent.Palette.WorkspaceSymbol) }
+    val triggerFormat: () -> Unit = { dispatch(IdeEvent.Palette.Format) }
+    val triggerCodeAction: () -> Unit = { dispatch(IdeEvent.Palette.CodeActionTrigger) }
 
-    val openFindInFiles: () -> Unit = {
-        val root = workspaceState.rootDir
-        if (root != null) {
-            appState.findInFilesIndex = ProjectFileIndex.walk(root)
-            appState.findInFiles = true
-        }
-    }
-    val cyclePalette: () -> Unit = {
-        val all = GlassPalette.values()
-        appState.palette = all[(all.indexOf(appState.palette) + 1) % all.size]
-        appState.paletteToastUntil = System.currentTimeMillis() + 1600L
-        val root = workspaceState.rootDir
-        if (root != null) {
-            appState.workspaceFile = appState.workspaceFile.copy(palette = appState.palette.name)
-            runCatching { WorkspaceStore.save(root, appState.workspaceFile) }
-        } else {
-            AppSettings.savePalette(appState.palette)
-        }
-    }
+    val toggleFindInFiles: () -> Unit = { dispatch(IdeEvent.Palette.ToggleFindInFiles) }
+    val cyclePalette: () -> Unit = { dispatch(IdeEvent.Palette.Cycle) }
 
     private val runActionsController = RunActionsController(
         isRunning = { runController.isRunning },
@@ -455,7 +438,7 @@ internal class AppController(
         closeActiveTab = closeActiveTab,
         toggleProblems = { layoutUiState.problemsOpen = !layoutUiState.problemsOpen },
         toggleTodo = { layoutUiState.todoOpen = !layoutUiState.todoOpen },
-        toggleFindInFiles = { if (appState.findInFiles) appState.findInFiles = false else openFindInFiles() },
+        toggleFindInFiles = toggleFindInFiles,
         openSearch = openSearch,
         openReplace = openReplace,
         openQuickOpen = openQuickOpen,
@@ -548,7 +531,7 @@ internal class AppController(
         onDismiss = { dispatch(IdeEvent.CodeAction.Dismiss) },
     )
 
-    fun handleEffect(event: IdeEvent, @Suppress("UNUSED_PARAMETER") prev: AppState, @Suppress("UNUSED_PARAMETER") next: AppState) {
+    fun handleEffect(event: IdeEvent, prev: AppState, next: AppState) {
         when (event) {
             is IdeEvent.CodeAction.Apply -> {
                 if (event.action.isExecutable) applyCodeAction(event.action)
@@ -563,7 +546,33 @@ internal class AppController(
             IdeEvent.Run.Start -> runActionsController.startActiveRun()
             IdeEvent.Run.Stop -> runActionsController.stopActiveRun()
             IdeEvent.Run.ClearOutput -> runCatching { outputState.clear() }
+            IdeEvent.Palette.Cycle -> persistPalette(next.chrome.palette)
+            IdeEvent.Palette.QuickOpen -> paletteController.openQuickOpen()
+            IdeEvent.Palette.DocumentSymbol -> paletteController.openDocumentSymbol()
+            IdeEvent.Palette.WorkspaceSymbol -> paletteController.openWorkspaceSymbol()
+            IdeEvent.Palette.Format -> paletteController.triggerFormat()
+            IdeEvent.Palette.CodeActionTrigger -> paletteController.triggerCodeAction()
+            IdeEvent.Palette.ToggleFindInFiles -> {
+                if (!prev.dialogs.findInFilesOpen) {
+                    val root = workspaceState.rootDir
+                    if (root != null) {
+                        appState.findInFilesIndex = ProjectFileIndex.walk(root)
+                        dispatch(IdeEvent.Dialog.OpenFindInFiles)
+                    }
+                }
+            }
             else -> Unit
+        }
+    }
+
+    private fun persistPalette(palette: GlassPalette) {
+        dispatch(IdeEvent.Chrome.ShowPaletteToast(System.currentTimeMillis() + 1600L))
+        val root = workspaceState.rootDir
+        if (root != null) {
+            appState.workspaceFile = appState.workspaceFile.copy(palette = palette.name)
+            runCatching { WorkspaceStore.save(root, appState.workspaceFile) }
+        } else {
+            AppSettings.savePalette(palette)
         }
     }
 

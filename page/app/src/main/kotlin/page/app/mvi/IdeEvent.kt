@@ -106,6 +106,16 @@ internal sealed interface IdeEvent {
         data object ClearOutput : Run
     }
 
+    sealed interface Palette : IdeEvent {
+        data object Cycle : Palette
+        data object QuickOpen : Palette
+        data object DocumentSymbol : Palette
+        data object WorkspaceSymbol : Palette
+        data object Format : Palette
+        data object CodeActionTrigger : Palette
+        data object ToggleFindInFiles : Palette
+    }
+
     sealed interface Internal : IdeEvent {
         data class CodeActionsResult(
             val actions: List<CodeActionEntry>,

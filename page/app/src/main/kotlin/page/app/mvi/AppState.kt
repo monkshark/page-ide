@@ -15,6 +15,7 @@ import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.runtime.RunConfigsState
+import page.ui.GlassPalette
 import java.nio.file.Path
 
 internal data class LayoutState(
@@ -37,6 +38,7 @@ internal data class LayoutState(
 internal data class ChromeState(
     val settingsDialogOpen: Boolean = false,
     val runDialogOpen: Boolean = false,
+    val palette: GlassPalette = GlassPalette.Cool,
     val paletteToastUntil: Long = 0L,
     val editorFocusVersion: Int = 0,
     val pendingTreeFocusTick: Int = 0,
