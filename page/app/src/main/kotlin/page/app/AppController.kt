@@ -357,16 +357,16 @@ internal class AppController(
         addSearchQuery = addSearchQuery,
         addReplaceText = addReplaceText,
     )
-    val openSearch = searchController::openSearch
-    val openReplace = searchController::openReplace
-    val closeSearch = searchController::closeSearch
-    val onQueryChange = searchController::onQueryChange
-    val onToggleCase = searchController::onToggleCase
-    val onSearchNext = searchController::onSearchNext
-    val onSearchPrev = searchController::onSearchPrev
-    val onReplaceChange = searchController::onReplaceChange
-    val onReplace = searchController::onReplace
-    val onReplaceAll = searchController::onReplaceAll
+    val openSearch: () -> Unit = { dispatch(IdeEvent.Search.Open) }
+    val openReplace: () -> Unit = { dispatch(IdeEvent.Search.OpenReplace) }
+    val closeSearch: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Close(side)) }
+    val onQueryChange: (PaneSide, String) -> Unit = { side, q -> dispatch(IdeEvent.Search.QueryChange(side, q)) }
+    val onToggleCase: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ToggleCase(side)) }
+    val onSearchNext: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Next(side)) }
+    val onSearchPrev: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.Prev(side)) }
+    val onReplaceChange: (PaneSide, String) -> Unit = { side, v -> dispatch(IdeEvent.Search.ReplaceChange(side, v)) }
+    val onReplace: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ReplaceOne(side)) }
+    val onReplaceAll: (PaneSide) -> Unit = { side -> dispatch(IdeEvent.Search.ReplaceAll(side)) }
 
     private val historyController = EditorHistoryController(
         focusedPane = { editorWorkspace.focusedPane },
@@ -390,32 +390,15 @@ internal class AppController(
             dispatch(IdeEvent.Internal.CodeActionsResult(list, uri, text, selected, open))
         },
     )
-    val openQuickOpen = paletteController::openQuickOpen
+    val openQuickOpen: () -> Unit = { dispatch(IdeEvent.Palette.QuickOpen) }
     val jumpProblemRelative = paletteController::jumpProblemRelative
-    val openDocumentSymbol = paletteController::openDocumentSymbol
-    val openWorkspaceSymbol = paletteController::openWorkspaceSymbol
-    val triggerFormat = paletteController::triggerFormat
-    val triggerCodeAction = paletteController::triggerCodeAction
+    val openDocumentSymbol: () -> Unit = { dispatch(IdeEvent.Palette.DocumentSymbol) }
+    val openWorkspaceSymbol: () -> Unit = { dispatch(IdeEvent.Palette.WorkspaceSymbol) }
+    val triggerFormat: () -> Unit = { dispatch(IdeEvent.Palette.Format) }
+    val triggerCodeAction: () -> Unit = { dispatch(IdeEvent.Palette.CodeActionTrigger) }
 
-    val openFindInFiles: () -> Unit = {
-        val root = workspaceState.rootDir
-        if (root != null) {
-            appState.findInFilesIndex = ProjectFileIndex.walk(root)
-            appState.findInFiles = true
-        }
-    }
-    val cyclePalette: () -> Unit = {
-        val all = GlassPalette.values()
-        appState.palette = all[(all.indexOf(appState.palette) + 1) % all.size]
-        appState.paletteToastUntil = System.currentTimeMillis() + 1600L
-        val root = workspaceState.rootDir
-        if (root != null) {
-            appState.workspaceFile = appState.workspaceFile.copy(palette = appState.palette.name)
-            runCatching { WorkspaceStore.save(root, appState.workspaceFile) }
-        } else {
-            AppSettings.savePalette(appState.palette)
-        }
-    }
+    val toggleFindInFiles: () -> Unit = { dispatch(IdeEvent.Palette.ToggleFindInFiles) }
+    val cyclePalette: () -> Unit = { dispatch(IdeEvent.Palette.Cycle) }
 
     private val runActionsController = RunActionsController(
         isRunning = { runController.isRunning },
@@ -455,7 +438,7 @@ internal class AppController(
         closeActiveTab = closeActiveTab,
         toggleProblems = { layoutUiState.problemsOpen = !layoutUiState.problemsOpen },
         toggleTodo = { layoutUiState.todoOpen = !layoutUiState.todoOpen },
-        toggleFindInFiles = { if (appState.findInFiles) appState.findInFiles = false else openFindInFiles() },
+        toggleFindInFiles = toggleFindInFiles,
         openSearch = openSearch,
         openReplace = openReplace,
         openQuickOpen = openQuickOpen,
@@ -492,20 +475,20 @@ internal class AppController(
     val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
 
     fun fileTreePanelActions(): FileTreePanelActions = FileTreePanelActions(
-        onToggle = toggleExpanded,
-        onOpenFile = openInTab,
-        onCreateFileIn = onCreateFileIn,
-        onCreateFolderIn = onCreateFolderIn,
-        onRenameEntry = onRenameEntry,
-        onDeleteEntry = onDeleteEntry,
-        onDeleteEntries = onDeleteEntries,
-        onRevealInFiles = onRevealInFiles,
-        onCopyPath = onCopyPath,
-        onCopyRelativePath = onCopyRelativePath,
-        onPasteInto = onPasteInto,
-        onDropPlan = onDropPlanReceived,
-        onExternalDrop = onExternalDropReceived,
-        onDropRejected = { msg -> showDropResultToast(msg, DropResultToastTone.Warning, null) },
+        onToggle = { p, recursive -> dispatch(IdeEvent.FileTree.Toggle(p, recursive)) },
+        onOpenFile = { p -> dispatch(IdeEvent.FileTree.OpenFile(p)) },
+        onCreateFileIn = { p -> dispatch(IdeEvent.FileTree.CreateFileIn(p)) },
+        onCreateFolderIn = { p -> dispatch(IdeEvent.FileTree.CreateFolderIn(p)) },
+        onRenameEntry = { p -> dispatch(IdeEvent.FileTree.RenameEntry(p)) },
+        onDeleteEntry = { p -> dispatch(IdeEvent.FileTree.DeleteEntry(p)) },
+        onDeleteEntries = { paths -> dispatch(IdeEvent.FileTree.DeleteEntries(paths)) },
+        onRevealInFiles = { p -> dispatch(IdeEvent.FileTree.RevealInFiles(p)) },
+        onCopyPath = { p -> dispatch(IdeEvent.FileTree.CopyPath(p)) },
+        onCopyRelativePath = { p -> dispatch(IdeEvent.FileTree.CopyRelativePath(p)) },
+        onPasteInto = { p -> dispatch(IdeEvent.FileTree.PasteInto(p)) },
+        onDropPlan = { plan -> dispatch(IdeEvent.FileTree.DropPlan(plan)) },
+        onExternalDrop = { sources, target -> dispatch(IdeEvent.FileTree.ExternalDrop(sources, target)) },
+        onDropRejected = { msg -> dispatch(IdeEvent.FileTree.DropRejected(msg)) },
         onUndoFileOp = onUndoFileOp,
         canUndoFileOp = run {
             appState.fileOpHistoryVersion
@@ -548,7 +531,7 @@ internal class AppController(
         onDismiss = { dispatch(IdeEvent.CodeAction.Dismiss) },
     )
 
-    fun handleEffect(event: IdeEvent, @Suppress("UNUSED_PARAMETER") prev: AppState, @Suppress("UNUSED_PARAMETER") next: AppState) {
+    fun handleEffect(event: IdeEvent, prev: AppState, next: AppState) {
         when (event) {
             is IdeEvent.CodeAction.Apply -> {
                 if (event.action.isExecutable) applyCodeAction(event.action)
@@ -560,28 +543,81 @@ internal class AppController(
             is IdeEvent.Lsp.JumpToProblem -> jumpToProblem(event.path, event.line, event.character)
             is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
             IdeEvent.Lsp.ReferencesClose -> Unit
+            is IdeEvent.Settings.Apply -> persistSettings(event.settings)
+            is IdeEvent.FileTree.Toggle -> toggleExpanded(event.path, event.recursive)
+            is IdeEvent.FileTree.OpenFile -> openInTab(event.path)
+            is IdeEvent.FileTree.CreateFileIn -> onCreateFileIn(event.parent)
+            is IdeEvent.FileTree.CreateFolderIn -> onCreateFolderIn(event.parent)
+            is IdeEvent.FileTree.RenameEntry -> onRenameEntry(event.path)
+            is IdeEvent.FileTree.DeleteEntry -> onDeleteEntry(event.path)
+            is IdeEvent.FileTree.DeleteEntries -> onDeleteEntries(event.paths)
+            is IdeEvent.FileTree.RevealInFiles -> onRevealInFiles(event.path)
+            is IdeEvent.FileTree.CopyPath -> onCopyPath(event.path)
+            is IdeEvent.FileTree.CopyRelativePath -> onCopyRelativePath(event.path)
+            is IdeEvent.FileTree.PasteInto -> onPasteInto(event.parent)
+            is IdeEvent.FileTree.DropPlan -> onDropPlanReceived(event.plan)
+            is IdeEvent.FileTree.ExternalDrop -> onExternalDropReceived(event.sources, event.target)
+            is IdeEvent.FileTree.DropRejected -> showDropResultToast(event.message, DropResultToastTone.Warning, null)
+            IdeEvent.Search.Open -> searchController.openSearch()
+            IdeEvent.Search.OpenReplace -> searchController.openReplace()
+            is IdeEvent.Search.Close -> searchController.closeSearch(event.side)
+            is IdeEvent.Search.QueryChange -> searchController.onQueryChange(event.side, event.query)
+            is IdeEvent.Search.ReplaceChange -> searchController.onReplaceChange(event.side, event.value)
+            is IdeEvent.Search.ToggleCase -> searchController.onToggleCase(event.side)
+            is IdeEvent.Search.Next -> searchController.onSearchNext(event.side)
+            is IdeEvent.Search.Prev -> searchController.onSearchPrev(event.side)
+            is IdeEvent.Search.ReplaceOne -> searchController.onReplace(event.side)
+            is IdeEvent.Search.ReplaceAll -> searchController.onReplaceAll(event.side)
             IdeEvent.Run.Start -> runActionsController.startActiveRun()
             IdeEvent.Run.Stop -> runActionsController.stopActiveRun()
             IdeEvent.Run.ClearOutput -> runCatching { outputState.clear() }
+            IdeEvent.Palette.Cycle -> persistPalette(next.chrome.palette)
+            IdeEvent.Palette.QuickOpen -> paletteController.openQuickOpen()
+            IdeEvent.Palette.DocumentSymbol -> paletteController.openDocumentSymbol()
+            IdeEvent.Palette.WorkspaceSymbol -> paletteController.openWorkspaceSymbol()
+            IdeEvent.Palette.Format -> paletteController.triggerFormat()
+            IdeEvent.Palette.CodeActionTrigger -> paletteController.triggerCodeAction()
+            IdeEvent.Palette.ToggleFindInFiles -> {
+                if (!prev.dialogs.findInFilesOpen) {
+                    val root = workspaceState.rootDir
+                    if (root != null) {
+                        appState.findInFilesIndex = ProjectFileIndex.walk(root)
+                        dispatch(IdeEvent.Dialog.OpenFindInFiles)
+                    }
+                }
+            }
             else -> Unit
+        }
+    }
+
+    private fun persistPalette(palette: GlassPalette) {
+        dispatch(IdeEvent.Chrome.ShowPaletteToast(System.currentTimeMillis() + 1600L))
+        val root = workspaceState.rootDir
+        if (root != null) {
+            appState.workspaceFile = appState.workspaceFile.copy(palette = palette.name)
+            runCatching { WorkspaceStore.save(root, appState.workspaceFile) }
+        } else {
+            AppSettings.savePalette(palette)
         }
     }
 
     fun settingsBinding(): SettingsBinding = SettingsBinding(
         panelOpen = appState.settingsDialogOpen,
-        onApply = { updated ->
-            appState.pageSettings = updated
-            AppSettings.saveAutoSave(updated.autoSave)
-            AppSettings.saveEditor(updated.editor)
-            AppSettings.saveLsp(updated.lsp)
-            AppSettings.saveAutoInput(updated.autoInput)
-            AppSettings.saveUi(updated.ui)
-            AppSettings.saveRun(updated.run)
-            appState.palette = updated.ui.palette
-        },
-        onPanelClose = { appState.settingsDialogOpen = false },
-        onToggle = { appState.settingsDialogOpen = !appState.settingsDialogOpen },
+        onApply = { updated -> dispatch(IdeEvent.Settings.Apply(updated)) },
+        onPanelClose = { dispatch(IdeEvent.Chrome.CloseSettings) },
+        onToggle = { dispatch(IdeEvent.Chrome.ToggleSettings) },
     )
+
+    private fun persistSettings(updated: PageSettings) {
+        appState.pageSettings = updated
+        AppSettings.saveAutoSave(updated.autoSave)
+        AppSettings.saveEditor(updated.editor)
+        AppSettings.saveLsp(updated.lsp)
+        AppSettings.saveAutoInput(updated.autoInput)
+        AppSettings.saveUi(updated.ui)
+        AppSettings.saveRun(updated.run)
+        appState.palette = updated.ui.palette
+    }
 
     fun onActiveTabChanged(side: PaneSide) {
         val pane = paneOf(side)

@@ -279,7 +279,6 @@ internal fun IdeMainLayout(
                             }
                         },
                         onBeforeDelete = { id ->
-                            // Stop running LSP so its process releases file handles on the install dir
                             lspRouter.shutdownLanguage(id)
                             kotlinx.coroutines.delay(500)
                         },

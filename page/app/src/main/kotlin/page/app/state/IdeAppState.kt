@@ -28,7 +28,13 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
             run = AppSettings.loadRun(),
         ),
     )
-    var palette: GlassPalette by mutableStateOf(pageSettings.ui.palette)
+    init {
+        store.updateChrome { it.copy(palette = pageSettings.ui.palette) }
+    }
+
+    var palette: GlassPalette
+        get() = store.chrome.palette
+        set(value) = store.updateChrome { it.copy(palette = value) }
     var paletteToastUntil: Long
         get() = store.chrome.paletteToastUntil
         set(value) = store.updateChrome { it.copy(paletteToastUntil = value) }

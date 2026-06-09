@@ -14,6 +14,7 @@ import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
 import page.runtime.RunConfig
 import page.runtime.RunConfigsState
+import page.ui.GlassPalette
 import java.nio.file.Path
 import kotlin.test.assertNull
 import kotlin.test.Test
@@ -443,5 +444,49 @@ class ReducerTest {
         assertEquals(s.chrome, next.chrome)
         assertEquals(s.tree, next.tree)
         assertEquals(s.editorLayout, next.editorLayout)
+    }
+
+    @Test
+    fun `palette cycle advances to next value and wraps around`() {
+        val all = GlassPalette.values()
+        val s = AppState(chrome = ChromeState(palette = all.first()))
+        val next = reduce(s, IdeEvent.Palette.Cycle)
+        assertEquals(all[1], next.chrome.palette)
+
+        val last = AppState(chrome = ChromeState(palette = all.last()))
+        val wrapped = reduce(last, IdeEvent.Palette.Cycle)
+        assertEquals(all.first(), wrapped.chrome.palette)
+    }
+
+    @Test
+    fun `palette cycle is pure and does not set the toast deadline`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Palette.Cycle)
+        assertEquals(s.chrome.paletteToastUntil, next.chrome.paletteToastUntil)
+    }
+
+    @Test
+    fun `toggle find-in-files closes when open and is a no-op in reduce when closed`() {
+        val open = AppState(dialogs = DialogState(findInFilesOpen = true))
+        assertFalse(reduce(open, IdeEvent.Palette.ToggleFindInFiles).dialogs.findInFilesOpen)
+
+        val closed = AppState()
+        assertSame(closed, reduce(closed, IdeEvent.Palette.ToggleFindInFiles))
+    }
+
+    @Test
+    fun `internal find-in-files open flips the dialog flag`() {
+        val next = reduce(AppState(), IdeEvent.Dialog.OpenFindInFiles)
+        assertTrue(next.dialogs.findInFilesOpen)
+    }
+
+    @Test
+    fun `effect-only palette triggers leave cold state unchanged`() {
+        val s = AppState()
+        assertSame(s, reduce(s, IdeEvent.Palette.QuickOpen))
+        assertSame(s, reduce(s, IdeEvent.Palette.DocumentSymbol))
+        assertSame(s, reduce(s, IdeEvent.Palette.WorkspaceSymbol))
+        assertSame(s, reduce(s, IdeEvent.Palette.Format))
+        assertSame(s, reduce(s, IdeEvent.Palette.CodeActionTrigger))
     }
 }

@@ -3,6 +3,7 @@ package page.app.mvi
 import androidx.compose.ui.unit.dp
 import page.app.EditorScrollMemory
 import page.app.PaneSide
+import page.ui.GlassPalette
 
 internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Panel -> state.copy(layout = reduceLayout(state.layout, event))
@@ -14,7 +15,27 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.CodeAction -> reduceCodeActionEvent(state, event)
     is IdeEvent.Lsp -> reduceLsp(state, event)
     is IdeEvent.Run -> reduceRun(state, event)
+    is IdeEvent.Palette -> reducePalette(state, event)
+    is IdeEvent.Search -> state
+    is IdeEvent.FileTree -> state
+    is IdeEvent.Settings -> state
     is IdeEvent.Internal -> reduceInternal(state, event)
+}
+
+private fun reducePalette(state: AppState, e: IdeEvent.Palette): AppState = when (e) {
+    IdeEvent.Palette.Cycle -> {
+        val all = GlassPalette.values()
+        val next = all[(all.indexOf(state.chrome.palette) + 1) % all.size]
+        state.copy(chrome = state.chrome.copy(palette = next))
+    }
+    IdeEvent.Palette.ToggleFindInFiles ->
+        if (state.dialogs.findInFilesOpen) state.copy(dialogs = state.dialogs.copy(findInFilesOpen = false))
+        else state
+    IdeEvent.Palette.QuickOpen,
+    IdeEvent.Palette.DocumentSymbol,
+    IdeEvent.Palette.WorkspaceSymbol,
+    IdeEvent.Palette.Format,
+    IdeEvent.Palette.CodeActionTrigger -> state
 }
 
 private fun reduceRun(state: AppState, e: IdeEvent.Run): AppState = when (e) {

@@ -375,7 +375,6 @@ class FolderPackageRenameTest {
             mapOf("com.example.util.Moved" to "com.example.core.Moved"),
             plan?.importRewriteMap,
         )
-        // sibling untouched
         assertEquals("package com.example.util\n", Files.readString(sibling))
     }
 

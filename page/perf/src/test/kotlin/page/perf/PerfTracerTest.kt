@@ -59,7 +59,6 @@ class PerfTracerTest {
         try {
             tracer.trace<Unit>("workspace.open") { throw IllegalStateException("boom") }
         } catch (_: IllegalStateException) {
-            // expected
         }
         val marks = tracer.snapshot()
         assertEquals(1, marks.size)

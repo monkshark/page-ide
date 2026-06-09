@@ -177,7 +177,6 @@ internal fun InstallGuideDialog(
                         outputLines = (outputLines + p.line).takeLast(2000)
                     }
                 }
-                // Auto-install Windows libc headers when installing clangd (c/cpp LSP)
                 if (!cancelled.get() && LspInstaller.isWindows() && active.languageId == "clangd") {
                     val mingw = MingwInstaller()
                     if (!mingw.isInstalled()) {
@@ -194,8 +193,6 @@ internal fun InstallGuideDialog(
                         InstallProgressRegistry.finish("mingw-toolchain")
                     }
                 }
-                // Auto-install Windows SDK (xwin) when installing the Swift toolchain — Swift needs
-                // MSVC CRT + Windows SDK headers/import-libs to build & link on Windows.
                 if (!cancelled.get() && LspInstaller.isWindows() && active.languageId == "swift") {
                     val sdk = WindowsSdkInstaller()
                     if (!sdk.isInstalled()) {

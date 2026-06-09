@@ -139,6 +139,50 @@ class AppControllerTest {
     }
 
     @Test
+    fun `search seam opens search and applies a query change through dispatch`() {
+        val h = Harness()
+        h.setPrimaryTabs(cleanTab(Paths.get("/p/A.kt")), editorText = "foo bar foo")
+
+        h.controller.openSearch()
+        assertTrue(h.editorWorkspace.primaryPane.search != null, "openSearch must initialize search state")
+
+        h.controller.onQueryChange(PaneSide.PRIMARY, "foo")
+        val search = h.editorWorkspace.primaryPane.search
+        assertEquals("foo", search?.query)
+        assertEquals(2, search?.matches?.size)
+
+        h.controller.closeSearch(PaneSide.PRIMARY)
+        assertNull(h.editorWorkspace.primaryPane.search, "closeSearch must clear search state")
+    }
+
+    @Test
+    fun `file tree seam toggles expansion through dispatch`() {
+        val h = Harness()
+        val dir = Files.createTempDirectory("appctl-tree-seam")
+        try {
+            val actions = h.controller.fileTreePanelActions()
+
+            actions.onToggle(dir, false)
+            assertTrue(dir in h.workspaceState.expanded, "onToggle must expand via dispatch")
+
+            actions.onToggle(dir, false)
+            assertFalse(dir in h.workspaceState.expanded, "onToggle must collapse via dispatch")
+        } finally {
+            Files.deleteIfExists(dir)
+        }
+    }
+
+    @Test
+    fun `file tree seam copies a path to the clipboard through dispatch`() {
+        val h = Harness()
+        val p = Paths.get("/p/Foo.kt")
+
+        h.controller.fileTreePanelActions().onCopyPath(p)
+
+        assertEquals(listOf(p.toAbsolutePath().toString()), h.clipboard)
+    }
+
+    @Test
     fun `toggleExpanded adds then removes the directory`() {
         val h = Harness()
         val dir = Files.createTempDirectory("appctl-tree")
@@ -174,9 +218,9 @@ class AppControllerTest {
     }
 
     @Test
-    fun `openFindInFiles is a no-op without a root and opens with one`() {
+    fun `toggleFindInFiles is a no-op without a root and toggles open then closed with one`() {
         val h = Harness()
-        h.controller.openFindInFiles()
+        h.controller.toggleFindInFiles()
         assertFalse(h.appState.findInFiles, "no root: must not open")
 
         val root = Files.createTempDirectory("appctl-find")
@@ -184,12 +228,37 @@ class AppControllerTest {
             Files.writeString(root.resolve("A.kt"), "x")
             h.workspaceState.rootDir = root
 
-            h.controller.openFindInFiles()
+            h.controller.toggleFindInFiles()
 
-            assertTrue(h.appState.findInFiles)
+            assertTrue(h.appState.findInFiles, "with root: opens and walks the index")
             assertTrue(h.appState.findInFilesIndex.isNotEmpty())
+
+            h.controller.toggleFindInFiles()
+
+            assertFalse(h.appState.findInFiles, "toggling again closes")
         } finally {
             root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `cyclePalette persists to AppSettings when there is no root`() {
+        val h = Harness()
+        val settingsDir = Files.createTempDirectory("appctl-palette")
+        val prior = System.getProperty("page.settings.dir")
+        System.setProperty("page.settings.dir", settingsDir.toString())
+        try {
+            val before = h.appState.palette
+
+            h.controller.cyclePalette()
+
+            val advanced = h.appState.palette
+            assertTrue(advanced != before, "palette should advance")
+            assertEquals(advanced, AppSettings.loadUi().palette, "no root: palette persisted to AppSettings")
+        } finally {
+            if (prior != null) System.setProperty("page.settings.dir", prior)
+            else System.clearProperty("page.settings.dir")
+            settingsDir.toFile().deleteRecursively()
         }
     }
 

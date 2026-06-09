@@ -43,7 +43,6 @@ class PieceTreeTest {
         val tree = PieceTree("abc")
         tree.insert(1, "XYZ")
         tree.insert(4, "QQ")
-        // text now: aXYZQQbc
         assertEquals("aXYZQQbc", tree.text())
         tree.delete(1, 7)
         assertEquals("ac", tree.text())

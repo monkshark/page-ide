@@ -5,6 +5,7 @@ import page.app.CreateEntryDialogState
 import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
 import page.app.FileOpConfirmState
+import page.app.PageSettings
 import page.app.PaneSide
 import page.app.PendingClose
 import page.app.ReferencesQueryState
@@ -14,6 +15,7 @@ import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
 import page.runtime.RunConfigsState
+import page.workspace.TreeDragController
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -104,6 +106,50 @@ internal sealed interface IdeEvent {
         data object Stop : Run
         data class SaveConfigs(val state: RunConfigsState) : Run
         data object ClearOutput : Run
+    }
+
+    sealed interface Palette : IdeEvent {
+        data object Cycle : Palette
+        data object QuickOpen : Palette
+        data object DocumentSymbol : Palette
+        data object WorkspaceSymbol : Palette
+        data object Format : Palette
+        data object CodeActionTrigger : Palette
+        data object ToggleFindInFiles : Palette
+    }
+
+    sealed interface Search : IdeEvent {
+        data object Open : Search
+        data object OpenReplace : Search
+        data class Close(val side: PaneSide) : Search
+        data class QueryChange(val side: PaneSide, val query: String) : Search
+        data class ReplaceChange(val side: PaneSide, val value: String) : Search
+        data class ToggleCase(val side: PaneSide) : Search
+        data class Next(val side: PaneSide) : Search
+        data class Prev(val side: PaneSide) : Search
+        data class ReplaceOne(val side: PaneSide) : Search
+        data class ReplaceAll(val side: PaneSide) : Search
+    }
+
+    sealed interface FileTree : IdeEvent {
+        data class Toggle(val path: Path, val recursive: Boolean) : FileTree
+        data class OpenFile(val path: Path) : FileTree
+        data class CreateFileIn(val parent: Path) : FileTree
+        data class CreateFolderIn(val parent: Path) : FileTree
+        data class RenameEntry(val path: Path) : FileTree
+        data class DeleteEntry(val path: Path) : FileTree
+        data class DeleteEntries(val paths: Set<Path>) : FileTree
+        data class RevealInFiles(val path: Path) : FileTree
+        data class CopyPath(val path: Path) : FileTree
+        data class CopyRelativePath(val path: Path) : FileTree
+        data class PasteInto(val parent: Path) : FileTree
+        data class DropPlan(val plan: TreeDragController.DropPlan) : FileTree
+        data class ExternalDrop(val sources: List<Path>, val target: Path) : FileTree
+        data class DropRejected(val message: String) : FileTree
+    }
+
+    sealed interface Settings : IdeEvent {
+        data class Apply(val settings: PageSettings) : Settings
     }
 
     sealed interface Internal : IdeEvent {
