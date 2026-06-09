@@ -220,7 +220,6 @@ private fun ManagerDetailPane(
         val dir = inst.installDir(version)
         val wasActive = activeVersion == version
         scope.launch(Dispatchers.IO) {
-            // Shut down any running LSP that may hold open file handles inside the install dir
             runCatching { onBeforeDelete(entry.id) }
             if (wasActive) {
                 val pointer = dir.parent?.resolve("CURRENT")

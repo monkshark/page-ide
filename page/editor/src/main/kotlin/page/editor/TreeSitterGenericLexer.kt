@@ -50,9 +50,7 @@ class TreeSitterGenericLexer(
 
     private fun isDocCommentRange(text: String, start: Int, end: Int): Boolean {
         if (end - start < 4) return false
-        // /** ... */ style (Java/Kotlin/C/Rust/etc.)
         if (text[start] == '/' && text[start + 1] == '*' && text[start + 2] == '*' && text[start + 3] != '/') return true
-        // Python/Ruby/Elixir triple-quote docstrings detected by tree-sitter node type are handled via overrides
         return false
     }
 
@@ -69,39 +67,30 @@ class TreeSitterGenericLexer(
 
     private fun classify(node: TSNode): TokenKind? {
         val type = node.type ?: return null
-        // Overrides take precedence
         overrides[type]?.let { return it }
         return defaultClassify(node, type)
     }
 
     private fun defaultClassify(node: TSNode, type: String): TokenKind? = when {
-        // Comments
         type == "comment" || type == "line_comment" || type == "block_comment" -> TokenKind.COMMENT
 
-        // Strings
         type == "string" || type == "string_literal" || type == "string_content" ||
             type == "raw_string" || type == "template_string" || type == "interpreted_string_literal" ||
             type == "char_literal" || type == "character_literal" || type == "rune_literal" -> TokenKind.STRING
 
-        // Numbers
         type == "integer" || type == "integer_literal" || type == "float" || type == "float_literal" ||
             type == "number" || type == "decimal_integer_literal" || type == "hex_integer_literal" -> TokenKind.NUMBER
 
-        // Types
         type == "type_identifier" || type == "type_name" || type == "builtin_type" ||
             type == "primitive_type" -> TokenKind.TYPE
 
-        // Annotations/decorators
         type == "decorator" || type == "attribute" || type == "attribute_item" ||
             type == "annotation" || type == "marker_annotation" -> TokenKind.ANNOTATION
 
-        // Unnamed nodes starting with a letter -> keyword
         !node.isNamed && type.isNotEmpty() && type[0].isLetter() -> TokenKind.KEYWORD
 
         else -> null
     }
-
-    // -- byte-to-char mapping utilities (same as TreeSitterJavaLexer) --
 
     private fun buildByteToCharIndex(bytes: ByteArray, text: String): IntArray {
         val map = IntArray(bytes.size + 1)

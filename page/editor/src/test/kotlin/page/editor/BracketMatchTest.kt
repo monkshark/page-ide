@@ -82,8 +82,6 @@ class BracketMatchTest {
 
     @Test
     fun `caret between two brackets prioritizes left`() {
-        // "(){}" — caret at 2 is between ) and {
-        // Left side: ')' at offset 1 → matches '(' at 0
         assertEquals(0 to 1, BracketMatch.find("(){}", 2))
     }
 

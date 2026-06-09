@@ -72,7 +72,6 @@ class GenericLanguageBackend(
             builder.directory(workspaceRoot.toFile())
         }
         builder.redirectErrorStream(false)
-        // Apply PAGE-managed env (runtimes, include paths, etc.)
         builder.environment().putAll(env)
         envSetup?.invoke(builder.environment())
         val process = builder.start()

@@ -107,16 +107,11 @@ object KotlinLsp {
         if (workspaceRoot != null && Files.isDirectory(workspaceRoot)) {
             builder.directory(workspaceRoot.toFile())
         }
-        // Apply PAGE-managed env (runtimes, include paths, etc.)
         builder.environment().putAll(env)
-        // KLS 1.3.x 의 번들 코틀린 컴파일러가 JDK 25+ 의 java.version 포맷을 파싱하지 못해 크래시함.
-        // PAGE 가 도는 JVM (toolchain 으로 JDK 21 보장) 을 KLS 에 재사용해 회피.
         val javaHome = System.getProperty("java.home")
         if (!javaHome.isNullOrBlank()) {
             builder.environment()["JAVA_HOME"] = javaHome
         }
-        // KLS 가 Gradle/Maven CLI 로 dependency 를 풀려고 하므로, 발견 가능한 gradle 디렉토리를
-        // 자식 PATH 앞에 끼워넣어 type checker 가 stdlib 외 모듈도 분석할 수 있게 한다.
         prependGradleToPath(builder)
         builder.redirectErrorStream(false)
         val process = builder.start()
