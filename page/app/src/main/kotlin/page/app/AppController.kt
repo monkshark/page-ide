@@ -543,6 +543,7 @@ internal class AppController(
             is IdeEvent.Lsp.JumpToProblem -> jumpToProblem(event.path, event.line, event.character)
             is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
             IdeEvent.Lsp.ReferencesClose -> Unit
+            is IdeEvent.Settings.Apply -> persistSettings(event.settings)
             IdeEvent.Run.Start -> runActionsController.startActiveRun()
             IdeEvent.Run.Stop -> runActionsController.stopActiveRun()
             IdeEvent.Run.ClearOutput -> runCatching { outputState.clear() }
@@ -578,19 +579,21 @@ internal class AppController(
 
     fun settingsBinding(): SettingsBinding = SettingsBinding(
         panelOpen = appState.settingsDialogOpen,
-        onApply = { updated ->
-            appState.pageSettings = updated
-            AppSettings.saveAutoSave(updated.autoSave)
-            AppSettings.saveEditor(updated.editor)
-            AppSettings.saveLsp(updated.lsp)
-            AppSettings.saveAutoInput(updated.autoInput)
-            AppSettings.saveUi(updated.ui)
-            AppSettings.saveRun(updated.run)
-            appState.palette = updated.ui.palette
-        },
-        onPanelClose = { appState.settingsDialogOpen = false },
-        onToggle = { appState.settingsDialogOpen = !appState.settingsDialogOpen },
+        onApply = { updated -> dispatch(IdeEvent.Settings.Apply(updated)) },
+        onPanelClose = { dispatch(IdeEvent.Chrome.CloseSettings) },
+        onToggle = { dispatch(IdeEvent.Chrome.ToggleSettings) },
     )
+
+    private fun persistSettings(updated: PageSettings) {
+        appState.pageSettings = updated
+        AppSettings.saveAutoSave(updated.autoSave)
+        AppSettings.saveEditor(updated.editor)
+        AppSettings.saveLsp(updated.lsp)
+        AppSettings.saveAutoInput(updated.autoInput)
+        AppSettings.saveUi(updated.ui)
+        AppSettings.saveRun(updated.run)
+        appState.palette = updated.ui.palette
+    }
 
     fun onActiveTabChanged(side: PaneSide) {
         val pane = paneOf(side)

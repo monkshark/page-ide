@@ -5,6 +5,7 @@ import page.app.CreateEntryDialogState
 import page.app.DeleteEntryDialogState
 import page.app.EditorScrollSnapshot
 import page.app.FileOpConfirmState
+import page.app.PageSettings
 import page.app.PaneSide
 import page.app.PendingClose
 import page.app.ReferencesQueryState
@@ -114,6 +115,10 @@ internal sealed interface IdeEvent {
         data object Format : Palette
         data object CodeActionTrigger : Palette
         data object ToggleFindInFiles : Palette
+    }
+
+    sealed interface Settings : IdeEvent {
+        data class Apply(val settings: PageSettings) : Settings
     }
 
     sealed interface Internal : IdeEvent {
