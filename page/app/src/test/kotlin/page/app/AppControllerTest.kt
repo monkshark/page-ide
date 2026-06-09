@@ -156,6 +156,33 @@ class AppControllerTest {
     }
 
     @Test
+    fun `file tree seam toggles expansion through dispatch`() {
+        val h = Harness()
+        val dir = Files.createTempDirectory("appctl-tree-seam")
+        try {
+            val actions = h.controller.fileTreePanelActions()
+
+            actions.onToggle(dir, false)
+            assertTrue(dir in h.workspaceState.expanded, "onToggle must expand via dispatch")
+
+            actions.onToggle(dir, false)
+            assertFalse(dir in h.workspaceState.expanded, "onToggle must collapse via dispatch")
+        } finally {
+            Files.deleteIfExists(dir)
+        }
+    }
+
+    @Test
+    fun `file tree seam copies a path to the clipboard through dispatch`() {
+        val h = Harness()
+        val p = Paths.get("/p/Foo.kt")
+
+        h.controller.fileTreePanelActions().onCopyPath(p)
+
+        assertEquals(listOf(p.toAbsolutePath().toString()), h.clipboard)
+    }
+
+    @Test
     fun `toggleExpanded adds then removes the directory`() {
         val h = Harness()
         val dir = Files.createTempDirectory("appctl-tree")

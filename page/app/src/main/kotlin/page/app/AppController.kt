@@ -475,20 +475,20 @@ internal class AppController(
     val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
 
     fun fileTreePanelActions(): FileTreePanelActions = FileTreePanelActions(
-        onToggle = toggleExpanded,
-        onOpenFile = openInTab,
-        onCreateFileIn = onCreateFileIn,
-        onCreateFolderIn = onCreateFolderIn,
-        onRenameEntry = onRenameEntry,
-        onDeleteEntry = onDeleteEntry,
-        onDeleteEntries = onDeleteEntries,
-        onRevealInFiles = onRevealInFiles,
-        onCopyPath = onCopyPath,
-        onCopyRelativePath = onCopyRelativePath,
-        onPasteInto = onPasteInto,
-        onDropPlan = onDropPlanReceived,
-        onExternalDrop = onExternalDropReceived,
-        onDropRejected = { msg -> showDropResultToast(msg, DropResultToastTone.Warning, null) },
+        onToggle = { p, recursive -> dispatch(IdeEvent.FileTree.Toggle(p, recursive)) },
+        onOpenFile = { p -> dispatch(IdeEvent.FileTree.OpenFile(p)) },
+        onCreateFileIn = { p -> dispatch(IdeEvent.FileTree.CreateFileIn(p)) },
+        onCreateFolderIn = { p -> dispatch(IdeEvent.FileTree.CreateFolderIn(p)) },
+        onRenameEntry = { p -> dispatch(IdeEvent.FileTree.RenameEntry(p)) },
+        onDeleteEntry = { p -> dispatch(IdeEvent.FileTree.DeleteEntry(p)) },
+        onDeleteEntries = { paths -> dispatch(IdeEvent.FileTree.DeleteEntries(paths)) },
+        onRevealInFiles = { p -> dispatch(IdeEvent.FileTree.RevealInFiles(p)) },
+        onCopyPath = { p -> dispatch(IdeEvent.FileTree.CopyPath(p)) },
+        onCopyRelativePath = { p -> dispatch(IdeEvent.FileTree.CopyRelativePath(p)) },
+        onPasteInto = { p -> dispatch(IdeEvent.FileTree.PasteInto(p)) },
+        onDropPlan = { plan -> dispatch(IdeEvent.FileTree.DropPlan(plan)) },
+        onExternalDrop = { sources, target -> dispatch(IdeEvent.FileTree.ExternalDrop(sources, target)) },
+        onDropRejected = { msg -> dispatch(IdeEvent.FileTree.DropRejected(msg)) },
         onUndoFileOp = onUndoFileOp,
         canUndoFileOp = run {
             appState.fileOpHistoryVersion
@@ -544,6 +544,20 @@ internal class AppController(
             is IdeEvent.Lsp.ApplyRename -> applyRename(event.edit)
             IdeEvent.Lsp.ReferencesClose -> Unit
             is IdeEvent.Settings.Apply -> persistSettings(event.settings)
+            is IdeEvent.FileTree.Toggle -> toggleExpanded(event.path, event.recursive)
+            is IdeEvent.FileTree.OpenFile -> openInTab(event.path)
+            is IdeEvent.FileTree.CreateFileIn -> onCreateFileIn(event.parent)
+            is IdeEvent.FileTree.CreateFolderIn -> onCreateFolderIn(event.parent)
+            is IdeEvent.FileTree.RenameEntry -> onRenameEntry(event.path)
+            is IdeEvent.FileTree.DeleteEntry -> onDeleteEntry(event.path)
+            is IdeEvent.FileTree.DeleteEntries -> onDeleteEntries(event.paths)
+            is IdeEvent.FileTree.RevealInFiles -> onRevealInFiles(event.path)
+            is IdeEvent.FileTree.CopyPath -> onCopyPath(event.path)
+            is IdeEvent.FileTree.CopyRelativePath -> onCopyRelativePath(event.path)
+            is IdeEvent.FileTree.PasteInto -> onPasteInto(event.parent)
+            is IdeEvent.FileTree.DropPlan -> onDropPlanReceived(event.plan)
+            is IdeEvent.FileTree.ExternalDrop -> onExternalDropReceived(event.sources, event.target)
+            is IdeEvent.FileTree.DropRejected -> showDropResultToast(event.message, DropResultToastTone.Warning, null)
             IdeEvent.Search.Open -> searchController.openSearch()
             IdeEvent.Search.OpenReplace -> searchController.openReplace()
             is IdeEvent.Search.Close -> searchController.closeSearch(event.side)

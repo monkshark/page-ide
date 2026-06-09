@@ -15,6 +15,7 @@ import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
 import page.runtime.RunConfigsState
+import page.workspace.TreeDragController
 import java.nio.file.Path
 
 internal sealed interface IdeEvent {
@@ -128,6 +129,23 @@ internal sealed interface IdeEvent {
         data class Prev(val side: PaneSide) : Search
         data class ReplaceOne(val side: PaneSide) : Search
         data class ReplaceAll(val side: PaneSide) : Search
+    }
+
+    sealed interface FileTree : IdeEvent {
+        data class Toggle(val path: Path, val recursive: Boolean) : FileTree
+        data class OpenFile(val path: Path) : FileTree
+        data class CreateFileIn(val parent: Path) : FileTree
+        data class CreateFolderIn(val parent: Path) : FileTree
+        data class RenameEntry(val path: Path) : FileTree
+        data class DeleteEntry(val path: Path) : FileTree
+        data class DeleteEntries(val paths: Set<Path>) : FileTree
+        data class RevealInFiles(val path: Path) : FileTree
+        data class CopyPath(val path: Path) : FileTree
+        data class CopyRelativePath(val path: Path) : FileTree
+        data class PasteInto(val parent: Path) : FileTree
+        data class DropPlan(val plan: TreeDragController.DropPlan) : FileTree
+        data class ExternalDrop(val sources: List<Path>, val target: Path) : FileTree
+        data class DropRejected(val message: String) : FileTree
     }
 
     sealed interface Settings : IdeEvent {
