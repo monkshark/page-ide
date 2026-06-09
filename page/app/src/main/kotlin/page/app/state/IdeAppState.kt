@@ -41,7 +41,9 @@ internal class IdeAppState(private val store: IdeStore = IdeStore()) {
     var historyLoaded by mutableStateOf(false)
     var workspaceFile by mutableStateOf(WorkspaceFile())
 
-    var runState: RunConfigsState by mutableStateOf(RunConfigsState())
+    var runState: RunConfigsState
+        get() = store.run.configs
+        set(value) = store.updateRun { it.copy(configs = value) }
     var runDialogOpen: Boolean
         get() = store.chrome.runDialogOpen
         set(value) = store.updateChrome { it.copy(runDialogOpen = value) }

@@ -15,6 +15,8 @@ import page.editor.TabBook
 import page.editor.UndoGroupTracker
 import page.language.LspRouter
 import page.runtime.CURRENT_FILE_ID
+import page.runtime.RunConfig
+import page.runtime.RunConfigsState
 import page.runtime.RunController
 import page.runtime.RunEvent
 import page.ui.GlassPalette
@@ -251,6 +253,32 @@ class AppControllerTest {
         assertFalse(h.controller.runPanelBinding().runIsRunning)
         h.outputState.onEvent(RunEvent.Started(command = "echo", args = emptyList(), workingDir = null))
         assertTrue(h.controller.runPanelBinding().runIsRunning)
+    }
+
+    @Test
+    fun `runPanelBinding onStartRun delegates through effect and opens output panel`() {
+        val h = Harness()
+        h.appState.runState = RunConfigsState(
+            configs = listOf(RunConfig(id = "r", name = "r", command = "echo hi")),
+            activeId = "r",
+        )
+        assertFalse(h.layoutUiState.outputOpen)
+
+        h.controller.runPanelBinding().onStartRun()
+
+        assertTrue(h.layoutUiState.outputOpen, "Run.Start effect must open the output panel")
+    }
+
+    @Test
+    fun `runPanelBinding onOutputClear clears output state`() {
+        val h = Harness()
+        h.outputState.onEvent(RunEvent.Started(command = "echo", args = emptyList(), workingDir = null))
+        h.outputState.onEvent(RunEvent.Exited(code = 0, durationMs = 1))
+        assertEquals(0, h.outputState.lastExitCode)
+
+        h.controller.runPanelBinding().onOutputClear()
+
+        assertNull(h.outputState.lastExitCode)
     }
 
     @Test

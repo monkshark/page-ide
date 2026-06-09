@@ -13,7 +13,16 @@ internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
     is IdeEvent.Dialog -> state.copy(dialogs = reduceDialogs(state.dialogs, event))
     is IdeEvent.CodeAction -> reduceCodeActionEvent(state, event)
     is IdeEvent.Lsp -> reduceLsp(state, event)
+    is IdeEvent.Run -> reduceRun(state, event)
     is IdeEvent.Internal -> reduceInternal(state, event)
+}
+
+private fun reduceRun(state: AppState, e: IdeEvent.Run): AppState = when (e) {
+    is IdeEvent.Run.SelectConfig -> state.copy(run = state.run.copy(configs = state.run.configs.select(e.id)))
+    is IdeEvent.Run.SaveConfigs -> state.copy(run = state.run.copy(configs = e.state))
+    IdeEvent.Run.Start,
+    IdeEvent.Run.Stop,
+    IdeEvent.Run.ClearOutput -> state
 }
 
 private fun reduceLsp(state: AppState, e: IdeEvent.Lsp): AppState = when (e) {
@@ -51,6 +60,9 @@ private fun reduceInternal(state: AppState, e: IdeEvent.Internal): AppState = wh
     )
     is IdeEvent.Internal.ReferencesResult -> state.copy(
         references = state.references.copy(query = e.state),
+    )
+    is IdeEvent.Internal.RunConfigsChanged -> state.copy(
+        run = state.run.copy(configs = e.state),
     )
 }
 

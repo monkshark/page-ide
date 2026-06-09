@@ -92,6 +92,36 @@ class IdeStoreTest {
     }
 
     @Test
+    fun `dispatcher writes run slice back to store`() {
+        val store = IdeStore()
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+        val saved = page.runtime.RunConfigsState(
+            configs = listOf(page.runtime.RunConfig(id = "a", name = "a", command = "echo a")),
+            activeId = "a",
+        )
+
+        dispatcher.onEvent(IdeEvent.Run.SaveConfigs(saved))
+
+        Snapshot.sendApplyNotifications()
+        assertEquals(saved, store.run.configs)
+    }
+
+    @Test
+    fun `dispatcher writes loaded run configs back to store`() {
+        val store = IdeStore()
+        val dispatcher = IdeDispatcher(store, IdeEffectHandler())
+        val loaded = page.runtime.RunConfigsState(
+            configs = listOf(page.runtime.RunConfig(id = "p", name = "p", command = "echo p")),
+            activeId = "p",
+        )
+
+        dispatcher.onEvent(IdeEvent.Internal.RunConfigsChanged(loaded))
+
+        Snapshot.sendApplyNotifications()
+        assertEquals(loaded, store.run.configs)
+    }
+
+    @Test
     fun `effect handler sink receives dispatched event`() {
         val store = IdeStore()
         val handler = IdeEffectHandler()
