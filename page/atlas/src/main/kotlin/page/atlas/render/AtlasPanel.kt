@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -70,53 +71,91 @@ fun AtlasPanel(
     width: Dp,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
+    showExpand: Boolean = false,
+    onExpand: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier.width(width).fillMaxHeight(),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+        AtlasContent(
+            slice = slice,
+            onNodeClick = onNodeClick,
+            onClose = onClose,
+            projectMode = projectMode,
+            onProjectModeChange = onProjectModeChange,
+            showExpand = showExpand,
+            onExpand = onExpand,
+        )
+    }
+}
+
+@Composable
+fun AtlasContent(
+    slice: GraphSlice,
+    onNodeClick: (FilePath) -> Unit,
+    onClose: () -> Unit,
+    projectMode: Boolean = false,
+    onProjectModeChange: (Boolean) -> Unit = {},
+    showExpand: Boolean = false,
+    onExpand: () -> Unit = {},
+) {
+    var selectedId by remember(slice) { mutableStateOf<String?>(null) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(28.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "ATLAS",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            ModeChip("파일", !projectMode) { onProjectModeChange(false) }
+            ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
+            Box(modifier = Modifier.weight(1f))
+            if (showExpand) {
                 Text(
-                    text = "ATLAS",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                ModeChip("파일", !projectMode) { onProjectModeChange(false) }
-                ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
-                Box(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Close",
+                    text = "확대",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { onClose() }.padding(4.dp),
+                    modifier = Modifier.clickable { onExpand() }.padding(4.dp),
+                )
+            }
+            Text(
+                text = "Close",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { onClose() }.padding(4.dp),
+            )
+        }
+        Divider()
+        if (slice.nodes.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = if (projectMode) "소스 파일 없음" else "import 없음",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                AtlasCanvas(
+                    slice = slice,
+                    projectMode = projectMode,
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onNodeClick = onNodeClick,
                 )
             }
             Divider()
-            if (slice.nodes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = if (projectMode) "소스 파일 없음" else "import 없음",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    AtlasCanvas(slice = slice, projectMode = projectMode, onNodeClick = onNodeClick)
-                }
-                Divider()
-                LegendRow()
-            }
+            LegendRow()
         }
     }
 }
@@ -193,6 +232,8 @@ private fun LegendItem(label: String, kind: EdgeKind) {
 private fun AtlasCanvas(
     slice: GraphSlice,
     projectMode: Boolean,
+    selectedId: String?,
+    onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
 ) {
     var yaw by remember { mutableStateOf(0.6f) }
@@ -216,17 +257,6 @@ private fun AtlasCanvas(
             toScene = scene
             morph.snapTo(0f)
             morph.animateTo(1f, tween(550, easing = FastOutSlowInEasing))
-        }
-    }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                if (last != 0L && now - lastInteract > 3_000_000_000L) {
-                    yaw += (now - last) / 1_000_000_000f * 0.25f
-                }
-                last = now
-            }
         }
     }
     val morphT = morph.value
@@ -271,7 +301,20 @@ private fun AtlasCanvas(
         .minByOrNull { hypot(pos.x - it.x, pos.y - it.y) }
 
     val hoverId = hoverPos?.let { nodeAt(it)?.id }
-    val highlighted = hoverId?.let { (neighborsByHover[it].orEmpty() + it) }
+    val focusId = selectedId ?: hoverId
+    val highlighted = focusId?.let { (neighborsByHover[it].orEmpty() + it) }
+    val rotationPaused by rememberUpdatedState(hoverId != null || selectedId != null)
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last != 0L && now - lastInteract > 3_000_000_000L && !rotationPaused) {
+                    yaw += (now - last) / 1_000_000_000f * 0.1f
+                }
+                last = now
+            }
+        }
+    }
 
     Canvas(
         modifier = Modifier
@@ -309,11 +352,19 @@ private fun AtlasCanvas(
                 }
             }
             .pointerInput(slice) {
-                detectTapGestures { tap ->
-                    val hit = nodeAt(tap) ?: return@detectTapGestures
-                    slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
-                    lastInteract = System.nanoTime()
-                }
+                detectTapGestures(
+                    onTap = { tap ->
+                        onSelect(nodeAt(tap)?.id)
+                        lastInteract = System.nanoTime()
+                    },
+                    onDoubleTap = { tap ->
+                        val hit = nodeAt(tap)
+                        if (hit != null) {
+                            slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
+                        }
+                        lastInteract = System.nanoTime()
+                    },
+                )
             },
     ) {
         val projectedNodes = projectScene(blended, yaw, pitch, zoom, size.width, size.height)
@@ -322,14 +373,15 @@ private fun AtlasCanvas(
         val minDepth = projectedNodes.minOf { it.depth }
         val maxDepth = projectedNodes.maxOf { it.depth }
         val depthRange = (maxDepth - minDepth).coerceAtLeast(1f)
-        fun depthAlpha(depth: Float): Float = 0.35f + 0.65f * ((maxDepth - depth) / depthRange)
+        fun depthAlpha(depth: Float): Float = 0.5f + 0.5f * ((maxDepth - depth) / depthRange)
+        val labelBudget = if (zoomUser >= 1.5f) 24 else 8
 
         for (ring in blended.rings) {
             val c = projectPoint(0f, ring.y, 0f, yaw, pitch, zoom, size.width, size.height)
             val rx = ring.radius * c.scale
             val ry = rx * abs(sin(pitch))
             drawOval(
-                color = edgeColor.copy(alpha = 0.3f),
+                color = edgeColor.copy(alpha = 0.1f),
                 topLeft = Offset(c.x - rx, c.y - ry),
                 size = Size(rx * 2f, ry * 2f),
                 style = Stroke(width = 1f),
@@ -340,12 +392,17 @@ private fun AtlasCanvas(
             val from = byId[edge.from] ?: continue
             val to = byId[edge.to] ?: continue
             val dimmed = highlighted != null && (edge.from !in highlighted || edge.to !in highlighted)
-            val alpha = if (dimmed) 0.12f else depthAlpha((from.depth + to.depth) / 2f)
+            val alpha = if (dimmed) 0.08f else depthAlpha((from.depth + to.depth) / 2f)
             val start = Offset(from.x, from.y)
             val end = Offset(to.x, to.y)
             val targetRadius = nodeRadius(kindById[edge.to]) * to.scale
             when (edge.kind) {
-                EdgeKind.IMPORT -> drawLine(edgeColor.copy(alpha = alpha), start, end, strokeWidth = 1f)
+                EdgeKind.IMPORT -> drawLine(
+                    color = edgeColor.copy(alpha = alpha),
+                    start = start,
+                    end = end,
+                    strokeWidth = 1f,
+                )
                 EdgeKind.EXTENDS -> {
                     drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 2f)
                     drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
@@ -392,10 +449,14 @@ private fun AtlasCanvas(
                 radius = r,
                 center = pos,
             )
+            if (p.id == selectedId) {
+                drawCircle(labelColor.copy(alpha = alpha * 0.8f), radius = r + 3f, center = pos, style = Stroke(width = 1.5f))
+            }
             val showLabel = p.id == hoverId ||
+                p.id == selectedId ||
                 highlighted?.contains(p.id) == true ||
                 kind == NodeKind.ACTIVE ||
-                projectedNodes.size <= 16
+                projectedNodes.size <= labelBudget
             if (showLabel) {
                 val raw = labelById[p.id] ?: continue
                 val label = if (raw.length > 28) raw.take(27) + "…" else raw

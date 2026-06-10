@@ -121,8 +121,8 @@ private fun assignLayers(ids: List<String>, deps: Map<String, List<String>>): Ma
     return layer
 }
 
-private const val LAYER_HEIGHT = 110f
-private const val RING_STEP = 70f
+private const val LAYER_HEIGHT = 140f
+private const val RING_STEP = 90f
 private const val RING_PADDING = 36f
 private const val GOLDEN_ANGLE = 2.39996f
 private const val FOCAL = 900f
