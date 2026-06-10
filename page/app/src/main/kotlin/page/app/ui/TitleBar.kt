@@ -53,6 +53,8 @@ internal fun TitleBar(
     onOpenRunDialog: () -> Unit,
     outputOpen: Boolean,
     onOutputToggle: () -> Unit,
+    atlasOpen: Boolean,
+    onAtlasToggle: () -> Unit,
     settingsOpen: Boolean,
     onToggleSettings: () -> Unit,
 ) {
@@ -112,6 +114,12 @@ internal fun TitleBar(
                 enabledIconTint = Color(0xFFE53935),
             )
             Spacer(Modifier.width(8.dp))
+            TitleBarToggle(
+                label = "Atlas",
+                selected = atlasOpen,
+                onClick = onAtlasToggle,
+                icon = { tint: Color -> AtlasGlyph(tint = tint) },
+            )
             TitleBarToggle(
                 label = "Output",
                 selected = outputOpen,
@@ -378,6 +386,34 @@ private fun TerminalGlyph(tint: Color, size: Dp = 14.dp) {
             size = Size(w * 0.34f, strokeW),
             cornerRadius = CornerRadius(strokeW / 2),
         )
+    }
+}
+
+@Composable
+private fun AtlasGlyph(tint: Color, size: Dp = 14.dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val strokeW = w * 0.1f
+        val center = Offset(w * 0.5f, h * 0.5f)
+        val nodes = listOf(
+            Offset(w * 0.5f, h * 0.14f),
+            Offset(w * 0.16f, h * 0.78f),
+            Offset(w * 0.84f, h * 0.78f),
+        )
+        nodes.forEach { node ->
+            drawLine(
+                color = tint,
+                start = center,
+                end = node,
+                strokeWidth = strokeW,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
+        drawCircle(color = tint, radius = w * 0.16f, center = center)
+        nodes.forEach { node ->
+            drawCircle(color = tint, radius = w * 0.12f, center = node)
+        }
     }
 }
 

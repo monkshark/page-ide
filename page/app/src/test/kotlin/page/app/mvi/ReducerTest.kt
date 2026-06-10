@@ -67,6 +67,35 @@ class ReducerTest {
     }
 
     @Test
+    fun `toggle atlas flips open flag and close forces false`() {
+        val s = AppState()
+        val opened = reduce(s, IdeEvent.Panel.ToggleAtlas)
+        assertTrue(opened.layout.atlasOpen)
+        val toggledOff = reduce(opened, IdeEvent.Panel.ToggleAtlas)
+        assertFalse(toggledOff.layout.atlasOpen)
+        val closed = reduce(opened, IdeEvent.Panel.CloseAtlas)
+        assertFalse(closed.layout.atlasOpen)
+    }
+
+    @Test
+    fun `resize atlas inverts delta sign`() {
+        val s = AppState()
+        val dragLeft = reduce(s, IdeEvent.Panel.ResizeAtlas((-40).dp))
+        assertEquals(400.dp, dragLeft.layout.atlasWidth)
+        val dragRight = reduce(s, IdeEvent.Panel.ResizeAtlas(40.dp))
+        assertEquals(320.dp, dragRight.layout.atlasWidth)
+    }
+
+    @Test
+    fun `resize atlas clamps to bounds`() {
+        val s = AppState()
+        val grown = reduce(s, IdeEvent.Panel.ResizeAtlas((-10_000).dp))
+        assertEquals(720.dp, grown.layout.atlasWidth)
+        val shrunk = reduce(s, IdeEvent.Panel.ResizeAtlas(10_000.dp))
+        assertEquals(240.dp, shrunk.layout.atlasWidth)
+    }
+
+    @Test
     fun `collapsed and order changes replace values`() {
         val s = AppState()
         val collapsed = reduce(s, IdeEvent.Panel.ProblemsCollapsedChanged(setOf("a", "b")))

@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.*
 import page.app.mvi.IdeEvent
+import page.atlas.graph.GraphSlice
+import page.atlas.render.AtlasPanel
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -133,6 +135,7 @@ internal fun IdeMainLayout(
     onEditorScrollChange: (Path, EditorScrollSnapshot) -> Unit = { _, _ -> },
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
     settings: SettingsBinding = SettingsBinding(),
+    atlasSlice: GraphSlice = GraphSlice.EMPTY,
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -228,6 +231,8 @@ internal fun IdeMainLayout(
             onOpenRunDialog = onOpenRunDialog,
             outputOpen = ui.outputOpen,
             onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
+            atlasOpen = ui.atlasOpen,
+            onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
             settingsOpen = settingsPanelOpen,
             onToggleSettings = onToggleSettings,
         )
@@ -397,6 +402,15 @@ internal fun IdeMainLayout(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+            }
+            if (ui.atlasOpen) {
+                ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
+                AtlasPanel(
+                    slice = atlasSlice,
+                    onNodeClick = onOpenFile,
+                    onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
+                    width = ui.atlasWidth,
+                )
             }
             if (codeActionPreviewVisible) {
                 CodeActionPreviewPanel(

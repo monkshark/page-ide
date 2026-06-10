@@ -40,11 +40,14 @@ internal sealed interface IdeEvent {
         data object CloseTerminal : Panel
         data object ToggleOutput : Panel
         data object CloseOutput : Panel
+        data object ToggleAtlas : Panel
+        data object CloseAtlas : Panel
         data class ResizeSidebar(val deltaDp: Dp) : Panel
         data class ResizeProblems(val deltaDp: Dp) : Panel
         data class ResizeTodo(val deltaDp: Dp) : Panel
         data class ResizeTerminal(val deltaDp: Dp) : Panel
         data class ResizeOutput(val deltaDp: Dp) : Panel
+        data class ResizeAtlas(val deltaDp: Dp) : Panel
         data class ResizeReferences(val deltaDp: Dp) : Panel
         data class ProblemsCollapsedChanged(val keys: Set<String>) : Panel
         data class ProblemsFileOrderChanged(val order: List<String>) : Panel

@@ -9,6 +9,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":page:atlas"))
     implementation(project(":page:core"))
     implementation(project(":page:perf"))
     implementation(project(":page:ui"))

@@ -62,6 +62,13 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
         get() = store.layout.referencesHeight
         set(value) = store.updateLayout { it.copy(referencesHeight = value) }
 
+    var atlasOpen: Boolean
+        get() = store.layout.atlasOpen
+        set(value) = store.updateLayout { it.copy(atlasOpen = value) }
+    var atlasWidth: Dp
+        get() = store.layout.atlasWidth
+        set(value) = store.updateLayout { it.copy(atlasWidth = value) }
+
     var createDialog: CreateEntryDialogState?
         get() = store.dialogs.createDialog
         set(value) = store.updateDialogs { it.copy(createDialog = value) }

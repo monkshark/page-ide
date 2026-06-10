@@ -33,6 +33,8 @@ internal data class LayoutState(
     val outputOpen: Boolean = false,
     val outputHeight: Dp = defaultOutputHeight(),
     val referencesHeight: Dp = 220.dp,
+    val atlasOpen: Boolean = false,
+    val atlasWidth: Dp = 360.dp,
 )
 
 internal data class ChromeState(
