@@ -1,0 +1,292 @@
+package page.atlas.analyzer
+
+import java.nio.file.Path
+import org.treesitter.TSLanguage
+import org.treesitter.TSNode
+import org.treesitter.TSParser
+import org.treesitter.TSTreeCursor
+import org.treesitter.TreeSitterGo
+import org.treesitter.TreeSitterJava
+import org.treesitter.TreeSitterJavascript
+import org.treesitter.TreeSitterKotlin
+import org.treesitter.TreeSitterPython
+import org.treesitter.TreeSitterRust
+import org.treesitter.TreeSitterTypescript
+import page.atlas.graph.EdgeKind
+
+data class RawImport(
+    val target: String,
+    val relative: Boolean,
+    val symbols: List<String> = emptyList(),
+)
+
+data class RawRelation(val typeName: String, val kind: EdgeKind)
+
+data class FileAnalysis(val imports: List<RawImport>, val relations: List<RawRelation>) {
+    companion object {
+        val EMPTY = FileAnalysis(emptyList(), emptyList())
+    }
+}
+
+object ImportExtractor {
+
+    private enum class Lang(
+        val nodeTypes: Set<String>,
+        val relationTypes: Set<String>,
+        val factory: () -> TSLanguage,
+    ) {
+        JAVA(
+            setOf("import_declaration"),
+            setOf("superclass", "super_interfaces", "extends_interfaces"),
+            ::TreeSitterJava,
+        ),
+        KOTLIN(setOf("import_header"), setOf("delegation_specifier"), ::TreeSitterKotlin),
+        PYTHON(setOf("import_statement", "import_from_statement"), setOf("class_definition"), ::TreeSitterPython),
+        JS(setOf("import_statement"), setOf("class_heritage"), ::TreeSitterJavascript),
+        TS(
+            setOf("import_statement"),
+            setOf("extends_clause", "implements_clause", "extends_type_clause"),
+            ::TreeSitterTypescript,
+        ),
+        GO(setOf("import_spec"), emptySet(), ::TreeSitterGo),
+        RUST(setOf("use_declaration"), emptySet(), ::TreeSitterRust),
+    }
+
+    private val langs: Map<String, Lang> = mapOf(
+        "java" to Lang.JAVA,
+        "kt" to Lang.KOTLIN,
+        "kts" to Lang.KOTLIN,
+        "py" to Lang.PYTHON,
+        "pyi" to Lang.PYTHON,
+        "js" to Lang.JS,
+        "jsx" to Lang.JS,
+        "mjs" to Lang.JS,
+        "cjs" to Lang.JS,
+        "ts" to Lang.TS,
+        "tsx" to Lang.TS,
+        "go" to Lang.GO,
+        "rs" to Lang.RUST,
+    )
+
+    private val parsers = mutableMapOf<Lang, TSParser>()
+
+    fun supports(path: Path): Boolean = extOf(path) in langs
+
+    fun extract(path: Path, text: String): List<RawImport> = analyze(path, text).imports
+
+    fun analyze(path: Path, text: String): FileAnalysis {
+        val lang = langs[extOf(path)] ?: return FileAnalysis.EMPTY
+        if (text.isBlank()) return FileAnalysis.EMPTY
+        val parser = parserFor(lang)
+        val tree = synchronized(parser) { parser.parseString(null, text) } ?: return FileAnalysis.EMPTY
+        val byteToChar = buildByteToChar(text)
+        val imports = mutableListOf<Pair<String, String>>()
+        val relations = mutableListOf<Pair<String, String>>()
+        collect(TSTreeCursor(tree.rootNode), lang, text, byteToChar, imports, relations)
+        return FileAnalysis(
+            imports.flatMap { (type, snippet) -> parse(lang, type, snippet) },
+            relations.flatMap { (type, snippet) -> parseRelation(lang, type, snippet) },
+        )
+    }
+
+    private fun parserFor(lang: Lang): TSParser = synchronized(parsers) {
+        parsers.getOrPut(lang) { TSParser().also { it.setLanguage(lang.factory()) } }
+    }
+
+    private fun collect(
+        c: TSTreeCursor,
+        lang: Lang,
+        text: String,
+        byteToChar: IntArray,
+        imports: MutableList<Pair<String, String>>,
+        relations: MutableList<Pair<String, String>>,
+    ) {
+        val node = c.currentNode()
+        val type = node.type ?: ""
+        if (type in lang.nodeTypes) {
+            imports += type to nodeText(node, text, byteToChar)
+            return
+        }
+        if (type in lang.relationTypes) {
+            relations += type to nodeText(node, text, byteToChar)
+        }
+        if (c.gotoFirstChild()) {
+            do {
+                collect(c, lang, text, byteToChar, imports, relations)
+            } while (c.gotoNextSibling())
+            c.gotoParent()
+        }
+    }
+
+    private fun nodeText(node: TSNode, text: String, byteToChar: IntArray): String {
+        val start = byteToChar[node.startByte.coerceIn(0, byteToChar.lastIndex)]
+        val end = byteToChar[node.endByte.coerceIn(0, byteToChar.lastIndex)]
+        return if (end > start) text.substring(start, end) else ""
+    }
+
+    private fun buildByteToChar(text: String): IntArray {
+        val byteLength = text.toByteArray(Charsets.UTF_8).size
+        val map = IntArray(byteLength + 1)
+        var byteIdx = 0
+        var charIdx = 0
+        while (charIdx < text.length) {
+            val cp = text.codePointAt(charIdx)
+            val charLen = Character.charCount(cp)
+            val byteLen = when {
+                cp < 0x80 -> 1
+                cp < 0x800 -> 2
+                cp < 0x10000 -> 3
+                else -> 4
+            }
+            repeat(byteLen) { map[byteIdx + it] = charIdx }
+            byteIdx += byteLen
+            charIdx += charLen
+        }
+        map[byteIdx] = text.length
+        return map
+    }
+
+    private fun parse(lang: Lang, type: String, snippet: String): List<RawImport> = when (lang) {
+        Lang.JAVA -> parseJava(snippet)
+        Lang.KOTLIN -> parseKotlin(snippet)
+        Lang.PYTHON -> if (type == "import_from_statement") parsePythonFrom(snippet) else parsePythonImport(snippet)
+        Lang.JS, Lang.TS -> parseQuoted(snippet, pathStyle = true)
+        Lang.GO -> parseQuoted(snippet, pathStyle = false)
+        Lang.RUST -> parseRust(snippet)
+    }
+
+    private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
+        Lang.JAVA -> parseJavaRelation(type, snippet)
+        Lang.KOTLIN -> parseKotlinRelation(snippet)
+        Lang.PYTHON -> parsePythonBases(snippet)
+        Lang.JS -> typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        Lang.TS -> parseTsRelation(type, snippet)
+        Lang.GO, Lang.RUST -> emptyList()
+    }
+
+    private fun parseJavaRelation(type: String, snippet: String): List<RawRelation> = when (type) {
+        "superclass" -> typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        "super_interfaces" ->
+            typeNames(snippet.trim().removePrefix("implements")).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        "extends_interfaces" ->
+            typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        else -> emptyList()
+    }
+
+    private fun parseKotlinRelation(snippet: String): List<RawRelation> {
+        val body = snippet.trim()
+        if (body.isEmpty()) return emptyList()
+        return if (body.contains('(')) {
+            typeNames(body.substringBefore('(')).map { RawRelation(it, EdgeKind.EXTENDS) }
+        } else {
+            typeNames(body.substringBefore(" by ")).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        }
+    }
+
+    private fun parseTsRelation(type: String, snippet: String): List<RawRelation> = when (type) {
+        "extends_clause", "extends_type_clause" ->
+            typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        "implements_clause" ->
+            typeNames(snippet.trim().removePrefix("implements")).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        else -> emptyList()
+    }
+
+    private fun parsePythonBases(snippet: String): List<RawRelation> {
+        val header = snippet.substringBefore(':')
+        if (!header.contains('(')) return emptyList()
+        val inside = header.substringAfter('(').substringBeforeLast(')')
+        return inside.split(',').mapNotNull { part ->
+            val base = part.trim()
+            if (base.isEmpty() || base.contains('=') || base.startsWith("*")) null
+            else RawRelation(base.substringBefore('['), EdgeKind.EXTENDS)
+        }
+    }
+
+    private fun typeNames(body: String): List<String> =
+        body.split(',').mapNotNull { part ->
+            val name = part.trim().substringBefore('<').substringBefore('(').trim()
+            name.takeIf { it.isNotEmpty() && it.first().isJavaIdentifierStart() }
+        }
+
+    private fun parseJava(snippet: String): List<RawImport> {
+        var body = snippet.trim().removePrefix("import").trim().removeSuffix(";").trim()
+        if (body.startsWith("static ")) body = body.removePrefix("static").trim()
+        val target = body.removeSuffix(".*").removeSuffix(".")
+        return if (target.isEmpty()) emptyList()
+        else listOf(RawImport(target, false, dottedSymbols(body, target)))
+    }
+
+    private fun parseKotlin(snippet: String): List<RawImport> {
+        val body = snippet.trim().removePrefix("import").trim()
+        val target = body.substringBefore(" as ").trim().removeSuffix(".*").removeSuffix(".")
+        if (target.isEmpty()) return emptyList()
+        val symbols =
+            if (" as " in body) listOfNotNull(localName(body.substringAfterLast(" as ").trim()))
+            else dottedSymbols(body, target)
+        return listOf(RawImport(target, false, symbols))
+    }
+
+    private fun dottedSymbols(body: String, target: String): List<String> =
+        if (body.endsWith(".*")) emptyList()
+        else listOfNotNull(target.substringAfterLast('.').takeIf { it.isNotEmpty() })
+
+    private fun parsePythonImport(snippet: String): List<RawImport> {
+        val body = snippet.trim().removePrefix("import").trim()
+        return body.split(',').mapNotNull { part ->
+            val target = part.trim().substringBefore(" as ").trim()
+            if (target.isEmpty()) null else RawImport(target, false)
+        }
+    }
+
+    private fun parsePythonFrom(snippet: String): List<RawImport> {
+        val tokens = snippet.trim().split(Regex("\\s+"))
+        if (tokens.size < 2 || tokens[0] != "from") return emptyList()
+        val target = tokens[1]
+        val symbols = snippet.substringAfter(" import ", "").split(',').mapNotNull { part ->
+            localName(part.trim().trim('(', ')').trim())
+        }
+        return listOf(RawImport(target, target.startsWith("."), symbols))
+    }
+
+    private fun parseQuoted(snippet: String, pathStyle: Boolean): List<RawImport> {
+        val target = unquote(snippet) ?: return emptyList()
+        if (target.isEmpty()) return emptyList()
+        val relative = pathStyle && (target.startsWith("./") || target.startsWith("../"))
+        val symbols = if (pathStyle) jsSymbols(snippet) else emptyList()
+        return listOf(RawImport(target, relative, symbols))
+    }
+
+    private fun jsSymbols(snippet: String): List<String> {
+        val head = snippet.substringAfter("import", "").substringBefore(" from ")
+        return head.split(',', '{', '}').mapNotNull { localName(it.trim()) }
+    }
+
+    private fun localName(token: String): String? {
+        if (token.isEmpty()) return null
+        val local = if (" as " in token) token.substringAfterLast(" as ").trim() else token
+        return local.takeIf {
+            it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() }
+        }
+    }
+
+    private fun parseRust(snippet: String): List<RawImport> {
+        val body = snippet.trim().removePrefix("use").trim().removeSuffix(";").trim()
+            .substringBefore("::{").substringBefore(" as ").trim()
+        if (body.isEmpty() || body.startsWith("{")) return emptyList()
+        val relative = body == "crate" || body == "super" || body == "self" ||
+            body.startsWith("crate::") || body.startsWith("super::") || body.startsWith("self::")
+        return listOf(RawImport(body, relative))
+    }
+
+    private fun unquote(snippet: String): String? {
+        val first = snippet.indexOfFirst { it == '"' || it == '\'' || it == '`' }
+        if (first < 0) return null
+        val quote = snippet[first]
+        val end = snippet.indexOf(quote, first + 1)
+        if (end <= first) return null
+        return snippet.substring(first + 1, end)
+    }
+
+    private fun extOf(path: Path): String =
+        path.fileName?.toString()?.substringAfterLast('.', "")?.lowercase() ?: ""
+}

@@ -11,6 +11,8 @@ import page.app.state.EditorWorkspaceState
 import page.app.state.IdeAppState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.atlas.analyzer.ImportGraphProvider
+import page.atlas.graph.GraphSlice
 import page.app.mvi.IdeDispatcher
 import page.app.mvi.IdeEffectHandler
 import page.app.mvi.IdeEvent
@@ -405,6 +407,23 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         app.onActiveTextChanged(focusedActivePath, focusedActiveText)
     }
 
+    val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
+    var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
+    val atlasOpen = layoutUiState.atlasOpen
+    val atlasProjectMode = layoutUiState.atlasProjectMode
+    val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
+    LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasProvider, focusedActivePath, focusedActiveText) {
+        if ((!atlasOpen && !atlasExpanded) || atlasProvider == null || (!atlasProjectMode && focusedActivePath == null)) {
+            atlasSlice = GraphSlice.EMPTY
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(300)
+        atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (atlasProjectMode) atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+            else atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
+        }
+    }
+
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
     val onReplaceInFiles = app.onReplaceInFiles
@@ -592,6 +611,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     },
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settings = app.settingsBinding(),
+                    atlasSlice = atlasSlice,
                   )
                 }
                 if (findInFiles) {

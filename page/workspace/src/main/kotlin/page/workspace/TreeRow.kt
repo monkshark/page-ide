@@ -29,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.graphics.Color
@@ -118,6 +120,7 @@ fun TreeRow(
         isHovered -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         else -> Color.Transparent
     }
+    val guideColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f)
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = when {
         isBeingDragged -> 0.45f
         isCut -> 0.45f
@@ -203,6 +206,12 @@ fun TreeRow(
             .fillMaxWidth()
             .height(RowHeight)
             .background(rowColor)
+            .drawBehind {
+                for (level in 1 until node.depth) {
+                    val x = (EdgePadding + IndentStep * level + ChevronSlot / 2).toPx()
+                    drawLine(guideColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                }
+            }
             .hoverable(interactionSource)
             .treeRowGestures(
                 key = node.path,

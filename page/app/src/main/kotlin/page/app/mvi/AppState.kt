@@ -18,6 +18,8 @@ import page.runtime.RunConfigsState
 import page.ui.GlassPalette
 import java.nio.file.Path
 
+internal enum class ExpandedPanel { NONE, ATLAS, TREE }
+
 internal data class LayoutState(
     val sidebarWidth: Dp = 260.dp,
     val problemsOpen: Boolean = false,
@@ -33,6 +35,10 @@ internal data class LayoutState(
     val outputOpen: Boolean = false,
     val outputHeight: Dp = defaultOutputHeight(),
     val referencesHeight: Dp = 220.dp,
+    val atlasOpen: Boolean = false,
+    val atlasWidth: Dp = 360.dp,
+    val atlasProjectMode: Boolean = false,
+    val expandedPanel: ExpandedPanel = ExpandedPanel.NONE,
 )
 
 internal data class ChromeState(

@@ -9,6 +9,7 @@ import page.app.DeleteEntryDialogState
 import page.app.RenameEntryDialogState
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
+import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeStore
 import page.editor.IndexedFile
 import page.lsp.DocumentSymbolEntry
@@ -61,6 +62,19 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
     var referencesHeight: Dp
         get() = store.layout.referencesHeight
         set(value) = store.updateLayout { it.copy(referencesHeight = value) }
+
+    var atlasOpen: Boolean
+        get() = store.layout.atlasOpen
+        set(value) = store.updateLayout { it.copy(atlasOpen = value) }
+    var atlasWidth: Dp
+        get() = store.layout.atlasWidth
+        set(value) = store.updateLayout { it.copy(atlasWidth = value) }
+    var atlasProjectMode: Boolean
+        get() = store.layout.atlasProjectMode
+        set(value) = store.updateLayout { it.copy(atlasProjectMode = value) }
+    var expandedPanel: ExpandedPanel
+        get() = store.layout.expandedPanel
+        set(value) = store.updateLayout { it.copy(expandedPanel = value) }
 
     var createDialog: CreateEntryDialogState?
         get() = store.dialogs.createDialog

@@ -67,6 +67,62 @@ class ReducerTest {
     }
 
     @Test
+    fun `toggle atlas flips open flag and close forces false`() {
+        val s = AppState()
+        val opened = reduce(s, IdeEvent.Panel.ToggleAtlas)
+        assertTrue(opened.layout.atlasOpen)
+        val toggledOff = reduce(opened, IdeEvent.Panel.ToggleAtlas)
+        assertFalse(toggledOff.layout.atlasOpen)
+        val closed = reduce(opened, IdeEvent.Panel.CloseAtlas)
+        assertFalse(closed.layout.atlasOpen)
+    }
+
+    @Test
+    fun `atlas project mode change replaces flag`() {
+        val s = AppState()
+        val on = reduce(s, IdeEvent.Panel.AtlasProjectModeChanged(true))
+        assertTrue(on.layout.atlasProjectMode)
+        val off = reduce(on, IdeEvent.Panel.AtlasProjectModeChanged(false))
+        assertFalse(off.layout.atlasProjectMode)
+    }
+
+    @Test
+    fun `expand panel to atlas forces atlas open`() {
+        val s = AppState()
+        val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS))
+        assertEquals(ExpandedPanel.ATLAS, expanded.layout.expandedPanel)
+        assertTrue(expanded.layout.atlasOpen)
+    }
+
+    @Test
+    fun `expand panel to tree keeps atlas closed and collapse resets`() {
+        val s = AppState()
+        val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.TREE))
+        assertEquals(ExpandedPanel.TREE, expanded.layout.expandedPanel)
+        assertFalse(expanded.layout.atlasOpen)
+        val collapsed = reduce(expanded, IdeEvent.Panel.CollapsePanel)
+        assertEquals(ExpandedPanel.NONE, collapsed.layout.expandedPanel)
+    }
+
+    @Test
+    fun `resize atlas inverts delta sign`() {
+        val s = AppState()
+        val dragLeft = reduce(s, IdeEvent.Panel.ResizeAtlas((-40).dp))
+        assertEquals(400.dp, dragLeft.layout.atlasWidth)
+        val dragRight = reduce(s, IdeEvent.Panel.ResizeAtlas(40.dp))
+        assertEquals(320.dp, dragRight.layout.atlasWidth)
+    }
+
+    @Test
+    fun `resize atlas clamps to bounds`() {
+        val s = AppState()
+        val grown = reduce(s, IdeEvent.Panel.ResizeAtlas((-10_000).dp))
+        assertEquals(720.dp, grown.layout.atlasWidth)
+        val shrunk = reduce(s, IdeEvent.Panel.ResizeAtlas(10_000.dp))
+        assertEquals(240.dp, shrunk.layout.atlasWidth)
+    }
+
+    @Test
     fun `collapsed and order changes replace values`() {
         val s = AppState()
         val collapsed = reduce(s, IdeEvent.Panel.ProblemsCollapsedChanged(setOf("a", "b")))
