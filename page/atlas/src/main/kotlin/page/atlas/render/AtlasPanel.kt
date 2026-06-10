@@ -190,8 +190,6 @@ fun AtlasContent(
                     )
                 }
             }
-            Divider()
-            MapHintRow()
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 AtlasCanvas(
@@ -227,22 +225,6 @@ private fun Divider() {
             .height(1.dp)
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
-}
-
-@Composable
-private fun MapHintRow() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "A → B : A 가 B 를 사용  ·  더블클릭: 펼침·접기 / 열기  ·  박스 드래그: 이동",
-            style = TextStyle(fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
-        )
-    }
 }
 
 @Composable
