@@ -41,8 +41,9 @@ data class MapModel(
     }
 }
 
-internal const val MAP_GAP = 22f
-internal const val MAP_PAD = 14f
+internal const val MAP_GAP = 40f
+internal const val MAP_PUSH_GAP = 22f
+internal const val MAP_PAD = 18f
 internal const val MAP_HEADER_H = 16f
 internal const val MAP_FILE_H = 20f
 internal const val MAP_CHIP_H = 24f
@@ -395,8 +396,8 @@ private fun shelfPack(
                 }
             }
             if (hit == null) break
-            val dx = hit[0] + hit[2] + MAP_GAP - px
-            val dy = hit[1] + hit[3] + MAP_GAP - py
+            val dx = hit[0] + hit[2] + MAP_PUSH_GAP - px
+            val dy = hit[1] + hit[3] + MAP_PUSH_GAP - py
             if (dx <= dy) px += dx else py += dy
         }
         placed += floatArrayOf(px, py, item.w, item.h)
