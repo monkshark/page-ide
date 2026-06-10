@@ -23,8 +23,8 @@ class ImportExtractorTest {
         val imports = ImportExtractor.extract(Path.of("Main.java"), text)
         assertEquals(
             listOf(
-                RawImport("java.util.List", false),
-                RawImport("java.lang.Math.max", false),
+                RawImport("java.util.List", false, listOf("List")),
+                RawImport("java.lang.Math.max", false, listOf("max")),
                 RawImport("com.example.util", false),
             ),
             imports,
@@ -45,8 +45,8 @@ class ImportExtractorTest {
         val imports = ImportExtractor.extract(Path.of("Main.kt"), text)
         assertEquals(
             listOf(
-                RawImport("foo.bar.Baz", false),
-                RawImport("foo.qux.Quux", false),
+                RawImport("foo.bar.Baz", false, listOf("Baz")),
+                RawImport("foo.qux.Quux", false, listOf("Q")),
                 RawImport("foo.all", false),
             ),
             imports,
@@ -67,9 +67,9 @@ class ImportExtractorTest {
             listOf(
                 RawImport("os.path", false),
                 RawImport("sys", false),
-                RawImport("..pkg", true),
-                RawImport(".local", true),
-                RawImport("importlib", false),
+                RawImport("..pkg", true, listOf("thing")),
+                RawImport(".local", true, listOf("x")),
+                RawImport("importlib", false, listOf("metadata")),
                 RawImport("json", false),
             ),
             imports,
@@ -86,8 +86,8 @@ class ImportExtractorTest {
         val imports = ImportExtractor.extract(Path.of("app.js"), text)
         assertEquals(
             listOf(
-                RawImport("./util", true),
-                RawImport("fs", false),
+                RawImport("./util", true, listOf("a")),
+                RawImport("fs", false, listOf("fs")),
                 RawImport("../styles/side-effect.css", true),
             ),
             imports,
@@ -103,8 +103,8 @@ class ImportExtractorTest {
         val imports = ImportExtractor.extract(Path.of("server.ts"), text)
         assertEquals(
             listOf(
-                RawImport("./types", true),
-                RawImport("express", false),
+                RawImport("./types", true, listOf("T")),
+                RawImport("express", false, listOf("express")),
             ),
             imports,
         )

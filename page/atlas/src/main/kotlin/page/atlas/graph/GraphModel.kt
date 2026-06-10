@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 enum class NodeKind { ACTIVE, WORKSPACE_FILE, EXTERNAL }
 
-enum class EdgeKind { IMPORT }
+enum class EdgeKind { IMPORT, IMPLEMENTS, EXTENDS }
 
 data class GraphNode(
     val id: String,
