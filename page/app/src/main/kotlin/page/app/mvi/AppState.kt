@@ -35,6 +35,7 @@ internal data class LayoutState(
     val referencesHeight: Dp = 220.dp,
     val atlasOpen: Boolean = false,
     val atlasWidth: Dp = 360.dp,
+    val atlasProjectMode: Boolean = false,
 )
 
 internal data class ChromeState(

@@ -1,5 +1,8 @@
 package page.atlas.render
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,12 +27,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -45,8 +53,11 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.nio.file.Path as FilePath
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
 import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
@@ -57,6 +68,8 @@ fun AtlasPanel(
     onNodeClick: (FilePath) -> Unit,
     onClose: () -> Unit,
     width: Dp,
+    projectMode: Boolean = false,
+    onProjectModeChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -78,6 +91,8 @@ fun AtlasPanel(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                ModeChip("파일", !projectMode) { onProjectModeChange(false) }
+                ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
                 Box(modifier = Modifier.weight(1f))
                 Text(
                     text = "Close",
@@ -90,20 +105,31 @@ fun AtlasPanel(
             if (slice.nodes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "import 없음",
+                        text = if (projectMode) "소스 파일 없음" else "import 없음",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    AtlasCanvas(slice = slice, onNodeClick = onNodeClick)
+                    AtlasCanvas(slice = slice, projectMode = projectMode, onNodeClick = onNodeClick)
                 }
                 Divider()
                 LegendRow()
             }
         }
     }
+}
+
+@Composable
+private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.clickable { onClick() }.padding(horizontal = 2.dp, vertical = 4.dp),
+    )
 }
 
 @Composable
@@ -166,21 +192,64 @@ private fun LegendItem(label: String, kind: EdgeKind) {
 @Composable
 private fun AtlasCanvas(
     slice: GraphSlice,
+    projectMode: Boolean,
     onNodeClick: (FilePath) -> Unit,
 ) {
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var scale by remember { mutableStateOf(1f) }
+    var yaw by remember { mutableStateOf(0.6f) }
+    var pitch by remember { mutableStateOf(0.5f) }
+    var zoomUser by remember { mutableStateOf(1f) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var hoverPos by remember { mutableStateOf<Offset?>(null) }
+    var lastInteract by remember { mutableStateOf(0L) }
     val activeId = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
-    LaunchedEffect(activeId) {
-        offset = Offset.Zero
-        scale = 1f
+    LaunchedEffect(activeId, projectMode) {
+        zoomUser = 1f
+        pitch = 0.5f
     }
-    val layout = remember(slice, canvasSize) {
-        if (canvasSize.width <= 0 || canvasSize.height <= 0) emptyMap()
-        else layeredLayout(slice, canvasSize.width.toFloat(), canvasSize.height.toFloat())
+    val scene = remember(slice) { buildScene(slice) }
+    var fromScene by remember { mutableStateOf(scene) }
+    var toScene by remember { mutableStateOf(scene) }
+    val morph = remember { Animatable(1f) }
+    LaunchedEffect(scene) {
+        if (toScene != scene) {
+            fromScene = toScene
+            toScene = scene
+            morph.snapTo(0f)
+            morph.animateTo(1f, tween(550, easing = FastOutSlowInEasing))
+        }
+    }
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (last != 0L && now - lastInteract > 3_000_000_000L) {
+                    yaw += (now - last) / 1_000_000_000f * 0.25f
+                }
+                last = now
+            }
+        }
+    }
+    val morphT = morph.value
+    val blended = remember(fromScene, toScene, morphT) { blendScenes(fromScene, toScene, morphT) }
+    val freshIds = remember(fromScene, toScene) {
+        if (fromScene === toScene) emptySet()
+        else toScene.nodes.map { it.id }.toSet() - fromScene.nodes.map { it.id }.toSet()
+    }
+    val radius = remember(toScene) { sceneRadius(toScene) }
+    val zoom = run {
+        val side = min(canvasSize.width, canvasSize.height).toFloat()
+        if (side <= 0f) zoomUser else side * 0.42f / radius * zoomUser
     }
     val kindById = remember(slice) { slice.nodes.associate { it.id to it.kind } }
+    val labelById = remember(slice) { slice.nodes.associate { it.id to it.label } }
+    val neighborsByHover = remember(slice) {
+        val map = HashMap<String, MutableSet<String>>()
+        for (edge in slice.edges) {
+            map.getOrPut(edge.from) { mutableSetOf() }.add(edge.to)
+            map.getOrPut(edge.to) { mutableSetOf() }.add(edge.from)
+        }
+        map
+    }
     val activeColor = MaterialTheme.colorScheme.primary
     val workspaceColor = MaterialTheme.colorScheme.secondary
     val externalColor = MaterialTheme.colorScheme.outline
@@ -190,28 +259,50 @@ private fun AtlasCanvas(
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val textMeasurer = rememberTextMeasurer()
 
-    fun screenPos(id: String): Offset? = layout[id]?.let { Offset(it.x * scale, it.y * scale) + offset }
+    fun nodeRadius(kind: NodeKind?): Float = if (kind == NodeKind.ACTIVE) 11f else 8f
 
-    fun nodeRadius(kind: NodeKind): Float = if (kind == NodeKind.ACTIVE) 10f else 7f
+    fun projected(): List<ProjectedNode> {
+        if (canvasSize.width <= 0 || canvasSize.height <= 0) return emptyList()
+        return projectScene(blended, yaw, pitch, zoom, canvasSize.width.toFloat(), canvasSize.height.toFloat())
+    }
+
+    fun nodeAt(pos: Offset): ProjectedNode? = projected()
+        .filter { hypot(pos.x - it.x, pos.y - it.y) <= max(nodeRadius(kindById[it.id]) * it.scale, 14f) }
+        .minByOrNull { hypot(pos.x - it.x, pos.y - it.y) }
+
+    val hoverId = hoverPos?.let { nodeAt(it)?.id }
+    val highlighted = hoverId?.let { (neighborsByHover[it].orEmpty() + it) }
 
     Canvas(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds()
             .onSizeChanged { canvasSize = it }
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    offset += dragAmount
+                    yaw += dragAmount.x * 0.008f
+                    pitch = (pitch + dragAmount.y * 0.008f).coerceIn(-0.2f, 1.25f)
+                    lastInteract = System.nanoTime()
                 }
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        if (event.type == PointerEventType.Scroll) {
-                            val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
-                            if (delta != 0f) {
-                                scale = (scale * if (delta > 0f) 0.9f else 1.1f).coerceIn(0.25f, 3f)
+                        when (event.type) {
+                            PointerEventType.Scroll -> {
+                                val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                                if (delta != 0f) {
+                                    zoomUser = (zoomUser * if (delta > 0f) 0.9f else 1.1f).coerceIn(0.2f, 5f)
+                                    lastInteract = System.nanoTime()
+                                }
+                            }
+                            PointerEventType.Move -> {
+                                hoverPos = event.changes.firstOrNull()?.position
+                            }
+                            PointerEventType.Exit -> {
+                                hoverPos = null
                             }
                         }
                     }
@@ -219,55 +310,116 @@ private fun AtlasCanvas(
             }
             .pointerInput(slice) {
                 detectTapGestures { tap ->
-                    val hit = slice.nodes.firstOrNull { node ->
-                        val pos = screenPos(node.id) ?: return@firstOrNull false
-                        hypot(tap.x - pos.x, tap.y - pos.y) <= max(nodeRadius(node.kind) * scale, 12f)
-                    }
-                    hit?.path?.let(onNodeClick)
+                    val hit = nodeAt(tap) ?: return@detectTapGestures
+                    slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
+                    lastInteract = System.nanoTime()
                 }
             },
     ) {
+        val projectedNodes = projectScene(blended, yaw, pitch, zoom, size.width, size.height)
+        if (projectedNodes.isEmpty()) return@Canvas
+        val byId = projectedNodes.associateBy { it.id }
+        val minDepth = projectedNodes.minOf { it.depth }
+        val maxDepth = projectedNodes.maxOf { it.depth }
+        val depthRange = (maxDepth - minDepth).coerceAtLeast(1f)
+        fun depthAlpha(depth: Float): Float = 0.35f + 0.65f * ((maxDepth - depth) / depthRange)
+
+        for (ring in blended.rings) {
+            val c = projectPoint(0f, ring.y, 0f, yaw, pitch, zoom, size.width, size.height)
+            val rx = ring.radius * c.scale
+            val ry = rx * abs(sin(pitch))
+            drawOval(
+                color = edgeColor.copy(alpha = 0.3f),
+                topLeft = Offset(c.x - rx, c.y - ry),
+                size = Size(rx * 2f, ry * 2f),
+                style = Stroke(width = 1f),
+            )
+        }
+
         for (edge in slice.edges) {
-            val from = screenPos(edge.from) ?: continue
-            val to = screenPos(edge.to) ?: continue
-            val targetRadius = (kindById[edge.to]?.let(::nodeRadius) ?: 7f) * scale
+            val from = byId[edge.from] ?: continue
+            val to = byId[edge.to] ?: continue
+            val dimmed = highlighted != null && (edge.from !in highlighted || edge.to !in highlighted)
+            val alpha = if (dimmed) 0.12f else depthAlpha((from.depth + to.depth) / 2f)
+            val start = Offset(from.x, from.y)
+            val end = Offset(to.x, to.y)
+            val targetRadius = nodeRadius(kindById[edge.to]) * to.scale
             when (edge.kind) {
-                EdgeKind.IMPORT -> drawLine(color = edgeColor, start = from, end = to, strokeWidth = 1f)
+                EdgeKind.IMPORT -> drawLine(edgeColor.copy(alpha = alpha), start, end, strokeWidth = 1f)
                 EdgeKind.EXTENDS -> {
-                    drawLine(color = relationColor, start = from, end = to, strokeWidth = 2f)
-                    drawArrowHead(from, to, targetRadius, relationColor, filled = true)
+                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 2f)
+                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
                 }
                 EdgeKind.IMPLEMENTS -> {
                     drawLine(
-                        color = relationColor,
-                        start = from,
-                        end = to,
+                        color = relationColor.copy(alpha = alpha),
+                        start = start,
+                        end = end,
                         strokeWidth = 1.5f,
                         pathEffect = dashEffect(),
                     )
-                    drawArrowHead(from, to, targetRadius, relationColor, filled = false)
+                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = false)
                 }
             }
         }
-        for (node in slice.nodes) {
-            val pos = screenPos(node.id) ?: continue
-            val color = when (node.kind) {
+        for (p in projectedNodes) {
+            val kind = kindById[p.id] ?: continue
+            val base = when (kind) {
                 NodeKind.ACTIVE -> activeColor
                 NodeKind.WORKSPACE_FILE -> workspaceColor
                 NodeKind.EXTERNAL -> externalColor
             }
-            drawCircle(color = color, radius = nodeRadius(node.kind) * scale, center = pos)
-            val label = if (node.label.length > 28) node.label.take(27) + "…" else node.label
-            val measured = textMeasurer.measure(AnnotatedString(label), labelStyle)
-            drawText(
-                textLayoutResult = measured,
-                topLeft = Offset(
-                    pos.x - measured.size.width / 2f,
-                    pos.y + nodeRadius(node.kind) * scale + 3f,
+            val pos = Offset(p.x, p.y)
+            val r = (nodeRadius(kind) * p.scale).coerceAtLeast(2f)
+            var alpha = depthAlpha(p.depth)
+            if (p.id in freshIds) alpha *= morphT
+            if (highlighted != null && p.id !in highlighted) alpha *= 0.18f
+            alpha = alpha.coerceIn(0f, 1f)
+            if (kind == NodeKind.ACTIVE) {
+                drawCircle(base.copy(alpha = alpha * 0.18f), radius = r * 2.4f, center = pos)
+                drawCircle(base.copy(alpha = alpha * 0.25f), radius = r * 1.6f, center = pos)
+            }
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        lerp(base, Color.White, 0.55f).copy(alpha = alpha),
+                        base.copy(alpha = alpha),
+                        lerp(base, Color.Black, 0.35f).copy(alpha = alpha),
+                    ),
+                    center = pos + Offset(-r * 0.35f, -r * 0.35f),
+                    radius = (r * 1.7f).coerceAtLeast(1f),
                 ),
+                radius = r,
+                center = pos,
             )
+            val showLabel = p.id == hoverId ||
+                highlighted?.contains(p.id) == true ||
+                kind == NodeKind.ACTIVE ||
+                projectedNodes.size <= 16
+            if (showLabel) {
+                val raw = labelById[p.id] ?: continue
+                val label = if (raw.length > 28) raw.take(27) + "…" else raw
+                val measured = textMeasurer.measure(AnnotatedString(label), labelStyle)
+                drawText(
+                    textLayoutResult = measured,
+                    color = labelColor.copy(alpha = alpha),
+                    topLeft = Offset(pos.x - measured.size.width / 2f, pos.y + r + 3f),
+                )
+            }
         }
     }
+}
+
+private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel {
+    if (t >= 1f || from === to) return to
+    val fromById = from.nodes.associateBy { it.id }
+    return SceneModel(
+        to.nodes.map { n ->
+            val f = fromById[n.id] ?: return@map n
+            Node3D(n.id, f.x + (n.x - f.x) * t, f.y + (n.y - f.y) * t, f.z + (n.z - f.z) * t)
+        },
+        to.rings,
+    )
 }
 
 private fun dashEffect(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))

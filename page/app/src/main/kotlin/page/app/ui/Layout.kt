@@ -410,6 +410,8 @@ internal fun IdeMainLayout(
                     onNodeClick = onOpenFile,
                     onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
                     width = ui.atlasWidth,
+                    projectMode = ui.atlasProjectMode,
+                    onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 )
             }
             if (codeActionPreviewVisible) {

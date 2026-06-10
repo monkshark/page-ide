@@ -47,6 +47,39 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
 
+    override fun nodesForProject(activePath: Path?, activeText: String?): GraphSlice {
+        index.refreshIfStale()
+        val files = index.files().filter { ImportExtractor.supports(it) }.take(PROJECT_MAX_NODES)
+        if (files.isEmpty()) return GraphSlice.EMPTY
+        val activeId = activePath?.toAbsolutePath()?.normalize()?.toString()
+        val nodes = LinkedHashMap<String, GraphNode>()
+        val edges = LinkedHashMap<Pair<String, String>, GraphEdge>()
+        for (file in files) {
+            val resolved = file.toAbsolutePath().normalize()
+            val id = resolved.toString()
+            val kind = if (id == activeId) NodeKind.ACTIVE else NodeKind.WORKSPACE_FILE
+            nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved, kind)
+        }
+        val queue = ArrayDeque<Pair<Path, String?>>()
+        for (file in files) {
+            val fileId = nodeId(file)
+            val analysis =
+                if (fileId == activeId && activeText != null) ImportExtractor.analyze(file, activeText)
+                else cachedAnalysis(file) ?: continue
+            val imported = ArrayList<Pair<RawImport, GraphNode>>()
+            for (raw in mergeByTarget(analysis.imports)) {
+                val resolvedImport = ImportResolver.resolve(raw, file, index) ?: continue
+                val id = nodeId(resolvedImport)
+                if (id == fileId) continue
+                val node = nodes[id] ?: continue
+                edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
+                imported += raw to node
+            }
+            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue)
+        }
+        return GraphSlice(nodes.values.toList(), edges.values.toList())
+    }
+
     private fun addNode(
         nodes: LinkedHashMap<String, GraphNode>,
         queue: ArrayDeque<Pair<Path, String?>>,
@@ -168,6 +201,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
     private companion object {
         const val MAX_NODES = 100
+        const val PROJECT_MAX_NODES = 300
         const val MAX_CACHE = 2048
     }
 }

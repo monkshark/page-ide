@@ -110,6 +110,39 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `project slice connects all workspace files without externals`(@TempDir root: Path) {
+        val util = root.resolve("pkg/util.py")
+        Files.createDirectories(util.parent)
+        Files.writeString(util, "import json")
+        val service = root.resolve("pkg/service.py")
+        Files.writeString(service, "from .util import helper")
+        val main = root.resolve("pkg/main.py")
+        Files.writeString(main, "from .service import run")
+        val orphan = root.resolve("pkg/orphan.py")
+        Files.writeString(orphan, "x = 1")
+        val slice = ImportGraphProvider(root).nodesForProject(main, null)
+        assertEquals(4, slice.nodes.size)
+        assertEquals(2, slice.edges.size)
+        assertEquals(NodeKind.ACTIVE, slice.nodes.single { it.label == "main.py" }.kind)
+        assertTrue(slice.nodes.none { it.kind == NodeKind.EXTERNAL })
+    }
+
+    @Test
+    fun `project slice promotes inheritance edges`(@TempDir root: Path) {
+        val base = root.resolve("src/base.ts")
+        Files.createDirectories(base.parent)
+        Files.writeString(base, "export class BaseComponent {}")
+        val widget = root.resolve("src/widget.ts")
+        Files.writeString(
+            widget,
+            "import { BaseComponent } from './base';\n\nexport class Widget extends BaseComponent {}",
+        )
+        val slice = ImportGraphProvider(root).nodesForProject(null, null)
+        assertEquals(2, slice.nodes.size)
+        assertEquals(EdgeKind.EXTENDS, slice.edges.single().kind)
+    }
+
+    @Test
     fun `imported supertype promotes edge to extends`(@TempDir root: Path) {
         val figure = root.resolve("src/sample/base/Figure.kt")
         Files.createDirectories(figure.parent)

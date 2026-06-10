@@ -78,6 +78,15 @@ class ReducerTest {
     }
 
     @Test
+    fun `atlas project mode change replaces flag`() {
+        val s = AppState()
+        val on = reduce(s, IdeEvent.Panel.AtlasProjectModeChanged(true))
+        assertTrue(on.layout.atlasProjectMode)
+        val off = reduce(on, IdeEvent.Panel.AtlasProjectModeChanged(false))
+        assertFalse(off.layout.atlasProjectMode)
+    }
+
+    @Test
     fun `resize atlas inverts delta sign`() {
         val s = AppState()
         val dragLeft = reduce(s, IdeEvent.Panel.ResizeAtlas((-40).dp))

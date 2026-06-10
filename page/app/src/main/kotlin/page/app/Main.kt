@@ -410,14 +410,16 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     val atlasOpen = layoutUiState.atlasOpen
-    LaunchedEffect(atlasOpen, atlasProvider, focusedActivePath, focusedActiveText) {
-        if (!atlasOpen || atlasProvider == null || focusedActivePath == null) {
+    val atlasProjectMode = layoutUiState.atlasProjectMode
+    LaunchedEffect(atlasOpen, atlasProjectMode, atlasProvider, focusedActivePath, focusedActiveText) {
+        if (!atlasOpen || atlasProvider == null || (!atlasProjectMode && focusedActivePath == null)) {
             atlasSlice = GraphSlice.EMPTY
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(300)
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            atlasProvider.nodesForFile(focusedActivePath, focusedActiveText)
+            if (atlasProjectMode) atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+            else atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
         }
     }
 
