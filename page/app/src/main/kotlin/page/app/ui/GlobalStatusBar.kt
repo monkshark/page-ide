@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import page.app.InstallProgressRegistry
 import page.app.PubSyncRegistry
+import page.app.dartSiblingLspStatus
 import page.app.lspStatusLineText
 import page.app.state.EditorWorkspaceState
 import page.editor.FileKind
@@ -74,6 +75,7 @@ internal fun GlobalStatusBar(
     val warningCount = diagnostics.count { it.severity == DiagnosticSeverity.WARNING }
 
     val lspStatusText = if (active != null) lspStatusLineText(lspRouter, active.path) else null
+    val siblingLsp = if (active != null) dartSiblingLspStatus(lspRouter, active.path) else null
 
     val activeExt = remember(active?.path) {
         active?.path?.fileName?.toString()?.lowercase()?.substringAfterLast('.', "") ?: ""
@@ -139,7 +141,7 @@ internal fun GlobalStatusBar(
             val showActivities = lspActivities.isNotEmpty()
             val showLifecycle = !lspStatusText.isNullOrBlank()
             val showRuntime = showCursor && runtimeInfo != null
-            if (showActivities || showLifecycle || showRuntime) {
+            if (showActivities || showLifecycle || siblingLsp != null || showRuntime) {
                 Box(modifier = Modifier.weight(1f))
                 if (showActivities) {
                     LspActivitiesItem(
@@ -149,6 +151,13 @@ internal fun GlobalStatusBar(
                 }
                 if (showLifecycle) {
                     LspLifecycleItem(text = lspStatusText!!, onClick = { activeCtrl?.openInstallGuide() })
+                }
+                if (siblingLsp != null) {
+                    val (siblingText, siblingId) = siblingLsp
+                    LspLifecycleItem(
+                        text = siblingText,
+                        onClick = onRuntimeClick?.let { click -> { click(siblingId) } },
+                    )
                 }
                 if (showRuntime) {
                     val (label, id, tooltip) = runtimeInfo!!
