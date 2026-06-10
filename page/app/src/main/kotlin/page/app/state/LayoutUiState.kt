@@ -11,6 +11,7 @@ import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeStore
+import page.atlas.render.AtlasViewTab
 import page.editor.IndexedFile
 import page.lsp.DocumentSymbolEntry
 
@@ -72,6 +73,9 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
     var atlasProjectMode: Boolean
         get() = store.layout.atlasProjectMode
         set(value) = store.updateLayout { it.copy(atlasProjectMode = value) }
+    var atlasViewTab: AtlasViewTab
+        get() = store.layout.atlasViewTab
+        set(value) = store.updateLayout { it.copy(atlasViewTab = value) }
     var expandedPanel: ExpandedPanel
         get() = store.layout.expandedPanel
         set(value) = store.updateLayout { it.copy(expandedPanel = value) }

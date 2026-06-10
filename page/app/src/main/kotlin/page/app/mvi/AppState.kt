@@ -11,6 +11,7 @@ import page.app.PendingClose
 import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
+import page.atlas.render.AtlasViewTab
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
@@ -38,6 +39,7 @@ internal data class LayoutState(
     val atlasOpen: Boolean = false,
     val atlasWidth: Dp = 360.dp,
     val atlasProjectMode: Boolean = false,
+    val atlasViewTab: AtlasViewTab = AtlasViewTab.DEPENDENCY,
     val expandedPanel: ExpandedPanel = ExpandedPanel.NONE,
 )
 

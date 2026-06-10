@@ -9,6 +9,7 @@ import page.app.PaneSide
 import page.app.PendingClose
 import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
+import page.atlas.render.AtlasViewTab
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
@@ -84,6 +85,16 @@ class ReducerTest {
         assertTrue(on.layout.atlasProjectMode)
         val off = reduce(on, IdeEvent.Panel.AtlasProjectModeChanged(false))
         assertFalse(off.layout.atlasProjectMode)
+    }
+
+    @Test
+    fun `atlas view tab defaults to dependency and change replaces value`() {
+        val s = AppState()
+        assertEquals(AtlasViewTab.DEPENDENCY, s.layout.atlasViewTab)
+        val graph = reduce(s, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.GRAPH))
+        assertEquals(AtlasViewTab.GRAPH, graph.layout.atlasViewTab)
+        val back = reduce(graph, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.DEPENDENCY))
+        assertEquals(AtlasViewTab.DEPENDENCY, back.layout.atlasViewTab)
     }
 
     @Test

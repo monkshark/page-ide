@@ -416,6 +416,8 @@ internal fun IdeMainLayout(
                     width = ui.atlasWidth,
                     projectMode = ui.atlasProjectMode,
                     onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
+                    viewTab = ui.atlasViewTab,
+                    onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
                     showExpand = true,
                     onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
                 )
@@ -590,6 +592,8 @@ internal fun IdeMainLayout(
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
+                viewTab = ui.atlasViewTab,
+                onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
             )
         }
         ExpandedPanel.TREE -> ExpandedPanelOverlay(

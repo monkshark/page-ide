@@ -411,16 +411,29 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     val atlasOpen = layoutUiState.atlasOpen
     val atlasProjectMode = layoutUiState.atlasProjectMode
+    val atlasViewTab = layoutUiState.atlasViewTab
     val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
-    LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasProvider, focusedActivePath, focusedActiveText) {
-        if ((!atlasOpen && !atlasExpanded) || atlasProvider == null || (!atlasProjectMode && focusedActivePath == null)) {
+    LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasViewTab, atlasProvider, focusedActivePath, focusedActiveText) {
+        val dependencyTab = atlasViewTab == page.atlas.render.AtlasViewTab.DEPENDENCY
+        if ((!atlasOpen && !atlasExpanded) || atlasProvider == null ||
+            (!dependencyTab && !atlasProjectMode && focusedActivePath == null)
+        ) {
             atlasSlice = GraphSlice.EMPTY
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(300)
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            if (atlasProjectMode) atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
-            else atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
+            when {
+                dependencyTab -> {
+                    val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                    val file = focusedActivePath
+                        ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
+                        ?: GraphSlice.EMPTY
+                    page.atlas.graph.GraphQueries.merge(project, file)
+                }
+                atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                else -> atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
+            }
         }
     }
 
