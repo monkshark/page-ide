@@ -168,11 +168,13 @@ fun AtlasContent(
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                DependencyTreePanel(
+                MapCanvas(
                     slice = slice,
                     selectedId = selectedId,
                     onSelect = { selectedId = it },
-                    onOpen = onNodeClick,
+                    onNodeClick = onNodeClick,
+                    expandedDirs = mapExpandedDirs,
+                    onExpandedDirsChange = { mapExpandedDirs = it },
                 )
             }
             if (slice.nodes.size >= 300) {
@@ -188,28 +190,20 @@ fun AtlasContent(
                     )
                 }
             }
+            Divider()
+            MapHintRow()
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (projectMode) {
-                    MapCanvas(
-                        slice = slice,
-                        selectedId = selectedId,
-                        onSelect = { selectedId = it },
-                        onNodeClick = onNodeClick,
-                        expandedDirs = mapExpandedDirs,
-                        onExpandedDirsChange = { mapExpandedDirs = it },
-                    )
-                } else {
-                    AtlasCanvas(
-                        slice = slice,
-                        selectedId = selectedId,
-                        onSelect = { selectedId = it },
-                        onNodeClick = onNodeClick,
-                    )
-                }
+                AtlasCanvas(
+                    slice = slice,
+                    projectMode = projectMode,
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onNodeClick = onNodeClick,
+                )
             }
             Divider()
-            if (projectMode) MapHintRow() else LegendRow()
+            LegendRow()
         }
     }
 }
@@ -301,6 +295,7 @@ private fun LegendItem(label: String, kind: EdgeKind) {
 @Composable
 private fun AtlasCanvas(
     slice: GraphSlice,
+    projectMode: Boolean,
     selectedId: String?,
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
@@ -312,7 +307,7 @@ private fun AtlasCanvas(
     var hoverPos by remember { mutableStateOf<Offset?>(null) }
     var lastInteract by remember { mutableStateOf(0L) }
     val activeId = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
-    LaunchedEffect(activeId) {
+    LaunchedEffect(activeId, projectMode) {
         zoomUser = 1f
         pitch = 0.5f
     }
