@@ -245,6 +245,32 @@ class MapLayoutTest {
     }
 
     @Test
+    fun `expanding a folder grows in place and moves only boxes in its footprint`() {
+        val slice = GraphSlice(
+            listOf(node("ws/a/x.kt", NodeKind.ACTIVE), node("ws/a/y.kt")) +
+                ('b'..'h').map { node("ws/$it/f.kt") },
+            emptyList(),
+        )
+        val collapsed = buildMap(slice, emptySet(), width)
+        val expanded = buildMap(slice, setOf(id("ws/a")), width)
+        val before = collapsed.boxes.first { it.id == id("ws/a") }
+        val grown = expanded.boxes.first { it.id == id("ws/a") }
+        assertEquals(before.x, grown.x)
+        assertEquals(before.y, grown.y)
+        assertTrue(grown.w > before.w || grown.h > before.h)
+        val top = expanded.boxes.filter { it.depth == 0 }
+        for (i in top.indices) {
+            for (j in i + 1 until top.size) {
+                assertFalse(overlaps(top[i], top[j]))
+            }
+        }
+        val stayed = collapsed.boxes.count { chip ->
+            chip.id != grown.id && expanded.boxes.first { it.id == chip.id }.let { it.x == chip.x && it.y == chip.y }
+        }
+        assertTrue(stayed > 0)
+    }
+
+    @Test
     fun `moving a child stretches its expanded parent to keep containing it`() {
         val slice = GraphSlice(
             listOf(

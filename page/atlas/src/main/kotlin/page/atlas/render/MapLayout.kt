@@ -323,24 +323,38 @@ private fun layoutDir(
 private fun shelfPack(items: List<Placed>): Triple<List<MapBox>, Float, Float> {
     val area = items.fold(0f) { acc, p -> acc + (p.stableW + MAP_GAP) * (p.stableH + MAP_GAP) }
     val target = max(items.maxOf { it.stableW }, sqrt(area) * 1.3f)
-    val out = mutableListOf<MapBox>()
-    var stableX = 0f
+    val homes = ArrayList<Pair<Float, Float>>(items.size)
     var x = 0f
     var y = 0f
     var rowH = 0f
-    var maxW = 0f
     for (item in items) {
-        if (stableX > 0f && stableX + item.stableW > target) {
-            stableX = 0f
+        if (x > 0f && x + item.stableW > target) {
             x = 0f
             y += rowH + MAP_GAP
             rowH = 0f
         }
-        out += item.boxes.map { it.copy(x = it.x + x, y = it.y + y) }
-        stableX += item.stableW + MAP_GAP
-        x += item.w + MAP_GAP
-        rowH = max(rowH, item.h)
-        maxW = max(maxW, x - MAP_GAP)
+        homes += x to y
+        x += item.stableW + MAP_GAP
+        rowH = max(rowH, item.stableH)
     }
-    return Triple(out, maxW, y + rowH)
+    val placed = ArrayList<FloatArray>(items.size)
+    val out = mutableListOf<MapBox>()
+    var maxW = 0f
+    var maxH = 0f
+    for ((index, item) in items.withIndex()) {
+        var (px, py) = homes[index]
+        while (true) {
+            val hit = placed.firstOrNull { r ->
+                px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h
+            } ?: break
+            val dx = hit[0] + hit[2] + MAP_GAP - px
+            val dy = hit[1] + hit[3] + MAP_GAP - py
+            if (dx <= dy) px += dx else py += dy
+        }
+        placed += floatArrayOf(px, py, item.w, item.h)
+        out += item.boxes.map { it.copy(x = it.x + px, y = it.y + py) }
+        maxW = max(maxW, px + item.w)
+        maxH = max(maxH, py + item.h)
+    }
+    return Triple(out, maxW, maxH)
 }
