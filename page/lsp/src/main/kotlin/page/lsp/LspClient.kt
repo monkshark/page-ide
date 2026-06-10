@@ -1,8 +1,12 @@
 package page.lsp
 
+import com.google.gson.JsonNull
 import org.eclipse.lsp4j.ApplyWorkspaceEditParams
 import org.eclipse.lsp4j.ApplyWorkspaceEditResponse
 import org.eclipse.lsp4j.ClientCapabilities
+import org.eclipse.lsp4j.ConfigurationParams
+import org.eclipse.lsp4j.RegistrationParams
+import org.eclipse.lsp4j.UnregistrationParams
 import org.eclipse.lsp4j.CodeActionCapabilities
 import org.eclipse.lsp4j.CodeActionKindCapabilities
 import org.eclipse.lsp4j.CodeActionLiteralSupportCapabilities
@@ -229,6 +233,22 @@ class LspClient(
     }
 
     override fun refreshDiagnostics(): CompletableFuture<Void> = CompletableFuture.completedFuture(null)
+
+    override fun configuration(configurationParams: ConfigurationParams): CompletableFuture<List<Any>> =
+        CompletableFuture.completedFuture(configurationParams.items.map { JsonNull.INSTANCE })
+
+    override fun registerCapability(params: RegistrationParams): CompletableFuture<Void> =
+        CompletableFuture.completedFuture(null)
+
+    override fun unregisterCapability(params: UnregistrationParams): CompletableFuture<Void> =
+        CompletableFuture.completedFuture(null)
+
+    override fun workspaceFolders(): CompletableFuture<List<WorkspaceFolder>> =
+        CompletableFuture.completedFuture(
+            workspaceRoot?.let { root ->
+                listOf(WorkspaceFolder(root.toUri().toString(), root.fileName?.toString() ?: clientName))
+            }.orEmpty(),
+        )
 
     override fun applyEdit(params: ApplyWorkspaceEditParams): CompletableFuture<ApplyWorkspaceEditResponse> {
         val handler = applyEditHandler.get()
