@@ -91,6 +91,23 @@ internal fun lspStatusLineText(lspRouter: LspRouter, activePath: Path?): String?
     return "$core$suffix"
 }
 
+internal fun dartSiblingLspStatus(lspRouter: LspRouter, activePath: Path?): Pair<String, String>? {
+    val path = activePath ?: return null
+    val name = path.fileName?.toString() ?: return null
+    if (!name.endsWith(".dart", ignoreCase = true)) return null
+    val routedId = lspRouter.backendFor(path)?.id ?: return null
+    val siblingId = when (routedId) {
+        "flutter" -> "dart"
+        "dart" -> "flutter"
+        else -> return null
+    }
+    val definition = LanguageRegistry.byId(siblingId) ?: return null
+    val displayName = definition.displayName.substringBefore(" (")
+    val installed = runCatching { LspInstallers.forId(siblingId)?.installedVersion() }.getOrNull()
+    val text = if (installed != null) "$displayName $installed" else "$displayName (not installed)"
+    return text to siblingId
+}
+
 private fun detectRuntimeVersions(projectRoot: java.nio.file.Path? = null): Map<String, String> {
     val vers = mutableMapOf<String, String>()
     val jdk = runCatching { JdkInstaller().activeVersion() }.getOrNull() ?: System.getProperty("java.version")
