@@ -108,6 +108,7 @@ fun AtlasContent(
     onExpand: () -> Unit = {},
 ) {
     var selectedId by remember(slice) { mutableStateOf<String?>(null) }
+    var mapExpandedDirs by remember { mutableStateOf<Set<String>?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -189,16 +190,26 @@ fun AtlasContent(
             }
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                AtlasCanvas(
-                    slice = slice,
-                    projectMode = projectMode,
-                    selectedId = selectedId,
-                    onSelect = { selectedId = it },
-                    onNodeClick = onNodeClick,
-                )
+                if (projectMode) {
+                    MapCanvas(
+                        slice = slice,
+                        selectedId = selectedId,
+                        onSelect = { selectedId = it },
+                        onNodeClick = onNodeClick,
+                        expandedDirs = mapExpandedDirs,
+                        onExpandedDirsChange = { mapExpandedDirs = it },
+                    )
+                } else {
+                    AtlasCanvas(
+                        slice = slice,
+                        selectedId = selectedId,
+                        onSelect = { selectedId = it },
+                        onNodeClick = onNodeClick,
+                    )
+                }
             }
             Divider()
-            LegendRow()
+            if (projectMode) MapHintRow() else LegendRow()
         }
     }
 }
@@ -222,6 +233,22 @@ private fun Divider() {
             .height(1.dp)
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
+}
+
+@Composable
+private fun MapHintRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "더블클릭: 폴더 펼침·접기 / 파일 열기",
+            style = TextStyle(fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+        )
+    }
 }
 
 @Composable
@@ -274,7 +301,6 @@ private fun LegendItem(label: String, kind: EdgeKind) {
 @Composable
 private fun AtlasCanvas(
     slice: GraphSlice,
-    projectMode: Boolean,
     selectedId: String?,
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
@@ -286,7 +312,7 @@ private fun AtlasCanvas(
     var hoverPos by remember { mutableStateOf<Offset?>(null) }
     var lastInteract by remember { mutableStateOf(0L) }
     val activeId = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
-    LaunchedEffect(activeId, projectMode) {
+    LaunchedEffect(activeId) {
         zoomUser = 1f
         pitch = 0.5f
     }
@@ -528,7 +554,7 @@ private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel 
 
 private fun dashEffect(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
 
-private fun DrawScope.drawArrowHead(
+internal fun DrawScope.drawArrowHead(
     from: Offset,
     to: Offset,
     targetRadius: Float,
