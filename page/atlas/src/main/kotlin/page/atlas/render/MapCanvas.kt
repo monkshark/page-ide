@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +69,18 @@ internal fun MapCanvas(
     var scale by remember { mutableStateOf(0f) }
     var fitScale by remember { mutableStateOf(1f) }
     var fitted by remember { mutableStateOf(false) }
+    val userOffsets = remember { mutableStateMapOf<String, Offset>() }
+
+    fun userOffset(id: String): Offset {
+        var acc = Offset.Zero
+        for ((key, off) in userOffsets) if (belongsTo(id, key)) acc += off
+        return acc
+    }
+
+    fun shift(box: MapBox): MapBox {
+        val off = userOffset(box.id)
+        return if (off == Offset.Zero) box else box.copy(x = box.x + off.x, y = box.y + off.y)
+    }
 
     fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
@@ -106,7 +119,23 @@ internal fun MapCanvas(
         if (scale <= 0f) return null
         val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
         return map.boxes
+            .map { shift(it) }
             .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
+            .maxByOrNull { it.depth * 2 + if (it.folder) 0 else 1 }
+    }
+
+    fun dragTargetAt(pos: Offset): MapBox? {
+        val (base, scale) = viewTransform()
+        if (scale <= 0f) return null
+        val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
+        val band = 8f / scale
+        return toMap.boxes
+            .map { shift(it) }
+            .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
+            .filter {
+                p.x < it.x + band || p.x > it.x + it.w - band ||
+                    p.y < it.y + band || p.y > it.y + it.h - band
+            }
             .maxByOrNull { it.depth * 2 + if (it.folder) 0 else 1 }
     }
 
@@ -124,10 +153,22 @@ internal fun MapCanvas(
             .clipToBounds()
             .onSizeChanged { canvasSize = it }
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    pan += dragAmount
-                }
+                var dragId: String? = null
+                detectDragGestures(
+                    onDragStart = { pos -> dragId = dragTargetAt(pos)?.id },
+                    onDragEnd = { dragId = null },
+                    onDragCancel = { dragId = null },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val id = dragId
+                        if (id == null) {
+                            pan += dragAmount
+                        } else {
+                            val (_, curScale) = viewTransform()
+                            userOffsets[id] = (userOffsets[id] ?: Offset.Zero) + dragAmount / curScale
+                        }
+                    },
+                )
             }
             .pointerInput(map) {
                 awaitPointerEventScope {
@@ -157,6 +198,7 @@ internal fun MapCanvas(
                                 if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
                             val nextBox = buildMap(slice, next, measureWidth).boxes
                                 .firstOrNull { it.id == hit.id }
+                                ?.let { shift(it) }
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
                                 if (scale <= 0f) scale = curScale
@@ -179,7 +221,7 @@ internal fun MapCanvas(
         for (box in toMap.boxes) {
             toIds += box.id
             val prev = fromById[box.id]
-            drawBoxes += when {
+            val (interp, alpha) = when {
                 prev == null -> box to t
                 t >= 1f -> box to 1f
                 else -> box.copy(
@@ -189,10 +231,11 @@ internal fun MapCanvas(
                     h = prev.h + (box.h - prev.h) * t,
                 ) to 1f
             }
+            drawBoxes += shift(interp) to alpha
         }
         if (t < 1f) {
             for (prev in fromMap.boxes) {
-                if (prev.id !in toIds) drawBoxes += prev to (1f - t)
+                if (prev.id !in toIds) drawBoxes += shift(prev) to (1f - t)
             }
         }
         withTransform({

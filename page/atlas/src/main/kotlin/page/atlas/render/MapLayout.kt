@@ -45,6 +45,11 @@ internal const val MAP_FILE_H = 20f
 internal const val MAP_CHIP_H = 24f
 internal const val MAP_TEXT_PAD = 14f
 
+internal fun belongsTo(id: String, ancestorId: String): Boolean =
+    id == ancestorId ||
+        (id.length > ancestorId.length && id.startsWith(ancestorId) &&
+            (id[ancestorId.length] == '\\' || id[ancestorId.length] == '/'))
+
 fun defaultExpandedDirs(slice: GraphSlice): Set<String> {
     val active = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.path?.parent ?: return emptySet()
     return generateSequence(active) { it.parent }.map(Path::toString).toSet()

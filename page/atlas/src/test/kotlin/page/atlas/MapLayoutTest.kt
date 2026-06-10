@@ -11,6 +11,7 @@ import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.render.MapBox
+import page.atlas.render.belongsTo
 import page.atlas.render.buildMap
 import page.atlas.render.defaultExpandedDirs
 
@@ -230,6 +231,15 @@ class MapLayoutTest {
         val map = buildMap(slice, emptySet(), width)
         assertEquals(2, map.boxes.size)
         assertTrue(map.boxes.indexOfFirst { it.id == id("ws/a") } < map.boxes.indexOfFirst { it.id == id("ws/b") })
+    }
+
+    @Test
+    fun `belongsTo matches self and path descendants only`() {
+        assertTrue(belongsTo(id("ws/a"), id("ws/a")))
+        assertTrue(belongsTo(id("ws/a/x.kt"), id("ws/a")))
+        assertTrue(belongsTo(id("ws/a/sub/y.kt"), id("ws/a")))
+        assertFalse(belongsTo(id("ws/ab/x.kt"), id("ws/a")))
+        assertFalse(belongsTo(id("ws"), id("ws/a")))
     }
 
     @Test
