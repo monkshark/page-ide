@@ -108,6 +108,7 @@ fun AtlasContent(
     onExpand: () -> Unit = {},
 ) {
     var selectedId by remember(slice) { mutableStateOf<String?>(null) }
+    var mapExpandedDirs by remember { mutableStateOf<Set<String>?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -167,11 +168,13 @@ fun AtlasContent(
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                DependencyTreePanel(
+                MapCanvas(
                     slice = slice,
                     selectedId = selectedId,
                     onSelect = { selectedId = it },
-                    onOpen = onNodeClick,
+                    onNodeClick = onNodeClick,
+                    expandedDirs = mapExpandedDirs,
+                    onExpandedDirsChange = { mapExpandedDirs = it },
                 )
             }
             if (slice.nodes.size >= 300) {

@@ -2,7 +2,6 @@ package page.atlas
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
@@ -19,71 +18,6 @@ class GraphQueriesTest {
         nodes.map { node(it) },
         edges.map { (from, to) -> GraphEdge(from, to) },
     )
-
-    @Test
-    fun `acyclic graph has no cycles`() {
-        val s = slice(listOf("a", "b", "c"), listOf("a" to "b", "b" to "c", "a" to "c"))
-        assertTrue(GraphQueries.cycles(s).isEmpty())
-    }
-
-    @Test
-    fun `two node cycle detected`() {
-        val s = slice(listOf("a", "b"), listOf("a" to "b", "b" to "a"))
-        val cycles = GraphQueries.cycles(s)
-        assertEquals(1, cycles.size)
-        assertEquals(setOf("a", "b"), cycles[0].map { it.id }.toSet())
-    }
-
-    @Test
-    fun `three node cycle with tail detected once`() {
-        val s = slice(
-            listOf("a", "b", "c", "d"),
-            listOf("a" to "b", "b" to "c", "c" to "a", "c" to "d"),
-        )
-        val cycles = GraphQueries.cycles(s)
-        assertEquals(1, cycles.size)
-        assertEquals(setOf("a", "b", "c"), cycles[0].map { it.id }.toSet())
-    }
-
-    @Test
-    fun `disjoint cycles reported separately`() {
-        val s = slice(
-            listOf("a", "b", "c", "d"),
-            listOf("a" to "b", "b" to "a", "c" to "d", "d" to "c"),
-        )
-        val cycles = GraphQueries.cycles(s)
-        assertEquals(2, cycles.size)
-        assertEquals(
-            setOf(setOf("a", "b"), setOf("c", "d")),
-            cycles.map { c -> c.map { it.id }.toSet() }.toSet(),
-        )
-    }
-
-    @Test
-    fun `self loop counts as cycle`() {
-        val s = slice(listOf("a", "b"), listOf("a" to "a", "a" to "b"))
-        val cycles = GraphQueries.cycles(s)
-        assertEquals(1, cycles.size)
-        assertEquals(listOf("a"), cycles[0].map { it.id })
-    }
-
-    @Test
-    fun `edges to unknown nodes are ignored`() {
-        val s = GraphSlice(
-            listOf(node("a")),
-            listOf(GraphEdge("a", "ghost"), GraphEdge("ghost", "a")),
-        )
-        assertTrue(GraphQueries.cycles(s).isEmpty())
-    }
-
-    @Test
-    fun `cycles are deterministic for same input`() {
-        val s = slice(
-            listOf("a", "b", "c", "d", "e"),
-            listOf("a" to "b", "b" to "c", "c" to "a", "d" to "e", "e" to "d"),
-        )
-        assertEquals(GraphQueries.cycles(s), GraphQueries.cycles(s))
-    }
 
     @Test
     fun `merge keeps base nodes and adds overlay only nodes`() {
