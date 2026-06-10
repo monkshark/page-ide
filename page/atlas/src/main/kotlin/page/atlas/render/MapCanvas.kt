@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -289,8 +290,14 @@ internal fun MapCanvas(
                 val to = byId[edge.to] ?: continue
                 val centerFrom = Offset(from.x + from.w / 2f, from.y + from.h / 2f)
                 val centerTo = Offset(to.x + to.w / 2f, to.y + to.h / 2f)
-                val start = borderPoint(from, centerTo)
-                val end = borderPoint(to, centerFrom)
+                val chord = borderPoint(to, centerFrom) - borderPoint(from, centerTo)
+                val chordLen = hypot(chord.x, chord.y)
+                if (chordLen < 1f) continue
+                val unit = Offset(chord.x / chordLen, chord.y / chordLen)
+                val bow = min(chordLen * 0.16f, 40f)
+                val control = (centerFrom + centerTo) / 2f + Offset(-unit.y, unit.x) * bow
+                val start = borderPoint(from, control)
+                val end = borderPoint(to, control)
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
                 val lineColor = when {
                     !selectionHasEdges -> edgeColor
@@ -298,10 +305,14 @@ internal fun MapCanvas(
                     edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
                     else -> edgeColor.copy(alpha = 0.2f)
                 }
-                drawLine(lineColor.fade(a), start, end, strokeWidth = stroke)
-                drawMapArrow(start, end, lineColor.fade(a), inv)
+                val curve = Path().apply {
+                    moveTo(start.x, start.y)
+                    quadraticBezierTo(control.x, control.y, end.x, end.y)
+                }
+                drawPath(curve, lineColor.fade(a), style = Stroke(width = stroke, cap = StrokeCap.Round))
+                drawMapArrow(control, end, lineColor.fade(a), inv)
                 if (edge.weight > 1) {
-                    val mid = (start + end) / 2f
+                    val mid = (start + end) / 4f + control / 2f
                     val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)
                     val halfW = text.size.width / 2f + 3f
                     val halfH = text.size.height / 2f + 1f
