@@ -424,16 +424,21 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
         kotlinx.coroutines.delay(300)
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            when {
-                dependencyTab -> {
-                    val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
-                    val file = focusedActivePath
-                        ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
-                        ?: GraphSlice.EMPTY
-                    page.atlas.graph.GraphQueries.merge(project, file)
+            runCatching {
+                when {
+                    dependencyTab -> {
+                        val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                        val file = focusedActivePath
+                            ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
+                            ?: GraphSlice.EMPTY
+                        page.atlas.graph.GraphQueries.merge(project, file)
+                    }
+                    atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                    else -> atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
                 }
-                atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
-                else -> atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
+            }.getOrElse { t ->
+                println("[atlas] slice computation failed: ${t::class.simpleName}: ${t.message}")
+                GraphSlice.EMPTY
             }
         }
     }

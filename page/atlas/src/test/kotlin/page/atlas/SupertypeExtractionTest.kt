@@ -171,6 +171,56 @@ class SupertypeExtractionTest {
     }
 
     @Test
+    fun `generic arguments with commas do not leak fragments`() {
+        val dart = relations(
+            "meal_impl.dart",
+            "class _${'$'}MealImpl extends MapEntry<String, Meal> implements Meal {}",
+        )
+        assertEquals(
+            listOf(
+                RawRelation("MapEntry", EdgeKind.EXTENDS),
+                RawRelation("Meal", EdgeKind.IMPLEMENTS),
+            ),
+            dart,
+        )
+        val java = relations(
+            "Pair.java",
+            "class Pair extends AbstractMap<String, Integer> implements Map.Entry<String, Integer> {}",
+        )
+        assertEquals(
+            listOf(
+                RawRelation("AbstractMap", EdgeKind.EXTENDS),
+                RawRelation("Map.Entry", EdgeKind.IMPLEMENTS),
+            ),
+            java,
+        )
+        val ts = relations(
+            "store.ts",
+            "class Store extends BaseStore<string, number> implements Readable<string>, Writable<number> {}",
+        )
+        assertEquals(
+            listOf(
+                RawRelation("BaseStore", EdgeKind.EXTENDS),
+                RawRelation("Readable", EdgeKind.IMPLEMENTS),
+                RawRelation("Writable", EdgeKind.IMPLEMENTS),
+            ),
+            ts,
+        )
+    }
+
+    @Test
+    fun `python generic base with comma does not leak fragments`() {
+        val rels = relations("mapping.py", "class Mapping(Dict[str, int], Base):\n    pass")
+        assertEquals(
+            listOf(
+                RawRelation("Dict", EdgeKind.EXTENDS),
+                RawRelation("Base", EdgeKind.EXTENDS),
+            ),
+            rels,
+        )
+    }
+
+    @Test
     fun `go and rust produce no relations`() {
         assertTrue(relations("main.go", "package main\n\ntype S struct{}\n").isEmpty())
         assertTrue(relations("main.rs", "struct S;\nimpl Clone for S { fn clone(&self) -> S { S } }\n").isEmpty())

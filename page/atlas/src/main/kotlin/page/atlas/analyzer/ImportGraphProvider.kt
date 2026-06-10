@@ -146,6 +146,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         nodes: LinkedHashMap<String, GraphNode>,
         queue: ArrayDeque<Pair<Path, String?>>,
     ): GraphNode? {
+        if (simple.any { !it.isJavaIdentifierPart() }) return null
         val dir = file.parent ?: return null
         val exts = siblingExts(extOf(file)) ?: return null
         val sibling = exts.asSequence()
