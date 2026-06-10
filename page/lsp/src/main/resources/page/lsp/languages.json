@@ -264,7 +264,7 @@
                                       },
                           "runCommand":  "flutter run",
                           "launchArgs":  [
-                                             "--stdio"
+                                             "--protocol=lsp"
                                          ]
                       },
                       {
