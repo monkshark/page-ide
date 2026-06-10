@@ -71,6 +71,8 @@ fun AtlasPanel(
     width: Dp,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
+    viewTab: AtlasViewTab = AtlasViewTab.GRAPH,
+    onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -85,6 +87,8 @@ fun AtlasPanel(
             onClose = onClose,
             projectMode = projectMode,
             onProjectModeChange = onProjectModeChange,
+            viewTab = viewTab,
+            onViewTabChange = onViewTabChange,
             showExpand = showExpand,
             onExpand = onExpand,
         )
@@ -98,6 +102,8 @@ fun AtlasContent(
     onClose: () -> Unit,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
+    viewTab: AtlasViewTab = AtlasViewTab.GRAPH,
+    onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
 ) {
@@ -117,8 +123,6 @@ fun AtlasContent(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            ModeChip("파일", !projectMode) { onProjectModeChange(false) }
-            ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
             Box(modifier = Modifier.weight(1f))
             if (showExpand) {
                 Text(
@@ -136,13 +140,52 @@ fun AtlasContent(
             )
         }
         Divider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(26.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ModeChip("의존성", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
+            ModeChip("그래프", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
+            Box(modifier = Modifier.weight(1f))
+            if (viewTab == AtlasViewTab.GRAPH) {
+                ModeChip("파일", !projectMode) { onProjectModeChange(false) }
+                ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
+            }
+        }
+        Divider()
         if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (projectMode) "소스 파일 없음" else "import 없음",
+                    text = if (projectMode || viewTab == AtlasViewTab.DEPENDENCY) "소스 파일 없음" else "import 없음",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else if (viewTab == AtlasViewTab.DEPENDENCY) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                DependencyTreePanel(
+                    slice = slice,
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onOpen = onNodeClick,
+                )
+            }
+            if (slice.nodes.size >= 300) {
+                Divider()
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "워크스페이스 파일 300개까지만 분석됨",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
