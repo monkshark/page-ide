@@ -1,5 +1,8 @@
 package page.atlas.render
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -16,6 +19,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -54,11 +58,15 @@ internal fun MapCanvas(
     val measureWidth: (String) -> Float =
         { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
     val map = remember(slice, effectiveExpanded) { buildMap(slice, effectiveExpanded, measureWidth) }
+    val anim = remember { Animatable(1f) }
+    var fromMap by remember { mutableStateOf(map) }
+    var toMap by remember { mutableStateOf(map) }
+    var panTarget by remember { mutableStateOf<Offset?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var pan by remember { mutableStateOf(Offset.Zero) }
     var scale by remember { mutableStateOf(0f) }
     var fitScale by remember { mutableStateOf(1f) }
-    var fittedSlice by remember { mutableStateOf<GraphSlice?>(null) }
+    var fitted by remember { mutableStateOf(false) }
 
     fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
@@ -71,12 +79,25 @@ internal fun MapCanvas(
     fun viewTransform(): Pair<Offset, Float> = if (scale > 0f) pan to scale else fitTransform()
 
     LaunchedEffect(slice, canvasSize) {
-        if (canvasSize.width <= 0 || map.width <= 0f || fittedSlice == slice) return@LaunchedEffect
+        if (fitted || canvasSize.width <= 0 || map.width <= 0f) return@LaunchedEffect
         val (p, s) = fitTransform()
         pan = p
         scale = s
         fitScale = s
-        fittedSlice = slice
+        fitted = true
+    }
+
+    LaunchedEffect(map) {
+        if (toMap == map) return@LaunchedEffect
+        fromMap = lerpModel(fromMap, toMap, anim.value)
+        toMap = map
+        val startPan = pan
+        val endPan = panTarget ?: startPan
+        panTarget = null
+        anim.snapTo(0f)
+        anim.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) {
+            pan = lerp(startPan, endPan, value)
+        }
     }
 
     fun boxAt(pos: Offset): MapBox? {
@@ -136,8 +157,8 @@ internal fun MapCanvas(
                                 .firstOrNull { it.id == hit.id }
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
-                                pan = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
-                                scale = curScale
+                                if (scale <= 0f) scale = curScale
+                                panTarget = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
                             }
                             onExpandedDirsChange(next)
                         } else {
@@ -147,32 +168,55 @@ internal fun MapCanvas(
                 )
             },
     ) {
-        if (map.boxes.isEmpty()) return@Canvas
-        val (base, scale) = viewTransform()
+        if (toMap.boxes.isEmpty() && map.boxes.isEmpty()) return@Canvas
+        val (base, viewScale) = viewTransform()
+        val t = anim.value
+        val fromById = fromMap.boxes.associateBy { it.id }
+        val toIds = HashSet<String>(toMap.boxes.size)
+        val drawBoxes = ArrayList<Pair<MapBox, Float>>(toMap.boxes.size)
+        for (box in toMap.boxes) {
+            toIds += box.id
+            val prev = fromById[box.id]
+            drawBoxes += when {
+                prev == null -> box to t
+                t >= 1f -> box to 1f
+                else -> box.copy(
+                    x = prev.x + (box.x - prev.x) * t,
+                    y = prev.y + (box.y - prev.y) * t,
+                    w = prev.w + (box.w - prev.w) * t,
+                    h = prev.h + (box.h - prev.h) * t,
+                ) to 1f
+            }
+        }
+        if (t < 1f) {
+            for (prev in fromMap.boxes) {
+                if (prev.id !in toIds) drawBoxes += prev to (1f - t)
+            }
+        }
         withTransform({
             translate(base.x, base.y)
-            scale(scale, scale, Offset.Zero)
+            scale(viewScale, viewScale, Offset.Zero)
         }) {
-            for (box in map.boxes) {
+            for ((box, a) in drawBoxes) {
                 val topLeft = Offset(box.x, box.y)
                 val size = Size(box.w, box.h)
                 when {
                     box.folder && box.expanded -> {
-                        drawRoundRect(folderFill.copy(alpha = 0.16f), topLeft, size, CornerRadius(8f))
+                        drawRoundRect(folderFill.copy(alpha = 0.16f * a), topLeft, size, CornerRadius(8f))
                         drawRoundRect(
-                            color = if (box.activeTrail) primary.copy(alpha = 0.5f) else outlineVariant,
+                            color = (if (box.activeTrail) primary.copy(alpha = 0.5f) else outlineVariant).fade(a),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(8f),
                             style = Stroke(width = 1f),
                         )
                         val header = textMeasurer.measure(AnnotatedString(box.label), labelStyle)
-                        drawText(header, labelColor, Offset(box.x + 8f, box.y + 2f))
+                        drawText(header, labelColor.fade(a), Offset(box.x + 8f, box.y + 2f))
                     }
                     box.folder -> {
-                        drawRoundRect(secondary.copy(alpha = 0.16f), topLeft, size, CornerRadius(6f))
+                        drawRoundRect(secondary.copy(alpha = 0.16f * a), topLeft, size, CornerRadius(6f))
                         drawRoundRect(
-                            color = if (box.activeTrail) primary.copy(alpha = 0.6f) else secondary.copy(alpha = 0.4f),
+                            color = if (box.activeTrail) primary.copy(alpha = 0.6f * a) else secondary.copy(alpha = 0.4f * a),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(6f),
@@ -181,7 +225,7 @@ internal fun MapCanvas(
                         val text = textMeasurer.measure(AnnotatedString("${box.label} (${box.fileCount})"), labelStyle)
                         drawText(
                             textLayoutResult = text,
-                            color = labelColor,
+                            color = labelColor.fade(a),
                             topLeft = Offset(
                                 box.x + (box.w - text.size.width) / 2f,
                                 box.y + (box.h - text.size.height) / 2f,
@@ -190,13 +234,13 @@ internal fun MapCanvas(
                     }
                     else -> {
                         drawRoundRect(
-                            color = if (box.active) primary.copy(alpha = 0.18f) else folderFill.copy(alpha = 0.35f),
+                            color = if (box.active) primary.copy(alpha = 0.18f * a) else folderFill.copy(alpha = 0.35f * a),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(5f),
                         )
                         drawRoundRect(
-                            color = if (box.active) primary else outlineVariant,
+                            color = (if (box.active) primary else outlineVariant).fade(a),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(5f),
@@ -205,7 +249,7 @@ internal fun MapCanvas(
                         val text = textMeasurer.measure(AnnotatedString(box.label), labelStyle)
                         drawText(
                             textLayoutResult = text,
-                            color = labelColor,
+                            color = labelColor.fade(a),
                             topLeft = Offset(
                                 box.x + (box.w - text.size.width) / 2f,
                                 box.y + (box.h - text.size.height) / 2f,
@@ -215,7 +259,7 @@ internal fun MapCanvas(
                 }
                 if (box.id == selectedId) {
                     drawRoundRect(
-                        color = primary.copy(alpha = 0.9f),
+                        color = primary.copy(alpha = 0.9f * a),
                         topLeft = topLeft - Offset(2f, 2f),
                         size = Size(box.w + 4f, box.h + 4f),
                         cornerRadius = CornerRadius(8f),
@@ -223,9 +267,21 @@ internal fun MapCanvas(
                     )
                 }
             }
-            val byId = map.boxes.associateBy { it.id }
-            val inv = 1f / scale
-            for (edge in map.edges) {
+            val byId = HashMap<String, MapBox>(drawBoxes.size)
+            for ((box, _) in drawBoxes) byId[box.id] = box
+            val inv = 1f / viewScale
+            val fromKeys = fromMap.edges.mapTo(HashSet()) { it.from to it.to }
+            val edgesToDraw = ArrayList<Pair<MapEdge, Float>>(toMap.edges.size)
+            for (edge in toMap.edges) {
+                edgesToDraw += edge to (if (t >= 1f || (edge.from to edge.to) in fromKeys) 1f else t)
+            }
+            if (t < 1f) {
+                val toKeys = toMap.edges.mapTo(HashSet()) { it.from to it.to }
+                for (edge in fromMap.edges) {
+                    if ((edge.from to edge.to) !in toKeys) edgesToDraw += edge to (1f - t)
+                }
+            }
+            for ((edge, a) in edgesToDraw) {
                 val from = byId[edge.from] ?: continue
                 val to = byId[edge.to] ?: continue
                 val centerFrom = Offset(from.x + from.w / 2f, from.y + from.h / 2f)
@@ -233,22 +289,22 @@ internal fun MapCanvas(
                 val start = borderPoint(from, centerTo)
                 val end = borderPoint(to, centerFrom)
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
-                drawLine(edgeColor, start, end, strokeWidth = stroke)
-                drawMapArrow(start, end, edgeColor, inv)
+                drawLine(edgeColor.fade(a), start, end, strokeWidth = stroke)
+                drawMapArrow(start, end, edgeColor.fade(a), inv)
                 if (edge.weight > 1) {
                     val mid = (start + end) / 2f
                     val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)
                     val halfW = text.size.width / 2f + 3f
                     val halfH = text.size.height / 2f + 1f
                     drawRoundRect(
-                        color = badgeFill,
+                        color = badgeFill.fade(a),
                         topLeft = mid - Offset(halfW, halfH),
                         size = Size(halfW * 2f, halfH * 2f),
                         cornerRadius = CornerRadius(halfH),
                     )
                     drawText(
                         textLayoutResult = text,
-                        color = labelColor,
+                        color = labelColor.fade(a),
                         topLeft = mid - Offset(text.size.width / 2f, text.size.height / 2f),
                     )
                 }
@@ -256,6 +312,23 @@ internal fun MapCanvas(
         }
     }
 }
+
+private fun lerpModel(from: MapModel, to: MapModel, t: Float): MapModel {
+    if (t >= 1f) return to
+    val fromById = from.boxes.associateBy { it.id }
+    val boxes = to.boxes.map { box ->
+        val prev = fromById[box.id] ?: return@map box
+        box.copy(
+            x = prev.x + (box.x - prev.x) * t,
+            y = prev.y + (box.y - prev.y) * t,
+            w = prev.w + (box.w - prev.w) * t,
+            h = prev.h + (box.h - prev.h) * t,
+        )
+    }
+    return MapModel(boxes, to.edges, to.width, to.height)
+}
+
+private fun Color.fade(f: Float): Color = if (f >= 1f) this else copy(alpha = alpha * f)
 
 private fun DrawScope.drawMapArrow(from: Offset, to: Offset, color: Color, inv: Float) {
     val direction = to - from
