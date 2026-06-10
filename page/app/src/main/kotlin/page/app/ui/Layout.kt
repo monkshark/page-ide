@@ -28,8 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.*
+import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeEvent
 import page.atlas.graph.GraphSlice
+import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
@@ -261,6 +263,8 @@ internal fun IdeMainLayout(
                 onPanelFocusChanged = onTreeFocusChanged,
                 pendingFocusTick = pendingTreeFocusTick,
                 revision = workspace.treeRevision,
+                showExpand = true,
+                onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.TREE)) },
                 modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
             )
             ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
@@ -412,6 +416,8 @@ internal fun IdeMainLayout(
                     width = ui.atlasWidth,
                     projectMode = ui.atlasProjectMode,
                     onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
+                    showExpand = true,
+                    onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
                 )
             }
             if (codeActionPreviewVisible) {
@@ -573,6 +579,49 @@ internal fun IdeMainLayout(
         } else {
             runtimeDialogOpen = null
         }
+    }
+    when (ui.expandedPanel) {
+        ExpandedPanel.ATLAS -> ExpandedPanelOverlay(
+            onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+        ) {
+            AtlasContent(
+                slice = atlasSlice,
+                onNodeClick = onOpenFile,
+                onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+                projectMode = ui.atlasProjectMode,
+                onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
+            )
+        }
+        ExpandedPanel.TREE -> ExpandedPanelOverlay(
+            onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+            title = "PROJECT",
+        ) {
+            FileTreePanel(
+                root = workspace.rootDir,
+                expanded = workspace.expanded,
+                selection = workspace.treeSelection,
+                onToggle = onToggle,
+                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
+                onOpenFile = onOpenFile,
+                onCreateFile = onCreateFileIn,
+                onCreateFolder = onCreateFolderIn,
+                onRename = onRenameEntry,
+                onDeleteOne = onDeleteEntry,
+                onDeleteMany = onDeleteEntries,
+                onReveal = onRevealInFiles,
+                onCopyPath = onCopyPath,
+                onCopyRelativePath = onCopyRelativePath,
+                onPasteInto = onPasteInto,
+                onUndo = onUndoFileOp,
+                canUndo = canUndoFileOp,
+                onDropPlan = onDropPlan,
+                onExternalDrop = onExternalDrop,
+                onDropRejected = onDropRejected,
+                revision = workspace.treeRevision,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        ExpandedPanel.NONE -> Unit
     }
     }
 }

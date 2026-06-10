@@ -143,6 +143,10 @@ private fun reduceLayout(s: LayoutState, e: IdeEvent.Panel): LayoutState = when 
     IdeEvent.Panel.ToggleAtlas -> s.copy(atlasOpen = !s.atlasOpen)
     IdeEvent.Panel.CloseAtlas -> s.copy(atlasOpen = false)
     is IdeEvent.Panel.AtlasProjectModeChanged -> s.copy(atlasProjectMode = e.enabled)
+    is IdeEvent.Panel.ExpandPanel ->
+        if (e.target == ExpandedPanel.ATLAS) s.copy(expandedPanel = e.target, atlasOpen = true)
+        else s.copy(expandedPanel = e.target)
+    IdeEvent.Panel.CollapsePanel -> s.copy(expandedPanel = ExpandedPanel.NONE)
     is IdeEvent.Panel.ResizeSidebar -> s.copy(sidebarWidth = (s.sidebarWidth + e.deltaDp).coerceIn(160.dp, 600.dp))
     is IdeEvent.Panel.ResizeProblems -> s.copy(problemsHeight = (s.problemsHeight + e.deltaDp).coerceIn(80.dp, 600.dp))
     is IdeEvent.Panel.ResizeTodo -> s.copy(todoHeight = (s.todoHeight + e.deltaDp).coerceIn(80.dp, 600.dp))

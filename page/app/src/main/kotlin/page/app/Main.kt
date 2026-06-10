@@ -411,8 +411,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     val atlasOpen = layoutUiState.atlasOpen
     val atlasProjectMode = layoutUiState.atlasProjectMode
-    LaunchedEffect(atlasOpen, atlasProjectMode, atlasProvider, focusedActivePath, focusedActiveText) {
-        if (!atlasOpen || atlasProvider == null || (!atlasProjectMode && focusedActivePath == null)) {
+    val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
+    LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasProvider, focusedActivePath, focusedActiveText) {
+        if ((!atlasOpen && !atlasExpanded) || atlasProvider == null || (!atlasProjectMode && focusedActivePath == null)) {
             atlasSlice = GraphSlice.EMPTY
             return@LaunchedEffect
         }

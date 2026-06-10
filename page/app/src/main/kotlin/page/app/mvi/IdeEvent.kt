@@ -43,6 +43,8 @@ internal sealed interface IdeEvent {
         data object ToggleAtlas : Panel
         data object CloseAtlas : Panel
         data class AtlasProjectModeChanged(val enabled: Boolean) : Panel
+        data class ExpandPanel(val target: ExpandedPanel) : Panel
+        data object CollapsePanel : Panel
         data class ResizeSidebar(val deltaDp: Dp) : Panel
         data class ResizeProblems(val deltaDp: Dp) : Panel
         data class ResizeTodo(val deltaDp: Dp) : Panel

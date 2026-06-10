@@ -87,6 +87,24 @@ class ReducerTest {
     }
 
     @Test
+    fun `expand panel to atlas forces atlas open`() {
+        val s = AppState()
+        val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS))
+        assertEquals(ExpandedPanel.ATLAS, expanded.layout.expandedPanel)
+        assertTrue(expanded.layout.atlasOpen)
+    }
+
+    @Test
+    fun `expand panel to tree keeps atlas closed and collapse resets`() {
+        val s = AppState()
+        val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.TREE))
+        assertEquals(ExpandedPanel.TREE, expanded.layout.expandedPanel)
+        assertFalse(expanded.layout.atlasOpen)
+        val collapsed = reduce(expanded, IdeEvent.Panel.CollapsePanel)
+        assertEquals(ExpandedPanel.NONE, collapsed.layout.expandedPanel)
+    }
+
+    @Test
     fun `resize atlas inverts delta sign`() {
         val s = AppState()
         val dragLeft = reduce(s, IdeEvent.Panel.ResizeAtlas((-40).dp))
