@@ -125,6 +125,7 @@ import java.nio.file.Path
 
 fun main() {
     PerfRegistry.start(StartupKind.COLD).begin(StartupPhases.COMPOSE_INIT)
+    UiFreezeWatchdog.start()
     application {
         AppContent()
     }
