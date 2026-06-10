@@ -55,6 +55,7 @@ object LanguageRegistry {
                 install = obj.getAsJsonObject("install").entrySet().associate { (k, v) -> k to v.asString },
                 runCommand = obj.get("runCommand").takeIf { !it.isJsonNull }?.asString,
                 launchArgs = obj.getAsJsonArray("launchArgs")?.map { it.asString } ?: listOf("--stdio"),
+                lspLanguageId = obj.get("lspLanguageId")?.takeIf { !it.isJsonNull }?.asString ?: obj.get("id").asString,
             )
         }
         return out

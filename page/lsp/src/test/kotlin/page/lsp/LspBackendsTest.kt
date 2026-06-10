@@ -70,4 +70,57 @@ class LspBackendsTest {
         LspBackends.register(KotlinLanguageBackend)
         assertEquals(sizeBefore, LspBackends.all().size)
     }
+
+    @Test
+    fun lspLanguageIdDefaultsToBackendId() {
+        assertEquals("kotlin", KotlinLanguageBackend.lspLanguageId)
+    }
+
+    @Test
+    fun forFileUsesExtensionRoutingWithoutInterceptor() {
+        assertSame(KotlinLanguageBackend, LspBackends.forFile(java.nio.file.Path.of("src", "Main.kt"), null))
+        assertNull(LspBackends.forFile(java.nio.file.Path.of("src", "Main.zzunknown"), null))
+    }
+
+    @Test
+    fun forFileInterceptorOverridesExtensionRouting() {
+        val base = FakeBackend("fake-base", "fakedart")
+        val alt = FakeBackend("fake-alt", "fakedart")
+        LspBackends.register(base)
+        LspBackends.register(alt)
+        try {
+            LspBackends.routingInterceptor = { path, _ ->
+                if (path.fileName?.toString() == "special.fakedart") LspBackends.byId("fake-alt") else null
+            }
+            assertSame(alt, LspBackends.forFile(java.nio.file.Path.of("p", "special.fakedart"), null))
+            assertSame(base, LspBackends.forFile(java.nio.file.Path.of("p", "plain.fakedart"), null))
+        } finally {
+            LspBackends.routingInterceptor = null
+        }
+    }
+
+    @Test
+    fun allForExtensionReturnsEveryMatchingBackend() {
+        val first = FakeBackend("fake-multi-1", "fakemulti")
+        val second = FakeBackend("fake-multi-2", "fakemulti")
+        LspBackends.register(first)
+        LspBackends.register(second)
+        assertEquals(
+            listOf("fake-multi-1", "fake-multi-2"),
+            LspBackends.allForExtension("fakemulti").map { it.id },
+        )
+    }
+
+    private class FakeBackend(override val id: String, private val ext: String) : LanguageBackend {
+        override val displayName: String = id
+        override fun supports(extension: String?): Boolean = ext.equals(extension, ignoreCase = true)
+        override fun resolveExecutable(env: Map<String, String>): LanguageBackend.Resolution =
+            LanguageBackend.Resolution.NotFound(emptyList())
+        override fun spawn(
+            executable: java.nio.file.Path,
+            workspaceRoot: java.nio.file.Path?,
+            onStderrLine: ((String) -> Unit)?,
+            env: Map<String, String>,
+        ): LspClient = throw UnsupportedOperationException()
+    }
 }

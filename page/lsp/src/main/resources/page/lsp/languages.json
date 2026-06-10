@@ -246,6 +246,7 @@
                       {
                           "id":  "flutter",
                           "displayName":  "Flutter (Dart language server)",
+                          "lspLanguageId":  "dart",
                           "extensions":  [
                                              "dart"
                                          ],

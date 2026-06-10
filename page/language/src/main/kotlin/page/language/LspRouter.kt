@@ -30,8 +30,7 @@ class LspRouter(
 
     @Synchronized
     fun controllerFor(path: Path): LspController? {
-        val ext = extractExtension(path) ?: return null
-        val backend = LspBackends.forExtension(ext) ?: return null
+        val backend = LspBackends.forFile(path, workspaceRoot) ?: return null
         return controllers.getOrPut(backend.id) {
             val scope = CoroutineScope(SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.Default)
             LspController(workspaceRoot, scope).also {
@@ -41,10 +40,9 @@ class LspRouter(
         }
     }
 
-    fun languageIdFor(path: Path): String? {
-        val ext = extractExtension(path) ?: return null
-        return LspBackends.forExtension(ext)?.id
-    }
+    fun backendFor(path: Path): LanguageBackend? = LspBackends.forFile(path, workspaceRoot)
+
+    fun languageIdFor(path: Path): String? = backendFor(path)?.lspLanguageId
 
     @Synchronized
     fun controllerById(id: String): LspController? = controllers[id]
@@ -90,8 +88,8 @@ class LspRouter(
     fun notifyFilesRenamed(moves: List<Pair<Path, Path>>) {
         val affected = mutableSetOf<String>()
         for ((old, new) in moves) {
-            extractExtension(old)?.let { LspBackends.forExtension(it)?.id }?.let { affected += it }
-            extractExtension(new)?.let { LspBackends.forExtension(it)?.id }?.let { affected += it }
+            LspBackends.forFile(old, workspaceRoot)?.let { affected += it.id }
+            LspBackends.forFile(new, workspaceRoot)?.let { affected += it.id }
         }
         for (id in affected) {
             controllerById(id)?.notifyFilesRenamed(moves)
@@ -104,15 +102,9 @@ class LspRouter(
         controllers.clear()
     }
 
-    private fun extractExtension(path: Path): String? {
-        val name = path.fileName?.toString() ?: return null
-        val dot = name.lastIndexOf('.')
-        return if (dot >= 0 && dot < name.length - 1) name.substring(dot + 1) else null
-    }
-
     companion object {
         fun backendIdsForExtensions(extensions: List<String>): Set<String> =
-            extensions.mapNotNull { LspBackends.forExtension(it)?.id }.toSet()
+            extensions.flatMap { ext -> LspBackends.allForExtension(ext).map { it.id } }.toSet()
     }
 }
 
