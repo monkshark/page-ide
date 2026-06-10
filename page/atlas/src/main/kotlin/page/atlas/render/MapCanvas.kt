@@ -111,6 +111,7 @@ internal fun MapCanvas(
 
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val folderFill = MaterialTheme.colorScheme.surfaceVariant
     val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
@@ -281,6 +282,8 @@ internal fun MapCanvas(
                     if ((edge.from to edge.to) !in toKeys) edgesToDraw += edge to (1f - t)
                 }
             }
+            val selectionHasEdges = selectedId != null &&
+                edgesToDraw.any { (edge, _) -> edge.from == selectedId || edge.to == selectedId }
             for ((edge, a) in edgesToDraw) {
                 val from = byId[edge.from] ?: continue
                 val to = byId[edge.to] ?: continue
@@ -289,8 +292,14 @@ internal fun MapCanvas(
                 val start = borderPoint(from, centerTo)
                 val end = borderPoint(to, centerFrom)
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
-                drawLine(edgeColor.fade(a), start, end, strokeWidth = stroke)
-                drawMapArrow(start, end, edgeColor.fade(a), inv)
+                val lineColor = when {
+                    !selectionHasEdges -> edgeColor
+                    edge.from == selectedId -> primary.copy(alpha = 0.9f)
+                    edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
+                    else -> edgeColor.copy(alpha = 0.2f)
+                }
+                drawLine(lineColor.fade(a), start, end, strokeWidth = stroke)
+                drawMapArrow(start, end, lineColor.fade(a), inv)
                 if (edge.weight > 1) {
                     val mid = (start + end) / 2f
                     val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)

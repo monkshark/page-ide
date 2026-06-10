@@ -196,6 +196,43 @@ class MapLayoutTest {
     }
 
     @Test
+    fun `siblings sort in dependency order with users first`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/app/main.kt", NodeKind.ACTIVE),
+                node("ws/core/util.kt"),
+                node("ws/ui/view.kt"),
+            ),
+            listOf(
+                edge("ws/app/main.kt", "ws/core/util.kt"),
+                edge("ws/ui/view.kt", "ws/core/util.kt"),
+            ),
+        )
+        val map = buildMap(slice, emptySet(), width)
+        val ids = map.boxes.map { it.id }
+        assertTrue(ids.indexOf(id("ws/app")) < ids.indexOf(id("ws/core")))
+        assertTrue(ids.indexOf(id("ws/ui")) < ids.indexOf(id("ws/core")))
+        assertTrue(ids.indexOf(id("ws/app")) < ids.indexOf(id("ws/ui")))
+    }
+
+    @Test
+    fun `cyclic siblings fall back to label order without hanging`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/x.kt", NodeKind.ACTIVE),
+                node("ws/b/y.kt"),
+            ),
+            listOf(
+                edge("ws/a/x.kt", "ws/b/y.kt"),
+                edge("ws/b/y.kt", "ws/a/x.kt"),
+            ),
+        )
+        val map = buildMap(slice, emptySet(), width)
+        assertEquals(2, map.boxes.size)
+        assertTrue(map.boxes.indexOfFirst { it.id == id("ws/a") } < map.boxes.indexOfFirst { it.id == id("ws/b") })
+    }
+
+    @Test
     fun `self and ghost edges are dropped`() {
         val slice = GraphSlice(
             listOf(

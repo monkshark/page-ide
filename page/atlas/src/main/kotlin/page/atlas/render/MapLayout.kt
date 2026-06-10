@@ -1,8 +1,10 @@
 package page.atlas.render
 
 import java.nio.file.Path
+import java.util.TreeSet
 import kotlin.math.max
 import kotlin.math.sqrt
+import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
@@ -69,7 +71,7 @@ fun buildMap(slice: GraphSlice, expanded: Set<String>, labelWidth: (String) -> F
         cur.files.add(node)
     }
     compress(root)
-    sortTree(root)
+    orderTree(root, slice.edges)
 
     val activeNode = files.firstOrNull { it.kind == NodeKind.ACTIVE }
     val trail = activeNode?.path?.parent
@@ -94,8 +96,7 @@ fun buildMap(slice: GraphSlice, expanded: Set<String>, labelWidth: (String) -> F
     }
 
     val activeId = activeNode?.id
-    val topKids = root.dirs.values.map { layoutDir(it, 0, expanded, trail, activeId, labelWidth) } +
-        root.files.map { placedFile(it, 0, activeId, labelWidth) }
+    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth)
     val (boxes, width, height) = shelfPack(topKids)
     return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height)
 }
@@ -103,6 +104,7 @@ fun buildMap(slice: GraphSlice, expanded: Set<String>, labelWidth: (String) -> F
 private class DirTree(val label: String, val dirPath: Path) {
     val dirs = LinkedHashMap<String, DirTree>()
     val files = mutableListOf<GraphNode>()
+    var unitOrder: List<String> = emptyList()
     val id: String get() = dirPath.toString()
     fun fileCount(): Int = files.size + dirs.values.sumOf { it.fileCount() }
 }
@@ -136,14 +138,65 @@ private fun compress(dir: DirTree) {
     }
 }
 
-private fun sortTree(dir: DirTree) {
-    val sorted = dir.dirs.values.sortedBy { it.label.lowercase() }
-    dir.dirs.clear()
-    for (child in sorted) {
-        dir.dirs[child.label] = child
-        sortTree(child)
+private fun orderTree(dir: DirTree, edges: List<GraphEdge>): Set<String> {
+    val unitFiles = LinkedHashMap<String, Set<String>>()
+    val unitLabel = HashMap<String, String>()
+    for (child in dir.dirs.values) {
+        unitFiles[child.id] = orderTree(child, edges)
+        unitLabel[child.id] = child.label
     }
-    dir.files.sortBy { it.label.lowercase() }
+    for (file in dir.files) {
+        unitFiles[file.id] = setOf(file.id)
+        unitLabel[file.id] = file.label
+    }
+    val fileUnit = HashMap<String, String>()
+    for ((unit, files) in unitFiles) for (f in files) fileUnit[f] = unit
+
+    val adj = HashMap<String, MutableSet<String>>()
+    val indeg = HashMap<String, Int>()
+    for (unit in unitFiles.keys) indeg[unit] = 0
+    for (edge in edges) {
+        val from = fileUnit[edge.from] ?: continue
+        val to = fileUnit[edge.to] ?: continue
+        if (from != to && adj.getOrPut(from) { mutableSetOf() }.add(to)) {
+            indeg[to] = indeg.getValue(to) + 1
+        }
+    }
+    val byLabel = compareBy<String> { unitLabel.getValue(it).lowercase() }.thenBy { it }
+    val ready = TreeSet(byLabel)
+    for ((unit, degree) in indeg) if (degree == 0) ready.add(unit)
+    val order = ArrayList<String>(unitFiles.size)
+    while (ready.isNotEmpty()) {
+        val unit = ready.pollFirst()!!
+        order += unit
+        for (next in adj[unit].orEmpty()) {
+            val degree = indeg.getValue(next) - 1
+            indeg[next] = degree
+            if (degree == 0) ready.add(next)
+        }
+    }
+    if (order.size < unitFiles.size) {
+        val placed = order.toHashSet()
+        order += unitFiles.keys.filter { it !in placed }.sortedWith(byLabel)
+    }
+    dir.unitOrder = order
+    return fileUnit.keys
+}
+
+private fun orderedKids(
+    dir: DirTree,
+    depth: Int,
+    expanded: Set<String>,
+    trail: Set<String>,
+    activeId: String?,
+    labelWidth: (String) -> Float,
+): List<Placed> {
+    val dirsById = dir.dirs.values.associateBy { it.id }
+    val filesById = dir.files.associateBy { it.id }
+    return dir.unitOrder.mapNotNull { key ->
+        dirsById[key]?.let { layoutDir(it, depth, expanded, trail, activeId, labelWidth) }
+            ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth) }
+    }
 }
 
 private fun placedFile(node: GraphNode, depth: Int, activeId: String?, labelWidth: (String) -> Float): Placed {
@@ -194,8 +247,7 @@ private fun layoutDir(
         )
         return Placed(chipW, MAP_CHIP_H, chipW, MAP_CHIP_H, listOf(box))
     }
-    val kids = dir.dirs.values.map { layoutDir(it, depth + 1, expanded, trail, activeId, labelWidth) } +
-        dir.files.map { placedFile(it, depth + 1, activeId, labelWidth) }
+    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth)
     val (inner, contentW, contentH) = shelfPack(kids)
     val w = max(contentW, labelWidth(dir.label)) + MAP_PAD * 2
     val h = contentH + MAP_HEADER_H + MAP_PAD * 2
