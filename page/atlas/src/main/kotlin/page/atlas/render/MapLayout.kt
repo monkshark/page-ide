@@ -34,6 +34,7 @@ data class MapModel(
     val edges: List<MapEdge>,
     val width: Float,
     val height: Float,
+    val pushes: Map<String, Offset> = emptyMap(),
 ) {
     companion object {
         val EMPTY = MapModel(emptyList(), emptyList(), 0f, 0f)
@@ -106,6 +107,7 @@ fun buildMap(
     labelWidth: (String) -> Float,
     offsets: Map<String, Offset> = emptyMap(),
     expandOrder: List<String> = emptyList(),
+    justExpanded: String? = null,
 ): MapModel {
     val files = slice.nodes.filter { it.path != null }
     if (files.isEmpty()) return MapModel.EMPTY
@@ -156,9 +158,10 @@ fun buildMap(
     for ((index, dirId) in expandOrder.asReversed().withIndex()) {
         if (dirId in expanded) rank.putIfAbsent(dirId, index)
     }
-    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth, offsets, rank)
-    val (boxes, width, height) = shelfPack(topKids, offsets, rank)
-    return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height)
+    val pushes = HashMap<String, Offset>()
+    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
+    val (boxes, width, height) = shelfPack(topKids, offsets, rank, justExpanded, pushes)
+    return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height, pushes)
 }
 
 private class DirTree(val label: String, val dirPath: Path) {
@@ -259,12 +262,15 @@ private fun orderedKids(
     labelWidth: (String) -> Float,
     offsets: Map<String, Offset>,
     rank: Map<String, Int>,
+    justExpanded: String?,
+    pushes: MutableMap<String, Offset>,
 ): List<Placed> {
     val dirsById = dir.dirs.values.associateBy { it.id }
     val filesById = dir.files.associateBy { it.id }
     return dir.unitOrder.mapNotNull { key ->
-        dirsById[key]?.let { layoutDir(it, depth, expanded, trail, activeId, labelWidth, offsets, rank) }
-            ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth) }
+        dirsById[key]?.let {
+            layoutDir(it, depth, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
+        } ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth) }
     }
 }
 
@@ -297,6 +303,8 @@ private fun layoutDir(
     labelWidth: (String) -> Float,
     offsets: Map<String, Offset>,
     rank: Map<String, Int>,
+    justExpanded: String?,
+    pushes: MutableMap<String, Offset>,
 ): Placed {
     val count = dir.fileCount()
     val chipW = labelWidth("${dir.label} ($count)") + MAP_TEXT_PAD
@@ -318,8 +326,8 @@ private fun layoutDir(
         )
         return Placed(dir.id, chipW, MAP_CHIP_H, chipW, MAP_CHIP_H, listOf(box))
     }
-    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth, offsets, rank)
-    val (inner, contentW, contentH) = shelfPack(kids, offsets, rank)
+    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
+    val (inner, contentW, contentH) = shelfPack(kids, offsets, rank, justExpanded, pushes)
     val w = max(contentW, labelWidth(dir.label)) + MAP_PAD * 2
     val h = contentH + MAP_HEADER_H + MAP_PAD * 2
     val self = MapBox(
@@ -345,6 +353,8 @@ private fun shelfPack(
     items: List<Placed>,
     offsets: Map<String, Offset>,
     rank: Map<String, Int>,
+    justExpanded: String?,
+    pushes: MutableMap<String, Offset>,
 ): Triple<List<MapBox>, Float, Float> {
     val area = items.fold(0f) { acc, p -> acc + (p.stableW + MAP_GAP) * (p.stableH + MAP_GAP) }
     val target = max(items.maxOf { it.stableW }, sqrt(area) * 1.3f)
@@ -362,27 +372,43 @@ private fun shelfPack(
         x += item.stableW + MAP_GAP
         rowH = max(rowH, item.stableH)
     }
+    fun priority(id: String): Int =
+        rank.entries.filter { belongsTo(it.key, id) }.minOfOrNull { it.value }
+            ?: if (id in offsets) Int.MAX_VALUE - 1 else Int.MAX_VALUE
+    val order = items.indices.sortedBy { priority(items[it].id) }
     val placed = ArrayList<FloatArray>(items.size)
+    val pushers = ArrayList<Boolean>(items.size)
     val anchors = arrayOfNulls<Pair<Float, Float>>(items.size)
-    val order = items.indices.sortedBy { index ->
-        val item = items[index]
-        if (item.id in offsets) -1 else rank[item.id] ?: Int.MAX_VALUE
-    }
     for (index in order) {
         val item = items[index]
         val off = offsets[item.id]
         var px = homes[index].first + (off?.x ?: 0f)
         var py = homes[index].second + (off?.y ?: 0f)
-        while (off == null) {
-            val hit = placed.firstOrNull { r ->
-                px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h
-            } ?: break
+        while (true) {
+            var hit: FloatArray? = null
+            for (i in placed.indices) {
+                if (off != null && !pushers[i]) continue
+                val r = placed[i]
+                if (px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h) {
+                    hit = r
+                    break
+                }
+            }
+            if (hit == null) break
             val dx = hit[0] + hit[2] + MAP_GAP - px
             val dy = hit[1] + hit[3] + MAP_GAP - py
             if (dx <= dy) px += dx else py += dy
         }
         placed += floatArrayOf(px, py, item.w, item.h)
-        anchors[index] = (px - (off?.x ?: 0f)) to (py - (off?.y ?: 0f))
+        pushers += justExpanded != null && belongsTo(justExpanded, item.id)
+        if (off == null) {
+            anchors[index] = px to py
+        } else {
+            val dx = px - homes[index].first - off.x
+            val dy = py - homes[index].second - off.y
+            if (dx != 0f || dy != 0f) pushes[item.id] = Offset(dx, dy)
+            anchors[index] = homes[index]
+        }
     }
     val out = mutableListOf<MapBox>()
     var maxW = 0f

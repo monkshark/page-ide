@@ -62,8 +62,9 @@ internal fun MapCanvas(
         { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
     val userOffsets = remember { mutableStateMapOf<String, Offset>() }
     val expandOrder = remember { mutableStateListOf<String>() }
+    var justExpandedId by remember { mutableStateOf<String?>(null) }
     val map = remember(slice, effectiveExpanded) {
-        buildMap(slice, effectiveExpanded, measureWidth, userOffsets, expandOrder.toList())
+        buildMap(slice, effectiveExpanded, measureWidth, userOffsets, expandOrder.toList(), justExpandedId)
     }
     val anim = remember { Animatable(1f) }
     var fromMap by remember { mutableStateOf(map) }
@@ -99,19 +100,26 @@ internal fun MapCanvas(
         val prevById = toMap.boxes.associateBy { it.id }
         val nextById = map.boxes.associateBy { it.id }
         var base = lerpModel(fromMap, toMap, anim.value)
-        for (id in userOffsets.keys.toList()) {
-            val prev = prevById[id] ?: continue
-            val next = nextById[id] ?: continue
-            val dx = prev.x - next.x
-            val dy = prev.y - next.y
-            if (dx == 0f && dy == 0f) continue
-            userOffsets[id] = userOffsets.getValue(id) + Offset(dx, dy)
+        fun absorb(id: String, dx: Float, dy: Float) {
+            userOffsets[id] = (userOffsets[id] ?: Offset.Zero) + Offset(dx, dy)
             base = MapModel(
                 base.boxes.map { if (belongsTo(it.id, id)) it.copy(x = it.x - dx, y = it.y - dy) else it },
                 base.edges,
                 base.width,
                 base.height,
             )
+        }
+        for ((id, push) in map.pushes) {
+            if (id in userOffsets) absorb(id, push.x, push.y)
+        }
+        for (id in userOffsets.keys.toList()) {
+            if (id in map.pushes) continue
+            val prev = prevById[id] ?: continue
+            val next = nextById[id] ?: continue
+            val dx = prev.x - next.x
+            val dy = prev.y - next.y
+            if (dx == 0f && dy == 0f) continue
+            absorb(id, dx, dy)
         }
         fromMap = base
         toMap = map
@@ -208,8 +216,9 @@ internal fun MapCanvas(
                                 if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
                             expandOrder.remove(hit.id)
                             if (!hit.expanded) expandOrder.add(hit.id)
+                            justExpandedId = if (hit.expanded) null else hit.id
                             val nextBox = applyUserOffsets(
-                                buildMap(slice, next, measureWidth, userOffsets, expandOrder.toList()).boxes,
+                                buildMap(slice, next, measureWidth, userOffsets, expandOrder.toList(), justExpandedId).boxes,
                                 userOffsets,
                             ).firstOrNull { it.id == hit.id }
                             if (nextBox != null) {

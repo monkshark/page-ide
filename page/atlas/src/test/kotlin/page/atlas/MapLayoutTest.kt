@@ -326,30 +326,72 @@ class MapLayoutTest {
                 pushed.boxes.first { it.id == chip.id }.let { it.x != chip.x || it.y != chip.y }
         }
         val offsets = mapOf(victim.id to Offset(1000f, 1000f))
-        val expanded = buildMap(slice, setOf(id("ws/a")), width, offsets)
+        val expanded = buildMap(slice, setOf(id("ws/a")), width, offsets, listOf(id("ws/a")), id("ws/a"))
         val after = expanded.boxes.first { it.id == victim.id }
         assertEquals(victim.x, after.x)
         assertEquals(victim.y, after.y)
+        assertTrue(expanded.pushes.isEmpty())
     }
 
     @Test
-    fun `user moved boxes are never pushed even inside the footprint`() {
+    fun `expansion pushes user moved boxes in its footprint by upgrading their offsets`() {
         val slice = GraphSlice(
             listOf(node("ws/a/x.kt", NodeKind.ACTIVE), node("ws/a/y.kt")) +
                 ('b'..'h').map { node("ws/$it/f.kt") },
             emptyList(),
         )
         val collapsed = buildMap(slice, emptySet(), width)
-        val pushed = buildMap(slice, setOf(id("ws/a")), width)
+        val pushed = buildMap(slice, setOf(id("ws/a")), width, emptyMap(), listOf(id("ws/a")), id("ws/a"))
         val victim = collapsed.boxes.first { chip ->
             chip.id != id("ws/a") &&
                 pushed.boxes.first { it.id == chip.id }.let { it.x != chip.x || it.y != chip.y }
         }
         val offsets = mapOf(victim.id to Offset(1f, 1f))
-        val expanded = buildMap(slice, setOf(id("ws/a")), width, offsets)
+        val expanded = buildMap(slice, setOf(id("ws/a")), width, offsets, listOf(id("ws/a")), id("ws/a"))
+        val push = expanded.pushes[victim.id]
+        assertNotNull(push)
+        val folder = expanded.boxes.first { it.id == id("ws/a") }
         val after = expanded.boxes.first { it.id == victim.id }
-        assertEquals(victim.x, after.x)
-        assertEquals(victim.y, after.y)
+        val display = after.copy(x = after.x + 1f + push.x, y = after.y + 1f + push.y)
+        assertFalse(overlaps(display, folder))
+        val collapsedAgain = buildMap(
+            slice,
+            emptySet(),
+            width,
+            mapOf(victim.id to Offset(1f + push.x, 1f + push.y)),
+        )
+        assertTrue(collapsedAgain.pushes.isEmpty())
+    }
+
+    @Test
+    fun `nested expansion keeps its ancestors pinned and pushes expanded siblings`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/alpha.kt", NodeKind.ACTIVE),
+                node("ws/a/bravo.kt"),
+                node("ws/b/direct.kt"),
+                node("ws/b/sub/alpha.kt"),
+                node("ws/b/sub/bravo.kt"),
+            ) + ('c'..'f').map { node("ws/$it/f.kt") },
+            emptyList(),
+        )
+        val collapsed = buildMap(slice, emptySet(), width)
+        val aHome = collapsed.boxes.first { it.id == id("ws/a") }
+        val bHome = collapsed.boxes.first { it.id == id("ws/b") }
+        val expanded = setOf(id("ws/a"), id("ws/b"), id("ws/b/sub"))
+        val order = listOf(id("ws/a"), id("ws/b"), id("ws/b/sub"))
+        val map = buildMap(slice, expanded, width, emptyMap(), order, id("ws/b/sub"))
+        val b = map.boxes.first { it.id == id("ws/b") }
+        assertEquals(bHome.x, b.x)
+        assertEquals(bHome.y, b.y)
+        val a = map.boxes.first { it.id == id("ws/a") }
+        assertTrue(a.x != aHome.x || a.y != aHome.y)
+        val top = map.boxes.filter { it.depth == 0 }
+        for (i in top.indices) {
+            for (j in i + 1 until top.size) {
+                assertFalse(overlaps(top[i], top[j]))
+            }
+        }
     }
 
     @Test
