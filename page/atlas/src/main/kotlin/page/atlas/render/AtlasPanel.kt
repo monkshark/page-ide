@@ -549,7 +549,7 @@ private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel 
 
 private fun dashEffect(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
 
-internal fun DrawScope.drawArrowHead(
+private fun DrawScope.drawArrowHead(
     from: Offset,
     to: Offset,
     targetRadius: Float,

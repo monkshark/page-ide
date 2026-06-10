@@ -15,6 +15,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import java.nio.file.Path as FilePath
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.min
 import page.atlas.graph.GraphSlice
@@ -76,7 +80,8 @@ internal fun MapCanvas(
     val secondary = MaterialTheme.colorScheme.secondary
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val folderFill = MaterialTheme.colorScheme.surfaceVariant
-    val edgeColor = labelColor.copy(alpha = 0.5f)
+    val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    val edgeColor = labelColor.copy(alpha = 0.8f)
 
     Canvas(
         modifier = Modifier
@@ -195,6 +200,7 @@ internal fun MapCanvas(
                 }
             }
             val byId = map.boxes.associateBy { it.id }
+            val inv = 1f / scale
             for (edge in map.edges) {
                 val from = byId[edge.from] ?: continue
                 val to = byId[edge.to] ?: continue
@@ -202,12 +208,20 @@ internal fun MapCanvas(
                 val centerTo = Offset(to.x + to.w / 2f, to.y + to.h / 2f)
                 val start = borderPoint(from, centerTo)
                 val end = borderPoint(to, centerFrom)
-                val stroke = (1f + ln(edge.weight.toFloat())).coerceAtMost(3.5f)
+                val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
                 drawLine(edgeColor, start, end, strokeWidth = stroke)
-                drawArrowHead(start, end, 0f, edgeColor, filled = true)
+                drawMapArrow(start, end, edgeColor, inv)
                 if (edge.weight > 1) {
                     val mid = (start + end) / 2f
                     val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)
+                    val halfW = text.size.width / 2f + 3f
+                    val halfH = text.size.height / 2f + 1f
+                    drawRoundRect(
+                        color = badgeFill,
+                        topLeft = mid - Offset(halfW, halfH),
+                        size = Size(halfW * 2f, halfH * 2f),
+                        cornerRadius = CornerRadius(halfH),
+                    )
                     drawText(
                         textLayoutResult = text,
                         color = labelColor,
@@ -217,6 +231,23 @@ internal fun MapCanvas(
             }
         }
     }
+}
+
+private fun DrawScope.drawMapArrow(from: Offset, to: Offset, color: Color, inv: Float) {
+    val direction = to - from
+    val length = hypot(direction.x, direction.y)
+    if (length < 0.5f) return
+    val unit = Offset(direction.x / length, direction.y / length)
+    val headLen = min(11f * inv, length * 0.45f)
+    val base = to - unit * headLen
+    val normal = Offset(-unit.y, unit.x) * headLen * 0.45f
+    val head = Path().apply {
+        moveTo(to.x, to.y)
+        lineTo(base.x + normal.x, base.y + normal.y)
+        lineTo(base.x - normal.x, base.y - normal.y)
+        close()
+    }
+    drawPath(head, color)
 }
 
 private fun borderPoint(box: MapBox, towards: Offset): Offset {
