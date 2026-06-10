@@ -71,17 +71,6 @@ internal fun MapCanvas(
     var fitted by remember { mutableStateOf(false) }
     val userOffsets = remember { mutableStateMapOf<String, Offset>() }
 
-    fun userOffset(id: String): Offset {
-        var acc = Offset.Zero
-        for ((key, off) in userOffsets) if (belongsTo(id, key)) acc += off
-        return acc
-    }
-
-    fun shift(box: MapBox): MapBox {
-        val off = userOffset(box.id)
-        return if (off == Offset.Zero) box else box.copy(x = box.x + off.x, y = box.y + off.y)
-    }
-
     fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
         val ch = canvasSize.height.toFloat()
@@ -118,8 +107,7 @@ internal fun MapCanvas(
         val (base, scale) = viewTransform()
         if (scale <= 0f) return null
         val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
-        return map.boxes
-            .map { shift(it) }
+        return applyUserOffsets(map.boxes, userOffsets)
             .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
             .maxByOrNull { it.depth * 2 + if (it.folder) 0 else 1 }
     }
@@ -129,8 +117,7 @@ internal fun MapCanvas(
         if (scale <= 0f) return null
         val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
         val band = 8f / scale
-        return toMap.boxes
-            .map { shift(it) }
+        return applyUserOffsets(toMap.boxes, userOffsets)
             .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
             .filter {
                 p.x < it.x + band || p.x > it.x + it.w - band ||
@@ -196,9 +183,8 @@ internal fun MapCanvas(
                         if (hit.folder) {
                             val next =
                                 if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
-                            val nextBox = buildMap(slice, next, measureWidth).boxes
+                            val nextBox = applyUserOffsets(buildMap(slice, next, measureWidth).boxes, userOffsets)
                                 .firstOrNull { it.id == hit.id }
-                                ?.let { shift(it) }
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
                                 if (scale <= 0f) scale = curScale
@@ -217,27 +203,40 @@ internal fun MapCanvas(
         val t = anim.value
         val fromById = fromMap.boxes.associateBy { it.id }
         val toIds = HashSet<String>(toMap.boxes.size)
-        val drawBoxes = ArrayList<Pair<MapBox, Float>>(toMap.boxes.size)
+        val interp = ArrayList<MapBox>(toMap.boxes.size)
+        val alphas = ArrayList<Float>(toMap.boxes.size)
         for (box in toMap.boxes) {
             toIds += box.id
             val prev = fromById[box.id]
-            val (interp, alpha) = when {
-                prev == null -> box to t
-                t >= 1f -> box to 1f
-                else -> box.copy(
-                    x = prev.x + (box.x - prev.x) * t,
-                    y = prev.y + (box.y - prev.y) * t,
-                    w = prev.w + (box.w - prev.w) * t,
-                    h = prev.h + (box.h - prev.h) * t,
-                ) to 1f
+            when {
+                prev == null -> {
+                    interp += box
+                    alphas += t
+                }
+                t >= 1f -> {
+                    interp += box
+                    alphas += 1f
+                }
+                else -> {
+                    interp += box.copy(
+                        x = prev.x + (box.x - prev.x) * t,
+                        y = prev.y + (box.y - prev.y) * t,
+                        w = prev.w + (box.w - prev.w) * t,
+                        h = prev.h + (box.h - prev.h) * t,
+                    )
+                    alphas += 1f
+                }
             }
-            drawBoxes += shift(interp) to alpha
         }
         if (t < 1f) {
             for (prev in fromMap.boxes) {
-                if (prev.id !in toIds) drawBoxes += shift(prev) to (1f - t)
+                if (prev.id !in toIds) {
+                    interp += prev
+                    alphas += 1f - t
+                }
             }
         }
+        val drawBoxes = applyUserOffsets(interp, userOffsets).zip(alphas)
         withTransform({
             translate(base.x, base.y)
             scale(viewScale, viewScale, Offset.Zero)

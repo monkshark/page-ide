@@ -1,8 +1,10 @@
 package page.atlas.render
 
+import androidx.compose.ui.geometry.Offset
 import java.nio.file.Path
 import java.util.TreeSet
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
@@ -49,6 +51,49 @@ internal fun belongsTo(id: String, ancestorId: String): Boolean =
     id == ancestorId ||
         (id.length > ancestorId.length && id.startsWith(ancestorId) &&
             (id[ancestorId.length] == '\\' || id[ancestorId.length] == '/'))
+
+internal fun applyUserOffsets(boxes: List<MapBox>, offsets: Map<String, Offset>): List<MapBox> {
+    if (offsets.isEmpty()) return boxes
+    val out = boxes.map { box ->
+        var dx = 0f
+        var dy = 0f
+        for ((key, off) in offsets) {
+            if (belongsTo(box.id, key)) {
+                dx += off.x
+                dy += off.y
+            }
+        }
+        if (dx == 0f && dy == 0f) box else box.copy(x = box.x + dx, y = box.y + dy)
+    }.toMutableList()
+    val resized = out.withIndex()
+        .filter { (_, box) ->
+            box.folder && box.expanded && offsets.keys.any { it != box.id && belongsTo(it, box.id) }
+        }
+        .sortedByDescending { it.value.depth }
+        .map { it.index }
+    for (index in resized) {
+        val folder = out[index]
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        for (box in out) {
+            if (box.id == folder.id || !belongsTo(box.id, folder.id)) continue
+            minX = min(minX, box.x)
+            minY = min(minY, box.y)
+            maxX = max(maxX, box.x + box.w)
+            maxY = max(maxY, box.y + box.h)
+        }
+        if (minX > maxX) continue
+        out[index] = folder.copy(
+            x = minX - MAP_PAD,
+            y = minY - MAP_HEADER_H - MAP_PAD,
+            w = maxX - minX + MAP_PAD * 2,
+            h = maxY - minY + MAP_HEADER_H + MAP_PAD * 2,
+        )
+    }
+    return out
+}
 
 fun defaultExpandedDirs(slice: GraphSlice): Set<String> {
     val active = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.path?.parent ?: return emptySet()

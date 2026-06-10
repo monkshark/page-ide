@@ -1,5 +1,6 @@
 package page.atlas
 
+import androidx.compose.ui.geometry.Offset
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,6 +12,7 @@ import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.render.MapBox
+import page.atlas.render.applyUserOffsets
 import page.atlas.render.belongsTo
 import page.atlas.render.buildMap
 import page.atlas.render.defaultExpandedDirs
@@ -240,6 +242,54 @@ class MapLayoutTest {
         assertTrue(belongsTo(id("ws/a/sub/y.kt"), id("ws/a")))
         assertFalse(belongsTo(id("ws/ab/x.kt"), id("ws/a")))
         assertFalse(belongsTo(id("ws"), id("ws/a")))
+    }
+
+    @Test
+    fun `moving a child stretches its expanded parent to keep containing it`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/x.kt", NodeKind.ACTIVE),
+                node("ws/a/y.kt"),
+                node("ws/b/z.kt"),
+            ),
+            emptyList(),
+        )
+        val map = buildMap(slice, setOf(id("ws/a")), width)
+        val before = map.boxes.first { it.id == id("ws/a") }
+        val moved = applyUserOffsets(map.boxes, mapOf(id("ws/a/x.kt") to Offset(400f, 300f)))
+        val parent = moved.first { it.id == id("ws/a") }
+        val child = moved.first { it.id == id("ws/a/x.kt") }
+        val sibling = moved.first { it.id == id("ws/a/y.kt") }
+        for (inner in listOf(child, sibling)) {
+            assertTrue(inner.x >= parent.x && inner.x + inner.w <= parent.x + parent.w)
+            assertTrue(inner.y >= parent.y && inner.y + inner.h <= parent.y + parent.h)
+        }
+        assertTrue(parent.w > before.w)
+        assertTrue(parent.h > before.h)
+    }
+
+    @Test
+    fun `moving a folder carries its children without resizing`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/x.kt", NodeKind.ACTIVE),
+                node("ws/b/z.kt"),
+            ),
+            emptyList(),
+        )
+        val map = buildMap(slice, setOf(id("ws/a")), width)
+        val moved = applyUserOffsets(map.boxes, mapOf(id("ws/a") to Offset(120f, 80f)))
+        val beforeParent = map.boxes.first { it.id == id("ws/a") }
+        val beforeChild = map.boxes.first { it.id == id("ws/a/x.kt") }
+        val parent = moved.first { it.id == id("ws/a") }
+        val child = moved.first { it.id == id("ws/a/x.kt") }
+        assertEquals(beforeParent.x + 120f, parent.x)
+        assertEquals(beforeParent.y + 80f, parent.y)
+        assertEquals(beforeParent.w, parent.w)
+        assertEquals(beforeParent.h, parent.h)
+        assertEquals(beforeChild.x + 120f, child.x)
+        assertEquals(beforeChild.y + 80f, child.y)
+        assertEquals(map.boxes.first { it.id == id("ws/b") }, moved.first { it.id == id("ws/b") })
     }
 
     @Test
