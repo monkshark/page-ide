@@ -48,7 +48,7 @@ class WorkspaceIndex(private val root: Path) {
         const val MAX_FILES = 20_000
         val SKIP_DIRS = setOf(".git", "build", "out", "node_modules", "target", ".gradle")
         val SOURCE_EXTS = setOf(
-            "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs",
+            "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
         )
     }
 }
@@ -64,6 +64,7 @@ object ImportResolver {
             "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"))
             "go" -> resolveGo(raw, index)
             "rs" -> resolveRust(raw, index)
+            "dart" -> resolveDart(raw, activeFile, index)
             else -> null
         }
     }
@@ -137,6 +138,21 @@ object ImportResolver {
             if (hit != null) return hit
         }
         return null
+    }
+
+    private fun resolveDart(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
+        val target = raw.target
+        if (target.startsWith("dart:")) return null
+        if (target.startsWith("package:")) {
+            val rest = target.removePrefix("package:").substringAfter('/', "")
+            if (rest.isEmpty()) return null
+            index.refreshIfStale()
+            val active = normalized(activeFile)
+            val candidates = index.files().filter { normalized(it).endsWith("/lib/$rest") }
+            return candidates.maxByOrNull { commonPrefixLength(normalized(it), active) }
+        }
+        val parent = activeFile.parent ?: return null
+        return parent.resolve(target).normalize().takeIf { Files.isRegularFile(it) }
     }
 
     private fun normalized(path: Path): String = path.toString().replace('\\', '/')

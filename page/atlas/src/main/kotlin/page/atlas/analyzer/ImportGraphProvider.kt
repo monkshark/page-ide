@@ -132,7 +132,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         if (raw.symbols.any { it == simple }) return true
         val path = node.path
         return if (path != null) {
-            path.fileName.toString().substringBeforeLast('.').equals(simple, ignoreCase = true)
+            path.fileName.toString().substringBeforeLast('.').replace("_", "")
+                .equals(simple.replace("_", ""), ignoreCase = true)
         } else {
             raw.target.substringAfterLast('.').substringAfterLast('/').substringAfterLast(':')
                 .equals(simple, ignoreCase = true)
@@ -148,7 +149,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         val dir = file.parent ?: return null
         val exts = siblingExts(extOf(file)) ?: return null
         val sibling = exts.asSequence()
-            .map { dir.resolve("$simple.$it") }
+            .flatMap { ext -> sequenceOf(dir.resolve("$simple.$ext"), dir.resolve("${snakeCase(simple)}.$ext")) }
             .firstOrNull { Files.isRegularFile(it) }
             ?: return null
         val id = nodeId(sibling)
@@ -166,6 +167,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         "kt", "kts" -> listOf("kt", "kts")
         "py", "pyi" -> listOf("py", "pyi")
         "js", "jsx", "mjs", "cjs", "ts", "tsx" -> listOf("ts", "tsx", "js", "jsx")
+        "dart" -> listOf("dart")
         else -> null
     }
 
@@ -193,6 +195,9 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         EdgeKind.IMPLEMENTS -> 1
         EdgeKind.EXTENDS -> 2
     }
+
+    private fun snakeCase(name: String): String =
+        name.replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), "_").lowercase()
 
     private fun nodeId(path: Path): String = path.toAbsolutePath().normalize().toString()
 

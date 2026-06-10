@@ -18,6 +18,7 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-typescript:0.23.2")
     implementation("io.github.bonede:tree-sitter-go:0.25.0")
     implementation("io.github.bonede:tree-sitter-rust:0.24.0")
+    implementation("io.github.bonede:tree-sitter-dart:master-a")
     testImplementation(kotlin("test"))
 }
 

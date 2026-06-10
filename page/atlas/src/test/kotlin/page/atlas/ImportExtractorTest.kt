@@ -153,6 +153,30 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `dart imports distinguish sdk package and relative`() {
+        val text = """
+            import 'dart:async';
+            import 'package:flutter/material.dart';
+            import 'package:my_app/widgets/button.dart' as btn;
+            import 'utils/helper.dart' show formatDate;
+            import '../models/user.dart';
+            export 'src/api.dart';
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("main.dart"), text)
+        assertEquals(
+            listOf(
+                RawImport("dart:async", false),
+                RawImport("package:flutter/material.dart", false),
+                RawImport("package:my_app/widgets/button.dart", false, listOf("btn")),
+                RawImport("utils/helper.dart", true, listOf("formatDate")),
+                RawImport("../models/user.dart", true),
+                RawImport("src/api.dart", true),
+            ),
+            imports,
+        )
+    }
+
+    @Test
     fun `unsupported extension returns empty`() {
         assertTrue(ImportExtractor.extract(Path.of("notes.txt"), "import x").isEmpty())
         assertTrue(ImportExtractor.supports(Path.of("a.kt")))

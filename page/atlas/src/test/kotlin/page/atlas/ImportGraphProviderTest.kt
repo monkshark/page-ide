@@ -40,6 +40,39 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `dart slice resolves package imports and promotes snake case extends`(@TempDir root: Path) {
+        val basePage = root.resolve("lib/pages/base_page.dart")
+        Files.createDirectories(basePage.parent)
+        Files.writeString(basePage, "class BasePage {}\n\nmixin Trackable {}")
+        val homePage = root.resolve("lib/pages/home_page.dart")
+        Files.writeString(
+            homePage,
+            """
+            import 'base_page.dart';
+
+            class HomePage extends BasePage with Trackable {}
+            """.trimIndent(),
+        )
+        val active = root.resolve("lib/main.dart")
+        val text = """
+            import 'dart:async';
+            import 'package:flutter/material.dart';
+            import 'package:flutter_app/pages/home_page.dart';
+        """.trimIndent()
+        Files.writeString(active, text)
+        val slice = ImportGraphProvider(root).nodesForFile(active, text)
+        val ids = slice.nodes.associateBy { it.label }
+        assertEquals(NodeKind.WORKSPACE_FILE, ids.getValue("home_page.dart").kind)
+        assertEquals(NodeKind.WORKSPACE_FILE, ids.getValue("base_page.dart").kind)
+        assertEquals(NodeKind.EXTERNAL, ids.getValue("dart:async").kind)
+        assertEquals(NodeKind.EXTERNAL, ids.getValue("package:flutter/material.dart").kind)
+        val extendsEdge = slice.edges.single {
+            it.from == ids.getValue("home_page.dart").id && it.to == ids.getValue("base_page.dart").id
+        }
+        assertEquals(EdgeKind.EXTENDS, extendsEdge.kind)
+    }
+
+    @Test
     fun `duplicate imports are deduplicated`(@TempDir root: Path) {
         val active = root.resolve("main.py")
         val text = """
