@@ -155,13 +155,27 @@ internal class AppController(
             PerfRegistry.instance?.end(StartupPhases.WORKSPACE_OPEN)
         }
     }
+    private val pubSyncController = PubSyncController(
+        scope = appScope,
+        workspaceRoot = { workspaceState.rootDir },
+        emitFailureOutput = { events ->
+            if (!outputState.running) {
+                events.forEach { outputState.onEvent(it) }
+                layoutUiState.outputOpen = true
+            }
+        },
+    )
+
     private val fileMenuController = FileMenuController(
         openInTab = openInTab,
         focused = { focused() },
         mutateFocused = { transform -> mutateFocused(transform) },
         paneOf = { side -> paneOf(side) },
         mutatePane = { side, transform -> mutatePane(side, transform) },
-        didSave = { path, text -> router.controllerFor(path)?.didSave(path, text) },
+        didSave = { path, text ->
+            router.controllerFor(path)?.didSave(path, text)
+            pubSyncController.onFileSaved(path)
+        },
         openWorkspaceFolder = openWorkspaceFolder,
     )
     val openFile = fileMenuController::openFile
@@ -656,6 +670,7 @@ internal class AppController(
         if (ctrl != null && langId != null) {
             ctrl.didOpen(path, langId, focused().editorValue.text)
         }
+        pubSyncController.onFileOpened(path)
     }
 
     fun onActiveTextChanged(path: Path?, text: String) {
