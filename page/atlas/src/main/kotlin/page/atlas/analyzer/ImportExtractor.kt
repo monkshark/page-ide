@@ -204,18 +204,41 @@ object ImportExtractor {
         val header = snippet.substringBefore(':')
         if (!header.contains('(')) return emptyList()
         val inside = header.substringAfter('(').substringBeforeLast(')')
-        return inside.split(',').mapNotNull { part ->
+        return splitTopLevel(inside).mapNotNull { part ->
             val base = part.trim()
             if (base.isEmpty() || base.contains('=') || base.startsWith("*")) null
-            else RawRelation(base.substringBefore('['), EdgeKind.EXTENDS)
+            else {
+                val name = base.substringBefore('[').trim()
+                if (name.isEmpty() || !name.all { it.isJavaIdentifierPart() || it == '.' }) null
+                else RawRelation(name, EdgeKind.EXTENDS)
+            }
         }
     }
 
     private fun typeNames(body: String): List<String> =
-        body.split(',').mapNotNull { part ->
+        splitTopLevel(body).mapNotNull { part ->
             val name = part.trim().substringBefore('<').substringBefore('(').trim()
-            name.takeIf { it.isNotEmpty() && it.first().isJavaIdentifierStart() }
+            name.takeIf {
+                it.isNotEmpty() && it.first().isJavaIdentifierStart() &&
+                    it.all { c -> c.isJavaIdentifierPart() || c == '.' }
+            }
         }
+
+    private fun splitTopLevel(body: String): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var depth = 0
+        for (ch in body) {
+            when (ch) {
+                '<', '(', '[' -> { depth++; current.append(ch) }
+                '>', ')', ']' -> { depth--; current.append(ch) }
+                ',' -> if (depth <= 0) { parts.add(current.toString()); current.clear() } else current.append(ch)
+                else -> current.append(ch)
+            }
+        }
+        parts.add(current.toString())
+        return parts
+    }
 
     private fun parseJava(snippet: String): List<RawImport> {
         var body = snippet.trim().removePrefix("import").trim().removeSuffix(";").trim()
