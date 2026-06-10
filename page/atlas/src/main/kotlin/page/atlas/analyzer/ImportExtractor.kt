@@ -5,6 +5,7 @@ import org.treesitter.TSLanguage
 import org.treesitter.TSNode
 import org.treesitter.TSParser
 import org.treesitter.TSTreeCursor
+import org.treesitter.TreeSitterDart
 import org.treesitter.TreeSitterGo
 import org.treesitter.TreeSitterJava
 import org.treesitter.TreeSitterJavascript
@@ -50,6 +51,11 @@ object ImportExtractor {
         ),
         GO(setOf("import_spec"), emptySet(), ::TreeSitterGo),
         RUST(setOf("use_declaration"), emptySet(), ::TreeSitterRust),
+        DART(
+            setOf("import_specification", "library_export"),
+            setOf("superclass", "interfaces"),
+            ::TreeSitterDart,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -66,6 +72,7 @@ object ImportExtractor {
         "tsx" to Lang.TS,
         "go" to Lang.GO,
         "rs" to Lang.RUST,
+        "dart" to Lang.DART,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -153,6 +160,7 @@ object ImportExtractor {
         Lang.JS, Lang.TS -> parseQuoted(snippet, pathStyle = true)
         Lang.GO -> parseQuoted(snippet, pathStyle = false)
         Lang.RUST -> parseRust(snippet)
+        Lang.DART -> parseDart(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -161,6 +169,7 @@ object ImportExtractor {
         Lang.PYTHON -> parsePythonBases(snippet)
         Lang.JS -> typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.TS -> parseTsRelation(type, snippet)
+        Lang.DART -> parseDartRelation(type, snippet)
         Lang.GO, Lang.RUST -> emptyList()
     }
 
@@ -267,6 +276,36 @@ object ImportExtractor {
         return local.takeIf {
             it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() }
         }
+    }
+
+    private fun parseDart(snippet: String): List<RawImport> {
+        val target = unquote(snippet) ?: return emptyList()
+        if (target.isEmpty()) return emptyList()
+        val relative = !target.startsWith("dart:") && !target.startsWith("package:")
+        val tail = snippet.substringAfter(target).removeSuffix(";")
+        val symbols = when {
+            " as " in tail -> listOfNotNull(localName(tail.substringAfter(" as ").trim().substringBefore(' ')))
+            " show " in tail ->
+                tail.substringAfter(" show ").substringBefore(" hide ").split(',')
+                    .mapNotNull { localName(it.trim()) }
+            else -> emptyList()
+        }
+        return listOf(RawImport(target, relative, symbols))
+    }
+
+    private fun parseDartRelation(type: String, snippet: String): List<RawRelation> = when (type) {
+        "superclass" -> {
+            val body = snippet.trim().removePrefix("extends").trim()
+            val base = if (body.startsWith("with")) "" else body.substringBefore(" with ")
+            val mixins =
+                if (body.startsWith("with")) body.removePrefix("with")
+                else body.substringAfter(" with ", "")
+            typeNames(base).map { RawRelation(it, EdgeKind.EXTENDS) } +
+                typeNames(mixins).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        }
+        "interfaces" ->
+            typeNames(snippet.trim().removePrefix("implements")).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        else -> emptyList()
     }
 
     private fun parseRust(snippet: String): List<RawImport> {

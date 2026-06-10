@@ -87,6 +87,41 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `dart package import resolves into lib directory`(@TempDir root: Path) {
+        val target = root.resolve("lib/widgets/button.dart")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "class Button {}")
+        val active = root.resolve("lib/main.dart")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(
+            RawImport("package:my_app/widgets/button.dart", false), active, WorkspaceIndex(root),
+        )
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `dart relative import resolves against file directory`(@TempDir root: Path) {
+        val target = root.resolve("lib/models/user.dart")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "class User {}")
+        val active = root.resolve("lib/pages/home.dart")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(
+            RawImport("../models/user.dart", true), active, WorkspaceIndex(root),
+        )
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `dart sdk import stays external`(@TempDir root: Path) {
+        val active = root.resolve("lib/main.dart")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        assertNull(ImportResolver.resolve(RawImport("dart:async", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
     fun `unresolved import returns null`(@TempDir root: Path) {
         val active = root.resolve("Main.kt")
         Files.writeString(active, "package main")

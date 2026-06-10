@@ -33,6 +33,24 @@ class SupertypeExtractionTest {
     }
 
     @Test
+    fun `dart extends with mixin and implements`() {
+        val text = """
+            import 'package:flutter/material.dart';
+            class HomePage extends StatefulWidget with SomeMixin implements Tappable {
+            }
+        """.trimIndent()
+        val rels = relations("home_page.dart", text)
+        assertEquals(
+            listOf(
+                RawRelation("StatefulWidget", EdgeKind.EXTENDS),
+                RawRelation("SomeMixin", EdgeKind.IMPLEMENTS),
+                RawRelation("Tappable", EdgeKind.IMPLEMENTS),
+            ),
+            rels,
+        )
+    }
+
+    @Test
     fun `java interface extends interfaces`() {
         val rels = relations("Repo.java", "interface Repo extends Readable, Writable {}")
         assertEquals(
