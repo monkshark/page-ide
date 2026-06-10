@@ -100,7 +100,12 @@ fun defaultExpandedDirs(slice: GraphSlice): Set<String> {
     return generateSequence(active) { it.parent }.map(Path::toString).toSet()
 }
 
-fun buildMap(slice: GraphSlice, expanded: Set<String>, labelWidth: (String) -> Float): MapModel {
+fun buildMap(
+    slice: GraphSlice,
+    expanded: Set<String>,
+    labelWidth: (String) -> Float,
+    offsets: Map<String, Offset> = emptyMap(),
+): MapModel {
     val files = slice.nodes.filter { it.path != null }
     if (files.isEmpty()) return MapModel.EMPTY
     val rootDir = commonRoot(files.map { it.path!!.parent ?: it.path!! })
@@ -146,8 +151,8 @@ fun buildMap(slice: GraphSlice, expanded: Set<String>, labelWidth: (String) -> F
     }
 
     val activeId = activeNode?.id
-    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth)
-    val (boxes, width, height) = shelfPack(topKids)
+    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth, offsets)
+    val (boxes, width, height) = shelfPack(topKids, offsets)
     return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height)
 }
 
@@ -159,7 +164,14 @@ private class DirTree(val label: String, val dirPath: Path) {
     fun fileCount(): Int = files.size + dirs.values.sumOf { it.fileCount() }
 }
 
-private class Placed(val w: Float, val h: Float, val stableW: Float, val stableH: Float, val boxes: List<MapBox>)
+private class Placed(
+    val id: String,
+    val w: Float,
+    val h: Float,
+    val stableW: Float,
+    val stableH: Float,
+    val boxes: List<MapBox>,
+)
 
 private fun commonRoot(dirs: List<Path>): Path {
     var prefix = dirs.first()
@@ -240,11 +252,12 @@ private fun orderedKids(
     trail: Set<String>,
     activeId: String?,
     labelWidth: (String) -> Float,
+    offsets: Map<String, Offset>,
 ): List<Placed> {
     val dirsById = dir.dirs.values.associateBy { it.id }
     val filesById = dir.files.associateBy { it.id }
     return dir.unitOrder.mapNotNull { key ->
-        dirsById[key]?.let { layoutDir(it, depth, expanded, trail, activeId, labelWidth) }
+        dirsById[key]?.let { layoutDir(it, depth, expanded, trail, activeId, labelWidth, offsets) }
             ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth) }
     }
 }
@@ -266,7 +279,7 @@ private fun placedFile(node: GraphNode, depth: Int, activeId: String?, labelWidt
         w = w,
         h = MAP_FILE_H,
     )
-    return Placed(w, MAP_FILE_H, w, MAP_FILE_H, listOf(box))
+    return Placed(node.id, w, MAP_FILE_H, w, MAP_FILE_H, listOf(box))
 }
 
 private fun layoutDir(
@@ -276,6 +289,7 @@ private fun layoutDir(
     trail: Set<String>,
     activeId: String?,
     labelWidth: (String) -> Float,
+    offsets: Map<String, Offset>,
 ): Placed {
     val count = dir.fileCount()
     val chipW = labelWidth("${dir.label} ($count)") + MAP_TEXT_PAD
@@ -295,10 +309,10 @@ private fun layoutDir(
             w = chipW,
             h = MAP_CHIP_H,
         )
-        return Placed(chipW, MAP_CHIP_H, chipW, MAP_CHIP_H, listOf(box))
+        return Placed(dir.id, chipW, MAP_CHIP_H, chipW, MAP_CHIP_H, listOf(box))
     }
-    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth)
-    val (inner, contentW, contentH) = shelfPack(kids)
+    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth, offsets)
+    val (inner, contentW, contentH) = shelfPack(kids, offsets)
     val w = max(contentW, labelWidth(dir.label)) + MAP_PAD * 2
     val h = contentH + MAP_HEADER_H + MAP_PAD * 2
     val self = MapBox(
@@ -317,10 +331,10 @@ private fun layoutDir(
         h = h,
     )
     val shifted = inner.map { it.copy(x = it.x + MAP_PAD, y = it.y + MAP_HEADER_H + MAP_PAD) }
-    return Placed(w, h, chipW, MAP_CHIP_H, listOf(self) + shifted)
+    return Placed(dir.id, w, h, chipW, MAP_CHIP_H, listOf(self) + shifted)
 }
 
-private fun shelfPack(items: List<Placed>): Triple<List<MapBox>, Float, Float> {
+private fun shelfPack(items: List<Placed>, offsets: Map<String, Offset>): Triple<List<MapBox>, Float, Float> {
     val area = items.fold(0f) { acc, p -> acc + (p.stableW + MAP_GAP) * (p.stableH + MAP_GAP) }
     val target = max(items.maxOf { it.stableW }, sqrt(area) * 1.3f)
     val homes = ArrayList<Pair<Float, Float>>(items.size)
@@ -342,7 +356,9 @@ private fun shelfPack(items: List<Placed>): Triple<List<MapBox>, Float, Float> {
     var maxW = 0f
     var maxH = 0f
     for ((index, item) in items.withIndex()) {
-        var (px, py) = homes[index]
+        val off = offsets[item.id] ?: Offset.Zero
+        var px = homes[index].first + off.x
+        var py = homes[index].second + off.y
         while (true) {
             val hit = placed.firstOrNull { r ->
                 px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h
@@ -352,9 +368,11 @@ private fun shelfPack(items: List<Placed>): Triple<List<MapBox>, Float, Float> {
             if (dx <= dy) px += dx else py += dy
         }
         placed += floatArrayOf(px, py, item.w, item.h)
-        out += item.boxes.map { it.copy(x = it.x + px, y = it.y + py) }
-        maxW = max(maxW, px + item.w)
-        maxH = max(maxH, py + item.h)
+        val lx = px - off.x
+        val ly = py - off.y
+        out += item.boxes.map { it.copy(x = it.x + lx, y = it.y + ly) }
+        maxW = max(maxW, lx + item.w)
+        maxH = max(maxH, ly + item.h)
     }
     return Triple(out, maxW, maxH)
 }

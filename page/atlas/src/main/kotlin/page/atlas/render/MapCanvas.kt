@@ -59,7 +59,8 @@ internal fun MapCanvas(
     val effectiveExpanded = expandedDirs ?: remember(slice) { defaultExpandedDirs(slice) }
     val measureWidth: (String) -> Float =
         { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
-    val map = remember(slice, effectiveExpanded) { buildMap(slice, effectiveExpanded, measureWidth) }
+    val userOffsets = remember { mutableStateMapOf<String, Offset>() }
+    val map = remember(slice, effectiveExpanded) { buildMap(slice, effectiveExpanded, measureWidth, userOffsets) }
     val anim = remember { Animatable(1f) }
     var fromMap by remember { mutableStateOf(map) }
     var toMap by remember { mutableStateOf(map) }
@@ -69,7 +70,6 @@ internal fun MapCanvas(
     var scale by remember { mutableStateOf(0f) }
     var fitScale by remember { mutableStateOf(1f) }
     var fitted by remember { mutableStateOf(false) }
-    val userOffsets = remember { mutableStateMapOf<String, Offset>() }
 
     fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
@@ -185,7 +185,7 @@ internal fun MapCanvas(
                         if (hit.folder) {
                             val next =
                                 if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
-                            val nextBox = applyUserOffsets(buildMap(slice, next, measureWidth).boxes, userOffsets)
+                            val nextBox = applyUserOffsets(buildMap(slice, next, measureWidth, userOffsets).boxes, userOffsets)
                                 .firstOrNull { it.id == hit.id }
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
