@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import page.app.InstallProgressRegistry
+import page.app.PubSyncRegistry
 import page.app.lspStatusLineText
 import page.app.state.EditorWorkspaceState
 import page.editor.FileKind
@@ -97,7 +98,10 @@ internal fun GlobalStatusBar(
             installerId = e.installerId,
         )
     }
-    val lspActivities = (globalStarting + ctrlActivities + installActivities)
+    val pubActivities = PubSyncRegistry.entries.values.map { e ->
+        LspController.Activity(kind = "pub", label = e.label, startedAtMs = e.startedAtMs)
+    }
+    val lspActivities = (globalStarting + ctrlActivities + installActivities + pubActivities)
         .distinctBy { it.kind + it.label }
         .sortedBy { it.startedAtMs }
 
