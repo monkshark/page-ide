@@ -510,7 +510,9 @@ internal fun IdeMainLayout(
         )
     }
     if (installGuideOpen && shellCtrl != null) {
-        val activeDef = shellActivePath?.let { resolveLanguageForPath(it) }
+        val activeDef = shellActivePath?.let { p ->
+            lspRouter.backendFor(p)?.let { page.lsp.LanguageRegistry.byId(it.id) } ?: resolveLanguageForPath(p)
+        }
         val def = activeDef
             ?: shellCtrl.missingDefinition.value
             ?: page.lsp.LanguageRegistry.byId("kotlin")
