@@ -239,7 +239,7 @@ private fun MapHintRow() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "A → B : A 가 B 를 사용  ·  더블클릭: 펼침·접기 / 열기  ·  테두리 드래그: 이동",
+            text = "A → B : A 가 B 를 사용  ·  더블클릭: 펼침·접기 / 열기  ·  박스 드래그: 이동",
             style = TextStyle(fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
         )
     }

@@ -116,13 +116,8 @@ internal fun MapCanvas(
         val (base, scale) = viewTransform()
         if (scale <= 0f) return null
         val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
-        val band = 8f / scale
         return applyUserOffsets(toMap.boxes, userOffsets)
             .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
-            .filter {
-                p.x < it.x + band || p.x > it.x + it.w - band ||
-                    p.y < it.y + band || p.y > it.y + it.h - band
-            }
             .maxByOrNull { it.depth * 2 + if (it.folder) 0 else 1 }
     }
 
