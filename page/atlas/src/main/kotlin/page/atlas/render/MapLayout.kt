@@ -356,10 +356,10 @@ private fun shelfPack(items: List<Placed>, offsets: Map<String, Offset>): Triple
     var maxW = 0f
     var maxH = 0f
     for ((index, item) in items.withIndex()) {
-        val off = offsets[item.id] ?: Offset.Zero
-        var px = homes[index].first + off.x
-        var py = homes[index].second + off.y
-        while (true) {
+        val off = offsets[item.id]
+        var px = homes[index].first + (off?.x ?: 0f)
+        var py = homes[index].second + (off?.y ?: 0f)
+        while (off == null) {
             val hit = placed.firstOrNull { r ->
                 px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h
             } ?: break
@@ -368,8 +368,8 @@ private fun shelfPack(items: List<Placed>, offsets: Map<String, Offset>): Triple
             if (dx <= dy) px += dx else py += dy
         }
         placed += floatArrayOf(px, py, item.w, item.h)
-        val lx = px - off.x
-        val ly = py - off.y
+        val lx = px - (off?.x ?: 0f)
+        val ly = py - (off?.y ?: 0f)
         out += item.boxes.map { it.copy(x = it.x + lx, y = it.y + ly) }
         maxW = max(maxW, lx + item.w)
         maxH = max(maxH, ly + item.h)

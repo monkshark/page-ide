@@ -291,6 +291,26 @@ class MapLayoutTest {
     }
 
     @Test
+    fun `user moved boxes are never pushed even inside the footprint`() {
+        val slice = GraphSlice(
+            listOf(node("ws/a/x.kt", NodeKind.ACTIVE), node("ws/a/y.kt")) +
+                ('b'..'h').map { node("ws/$it/f.kt") },
+            emptyList(),
+        )
+        val collapsed = buildMap(slice, emptySet(), width)
+        val pushed = buildMap(slice, setOf(id("ws/a")), width)
+        val victim = collapsed.boxes.first { chip ->
+            chip.id != id("ws/a") &&
+                pushed.boxes.first { it.id == chip.id }.let { it.x != chip.x || it.y != chip.y }
+        }
+        val offsets = mapOf(victim.id to Offset(1f, 1f))
+        val expanded = buildMap(slice, setOf(id("ws/a")), width, offsets)
+        val after = expanded.boxes.first { it.id == victim.id }
+        assertEquals(victim.x, after.x)
+        assertEquals(victim.y, after.y)
+    }
+
+    @Test
     fun `moving a child stretches its expanded parent to keep containing it`() {
         val slice = GraphSlice(
             listOf(

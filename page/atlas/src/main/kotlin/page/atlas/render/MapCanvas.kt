@@ -92,7 +92,24 @@ internal fun MapCanvas(
 
     LaunchedEffect(map) {
         if (toMap == map) return@LaunchedEffect
-        fromMap = lerpModel(fromMap, toMap, anim.value)
+        val prevById = toMap.boxes.associateBy { it.id }
+        val nextById = map.boxes.associateBy { it.id }
+        var base = lerpModel(fromMap, toMap, anim.value)
+        for (id in userOffsets.keys.toList()) {
+            val prev = prevById[id] ?: continue
+            val next = nextById[id] ?: continue
+            val dx = prev.x - next.x
+            val dy = prev.y - next.y
+            if (dx == 0f && dy == 0f) continue
+            userOffsets[id] = userOffsets.getValue(id) + Offset(dx, dy)
+            base = MapModel(
+                base.boxes.map { if (belongsTo(it.id, id)) it.copy(x = it.x - dx, y = it.y - dy) else it },
+                base.edges,
+                base.width,
+                base.height,
+            )
+        }
+        fromMap = base
         toMap = map
         val startPan = pan
         val endPan = panTarget ?: startPan
