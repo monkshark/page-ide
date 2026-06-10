@@ -10,13 +10,10 @@ import java.nio.file.Path
 
 private var backendsRegistered = false
 
-private val nonRoutingBackendIds = setOf("flutter")
-
 internal fun registerAllBackends() {
     if (backendsRegistered) return
     backendsRegistered = true
     for (def in LanguageRegistry.all()) {
-        if (def.id in nonRoutingBackendIds) continue
         if (LspBackends.byId(def.id) != null) continue
         LspBackends.register(GenericLanguageBackend(
             definition = def,
@@ -37,6 +34,24 @@ internal fun registerAllBackends() {
             },
         ))
     }
+    LspBackends.routingInterceptor = { path, workspaceRoot ->
+        if (isFlutterDartFile(path, workspaceRoot)) LspBackends.byId("flutter") else null
+    }
+}
+
+private const val FLUTTER_DETECT_TTL_MS = 30_000L
+private val flutterDirCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Boolean>>()
+
+internal fun isFlutterDartFile(path: Path, workspaceRoot: Path?): Boolean {
+    val name = path.fileName?.toString() ?: return false
+    if (!name.endsWith(".dart", ignoreCase = true)) return false
+    val dir = path.parent ?: return false
+    val key = "${workspaceRoot?.toAbsolutePath()?.normalize()}|${dir.toAbsolutePath().normalize()}"
+    val now = System.currentTimeMillis()
+    flutterDirCache[key]?.let { (at, hit) -> if (now - at < FLUTTER_DETECT_TTL_MS) return hit }
+    val hit = runCatching { FlutterProjectDetector.flutterRootFor(path, workspaceRoot) != null }.getOrDefault(false)
+    flutterDirCache[key] = now to hit
+    return hit
 }
 
 internal fun resolveLanguageForPath(path: Path): page.lsp.LanguageDefinition? {
@@ -48,13 +63,15 @@ internal fun resolveLanguageForPath(path: Path): page.lsp.LanguageDefinition? {
 
 @androidx.compose.runtime.Composable
 internal fun lspStatusLineText(lspRouter: LspRouter, activePath: Path?): String? {
-    val definition = activePath?.let(::resolveLanguageForPath)
+    val routedBackend = activePath?.let { lspRouter.backendFor(it) }
+    val definition = routedBackend?.let { LanguageRegistry.byId(it.id) }
+        ?: activePath?.let(::resolveLanguageForPath)
     val langId = definition?.id
     val displayName = definition?.displayName
     val isKotlin = langId == "kotlin" || (langId == null && activePath?.fileName?.toString()?.endsWith(".kt") != false)
     if (langId == null && !isKotlin) return null
     val resolvedId = langId ?: "kotlin"
-    val resolvedName = displayName ?: "Kotlin"
+    val resolvedName = (displayName ?: "Kotlin").substringBefore(" (")
     val ctrl = activePath?.let { lspRouter.controllerFor(it) }
     val installer = LspInstallers.forId(resolvedId) ?: return when {
         isKotlin && ctrl?.status?.value == LspController.Status.MISSING -> "LSP · kotlin-language-server missing"

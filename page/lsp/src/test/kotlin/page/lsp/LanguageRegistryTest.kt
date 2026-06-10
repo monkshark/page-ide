@@ -31,6 +31,13 @@ class LanguageRegistryTest {
     }
 
     @Test
+    fun flutterSpeaksDartLanguageIdOverLsp() {
+        assertEquals("dart", LanguageRegistry.byId("flutter")?.lspLanguageId)
+        assertEquals("dart", LanguageRegistry.byId("dart")?.lspLanguageId)
+        assertEquals("kotlin", LanguageRegistry.byId("kotlin")?.lspLanguageId)
+    }
+
+    @Test
     fun bundledRegistryHasUniqueIds() {
         val all = LanguageRegistry.all()
         val ids = all.map { it.id }
