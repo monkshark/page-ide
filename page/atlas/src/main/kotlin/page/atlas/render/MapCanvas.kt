@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,21 +51,32 @@ internal fun MapCanvas(
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val weightStyle = TextStyle(fontSize = 9.sp, color = labelColor)
     val effectiveExpanded = expandedDirs ?: remember(slice) { defaultExpandedDirs(slice) }
-    val map = remember(slice, effectiveExpanded) {
-        buildMap(slice, effectiveExpanded) { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
-    }
+    val measureWidth: (String) -> Float =
+        { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
+    val map = remember(slice, effectiveExpanded) { buildMap(slice, effectiveExpanded, measureWidth) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var pan by remember { mutableStateOf(Offset.Zero) }
-    var zoomUser by remember { mutableStateOf(1f) }
+    var scale by remember { mutableStateOf(0f) }
+    var fitScale by remember { mutableStateOf(1f) }
+    var fittedSlice by remember { mutableStateOf<GraphSlice?>(null) }
 
-    fun viewTransform(): Pair<Offset, Float> {
+    fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
         val ch = canvasSize.height.toFloat()
         if (cw <= 0f || ch <= 0f || map.width <= 0f || map.height <= 0f) return Offset.Zero to 1f
         val fit = min(cw / (map.width + 48f), ch / (map.height + 48f)).coerceAtMost(1.4f)
-        val scale = fit * zoomUser
-        val base = Offset((cw - map.width * scale) / 2f, (ch - map.height * scale) / 2f) + pan
-        return base to scale
+        return Offset((cw - map.width * fit) / 2f, (ch - map.height * fit) / 2f) to fit
+    }
+
+    fun viewTransform(): Pair<Offset, Float> = if (scale > 0f) pan to scale else fitTransform()
+
+    LaunchedEffect(slice, canvasSize) {
+        if (canvasSize.width <= 0 || map.width <= 0f || fittedSlice == slice) return@LaunchedEffect
+        val (p, s) = fitTransform()
+        pan = p
+        scale = s
+        fitScale = s
+        fittedSlice = slice
     }
 
     fun boxAt(pos: Offset): MapBox? {
@@ -94,14 +106,19 @@ internal fun MapCanvas(
                     pan += dragAmount
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(map) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         if (event.type == PointerEventType.Scroll) {
-                            val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                            val change = event.changes.firstOrNull()
+                            val delta = change?.scrollDelta?.y ?: 0f
                             if (delta != 0f) {
-                                zoomUser = (zoomUser * if (delta > 0f) 0.9f else 1.1f).coerceIn(0.3f, 5f)
+                                val (curPan, curScale) = viewTransform()
+                                val next = (curScale * if (delta > 0f) 0.9f else 1.1f)
+                                    .coerceIn(fitScale * 0.3f, fitScale * 5f)
+                                pan = change!!.position - (change.position - curPan) * (next / curScale)
+                                scale = next
                             }
                         }
                     }
@@ -113,9 +130,16 @@ internal fun MapCanvas(
                     onDoubleTap = { tap ->
                         val hit = boxAt(tap) ?: return@detectTapGestures
                         if (hit.folder) {
-                            onExpandedDirsChange(
-                                if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id,
-                            )
+                            val next =
+                                if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
+                            val nextBox = buildMap(slice, next, measureWidth).boxes
+                                .firstOrNull { it.id == hit.id }
+                            if (nextBox != null) {
+                                val (curPan, curScale) = viewTransform()
+                                pan = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
+                                scale = curScale
+                            }
+                            onExpandedDirsChange(next)
                         } else {
                             hit.path?.let(onNodeClick)
                         }
