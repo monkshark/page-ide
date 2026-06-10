@@ -116,9 +116,16 @@ internal fun MapCanvas(
         val (base, scale) = viewTransform()
         if (scale <= 0f) return null
         val p = Offset((pos.x - base.x) / scale, (pos.y - base.y) / scale)
-        return applyUserOffsets(toMap.boxes, userOffsets)
+        val hit = applyUserOffsets(toMap.boxes, userOffsets)
             .filter { p.x >= it.x && p.x <= it.x + it.w && p.y >= it.y && p.y <= it.y + it.h }
             .maxByOrNull { it.depth * 2 + if (it.folder) 0 else 1 }
+            ?: return null
+        if (!hit.folder || !hit.expanded) return hit
+        val band = 8f / scale
+        val onHandle = p.y < hit.y + MAP_HEADER_H ||
+            p.x < hit.x + band || p.x > hit.x + hit.w - band ||
+            p.y > hit.y + hit.h - band
+        return if (onHandle) hit else null
     }
 
     val primary = MaterialTheme.colorScheme.primary
