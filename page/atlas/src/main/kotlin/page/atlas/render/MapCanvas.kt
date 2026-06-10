@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,7 +61,10 @@ internal fun MapCanvas(
     val measureWidth: (String) -> Float =
         { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
     val userOffsets = remember { mutableStateMapOf<String, Offset>() }
-    val map = remember(slice, effectiveExpanded) { buildMap(slice, effectiveExpanded, measureWidth, userOffsets) }
+    val expandOrder = remember { mutableStateListOf<String>() }
+    val map = remember(slice, effectiveExpanded) {
+        buildMap(slice, effectiveExpanded, measureWidth, userOffsets, expandOrder.toList())
+    }
     val anim = remember { Animatable(1f) }
     var fromMap by remember { mutableStateOf(map) }
     var toMap by remember { mutableStateOf(map) }
@@ -202,8 +206,12 @@ internal fun MapCanvas(
                         if (hit.folder) {
                             val next =
                                 if (hit.expanded) effectiveExpanded - hit.id else effectiveExpanded + hit.id
-                            val nextBox = applyUserOffsets(buildMap(slice, next, measureWidth, userOffsets).boxes, userOffsets)
-                                .firstOrNull { it.id == hit.id }
+                            expandOrder.remove(hit.id)
+                            if (!hit.expanded) expandOrder.add(hit.id)
+                            val nextBox = applyUserOffsets(
+                                buildMap(slice, next, measureWidth, userOffsets, expandOrder.toList()).boxes,
+                                userOffsets,
+                            ).firstOrNull { it.id == hit.id }
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
                                 if (scale <= 0f) scale = curScale

@@ -271,6 +271,48 @@ class MapLayoutTest {
     }
 
     @Test
+    fun `expanding pushes an already expanded sibling and collapsing restores it`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/alpha.kt", NodeKind.ACTIVE),
+                node("ws/a/bravo.kt"),
+                node("ws/b/alpha.kt"),
+                node("ws/b/bravo.kt"),
+            ) + ('c'..'f').map { node("ws/$it/f.kt") },
+            emptyList(),
+        )
+        val collapsed = buildMap(slice, emptySet(), width)
+        val aHome = collapsed.boxes.first { it.id == id("ws/a") }
+        val bHome = collapsed.boxes.first { it.id == id("ws/b") }
+        val aOnly = buildMap(slice, setOf(id("ws/a")), width, emptyMap(), listOf(id("ws/a")))
+        val aFirst = aOnly.boxes.first { it.id == id("ws/a") }
+        assertEquals(aHome.x, aFirst.x)
+        assertEquals(aHome.y, aFirst.y)
+        val both = buildMap(
+            slice,
+            setOf(id("ws/a"), id("ws/b")),
+            width,
+            emptyMap(),
+            listOf(id("ws/a"), id("ws/b")),
+        )
+        val bBoth = both.boxes.first { it.id == id("ws/b") }
+        assertEquals(bHome.x, bBoth.x)
+        assertEquals(bHome.y, bBoth.y)
+        val aBoth = both.boxes.first { it.id == id("ws/a") }
+        assertTrue(aBoth.x != aHome.x || aBoth.y != aHome.y)
+        val top = both.boxes.filter { it.depth == 0 }
+        for (i in top.indices) {
+            for (j in i + 1 until top.size) {
+                assertFalse(overlaps(top[i], top[j]))
+            }
+        }
+        val restored = buildMap(slice, setOf(id("ws/a")), width, emptyMap(), listOf(id("ws/a")))
+        val aBack = restored.boxes.first { it.id == id("ws/a") }
+        assertEquals(aHome.x, aBack.x)
+        assertEquals(aHome.y, aBack.y)
+    }
+
+    @Test
     fun `expansion does not push boxes already dragged out of the footprint`() {
         val slice = GraphSlice(
             listOf(node("ws/a/x.kt", NodeKind.ACTIVE), node("ws/a/y.kt")) +
