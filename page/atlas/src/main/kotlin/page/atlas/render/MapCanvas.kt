@@ -6,7 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,12 +31,14 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import java.nio.file.Path as FilePath
@@ -42,7 +46,10 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.min
+import kotlin.math.roundToInt
 import page.atlas.graph.GraphSlice
+import page.ui.CompactDropdown
+import page.ui.CompactMenuItem
 
 @Composable
 internal fun MapCanvas(
@@ -52,6 +59,8 @@ internal fun MapCanvas(
     onNodeClick: (FilePath) -> Unit,
     expandedDirs: Set<String>?,
     onExpandedDirsChange: (Set<String>) -> Unit,
+    filter: MapFilterState,
+    onFilterChange: (MapFilterState) -> Unit,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -63,6 +72,7 @@ internal fun MapCanvas(
     val userOffsets = remember { mutableStateMapOf<String, Offset>() }
     val expandOrder = remember { mutableStateListOf<String>() }
     var justExpandedId by remember { mutableStateOf<String?>(null) }
+    var menu by remember { mutableStateOf<MapMenuTarget?>(null) }
     val map = remember(slice, effectiveExpanded) {
         buildMap(slice, effectiveExpanded, measureWidth, userOffsets, expandOrder.toList(), justExpandedId)
     }
@@ -188,10 +198,14 @@ internal fun MapCanvas(
                     },
                 )
             }
-            .pointerInput(map) {
+            .pointerInput(map, filter) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                            val pos = event.changes.firstOrNull()?.position
+                            if (pos != null) menu = MapMenuTarget(boxAt(pos), pos)
+                        }
                         if (event.type == PointerEventType.Scroll) {
                             val change = event.changes.firstOrNull()
                             val delta = change?.scrollDelta?.y ?: 0f
@@ -409,7 +423,41 @@ internal fun MapCanvas(
             }
         }
     }
+    val menuTarget = menu
+    if (menuTarget != null) {
+        Box(
+            modifier = Modifier.offset {
+                IntOffset(menuTarget.pos.x.roundToInt(), menuTarget.pos.y.roundToInt())
+            },
+        ) {
+            CompactDropdown(expanded = true, onDismissRequest = { menu = null }) {
+                val box = menuTarget.box
+                if (box != null && box.folder) {
+                    CompactMenuItem("Show only this folder", onClick = {
+                        menu = null
+                        onFilterChange(filter.copy(focusDir = box.id))
+                    })
+                    CompactMenuItem("Hide this folder", onClick = {
+                        menu = null
+                        onFilterChange(filter.copy(hiddenDirs = filter.hiddenDirs + box.id))
+                    })
+                    CompactMenuItem("Hide this folder's dependencies", onClick = {
+                        menu = null
+                        onFilterChange(filter.copy(mutedDirs = filter.mutedDirs + box.id))
+                    })
+                }
+                if (filter.active) {
+                    CompactMenuItem("Show everything", onClick = {
+                        menu = null
+                        onFilterChange(MapFilterState())
+                    })
+                }
+            }
+        }
+    }
 }
+
+private data class MapMenuTarget(val box: MapBox?, val pos: Offset)
 
 private fun lerpModel(from: MapModel, to: MapModel, t: Float): MapModel {
     if (t >= 1f) return to
