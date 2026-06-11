@@ -3,6 +3,7 @@ package page.lsp
 import com.google.gson.JsonNull
 import org.eclipse.lsp4j.ApplyWorkspaceEditParams
 import org.eclipse.lsp4j.ApplyWorkspaceEditResponse
+import org.eclipse.lsp4j.CallHierarchyCapabilities
 import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.ConfigurationParams
 import org.eclipse.lsp4j.RegistrationParams
@@ -194,6 +195,7 @@ class LspClient(
                     dataSupport = true
                     resolveSupport = CodeActionResolveSupportCapabilities(listOf("edit"))
                 }
+                callHierarchy = CallHierarchyCapabilities()
                 publishDiagnostics = PublishDiagnosticsCapabilities().apply {
                     tagSupport = org.eclipse.lsp4j.jsonrpc.messages.Either.forRight(
                         DiagnosticsTagSupport(
