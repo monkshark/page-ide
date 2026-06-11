@@ -33,6 +33,7 @@ import page.app.mvi.IdeEvent
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
+import page.atlas.render.MapViewState
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -138,6 +139,7 @@ internal fun IdeMainLayout(
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
     settings: SettingsBinding = SettingsBinding(),
     atlasSlice: GraphSlice = GraphSlice.EMPTY,
+    atlasMapView: MapViewState = remember { MapViewState() },
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -418,6 +420,7 @@ internal fun IdeMainLayout(
                     onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
                     showExpand = true,
                     onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
+                    mapView = atlasMapView,
                 )
             }
             if (codeActionPreviewVisible) {
@@ -594,6 +597,7 @@ internal fun IdeMainLayout(
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,
                 onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
+                mapView = atlasMapView,
             )
         }
         ExpandedPanel.NONE -> Unit

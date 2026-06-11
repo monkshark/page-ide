@@ -278,12 +278,14 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             dispatch = onIdeEvent,
         ).also { ideEffectHandler.bind(it::handleEffect) }
     }
+    val atlasMapView = remember { page.atlas.render.MapViewState() }
     val sessionCoordinator = remember {
         SessionCoordinator(
             editorWorkspace = editorWorkspace,
             layoutUiState = layoutUiState,
             workspaceState = workspaceState,
             terminalManagerProvider = { currentTerminalManager },
+            atlasMapView = atlasMapView,
         )
     }
 
@@ -631,6 +633,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settings = app.settingsBinding(),
                     atlasSlice = atlasSlice,
+                    atlasMapView = atlasMapView,
                   )
                 }
                 if (findInFiles) {

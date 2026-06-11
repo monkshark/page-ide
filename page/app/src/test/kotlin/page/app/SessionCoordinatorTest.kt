@@ -1,5 +1,6 @@
 package page.app
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -7,6 +8,8 @@ import kotlinx.coroutines.runBlocking
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.atlas.render.MapFilterState
+import page.atlas.render.MapViewState
 import page.editor.SplitOrientation
 import page.editor.UndoGroupTracker
 import page.runtime.TerminalManager
@@ -32,12 +35,14 @@ class SessionCoordinatorTest {
         return dir
     }
 
-    private fun coordinator(root: Path): SessionCoordinator = SessionCoordinator(
-        editorWorkspace = editorWorkspace,
-        layoutUiState = layoutUiState,
-        workspaceState = workspaceState,
-        terminalManagerProvider = { TerminalManager(root, scope) },
-    )
+    private fun coordinator(root: Path, atlasMapView: MapViewState = MapViewState()): SessionCoordinator =
+        SessionCoordinator(
+            editorWorkspace = editorWorkspace,
+            layoutUiState = layoutUiState,
+            workspaceState = workspaceState,
+            terminalManagerProvider = { TerminalManager(root, scope) },
+            atlasMapView = atlasMapView,
+        )
 
     @Test
     fun `restore populates holders from a saved session`() {
@@ -105,6 +110,42 @@ class SessionCoordinatorTest {
         assertEquals(280f, snap.sidebarWidth)
         assertTrue(snap.problemsOpen)
         assertTrue(snap.todoOpen)
+    }
+
+    @Test
+    fun `atlas map view round-trips through save and restore`() {
+        val ws = newWorkspace()
+        val view = MapViewState()
+        view.pan = Offset(33f, -7f)
+        view.scale = 1.4f
+        view.userOffsets["box"] = Offset(5f, 6f)
+        view.expandOrder.add("dir")
+        view.expandedDirs = setOf("dir")
+        view.filter = MapFilterState(focusDir = "dir", hiddenDirs = setOf("h"), mutedDirs = setOf("m"))
+        SessionStore.save(ws, coordinator(ws, view).snapshot())
+
+        val restored = MapViewState()
+        runBlocking { coordinator(ws, restored).restore(ws) }
+
+        assertEquals(Offset(33f, -7f), restored.pan)
+        assertEquals(1.4f, restored.scale)
+        assertTrue(restored.fitted)
+        assertEquals(Offset(5f, 6f), restored.userOffsets["box"])
+        assertEquals(listOf("dir"), restored.expandOrder.toList())
+        assertEquals(setOf("dir"), restored.expandedDirs)
+        assertEquals("dir", restored.filter.focusDir)
+        assertEquals(setOf("h"), restored.filter.hiddenDirs)
+        assertEquals(setOf("m"), restored.filter.mutedDirs)
+    }
+
+    @Test
+    fun `restore without atlas map keeps the view unfitted`() {
+        val ws = newWorkspace()
+        SessionStore.save(ws, SessionFile())
+        val restored = MapViewState()
+        runBlocking { coordinator(ws, restored).restore(ws) }
+        assertFalse(restored.fitted)
+        assertEquals(0f, restored.scale)
     }
 
     @Test
