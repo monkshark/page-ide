@@ -44,6 +44,23 @@ class MapLayoutTest {
     }
 
     @Test
+    fun `file box grows with dependents`() {
+        val slice = GraphSlice(
+            listOf(node("ws/hub.kt"), node("ws/aaa.kt"), node("ws/bbb.kt"), node("ws/ccc.kt")),
+            listOf(
+                edge("ws/aaa.kt", "ws/hub.kt"),
+                edge("ws/bbb.kt", "ws/hub.kt"),
+                edge("ws/ccc.kt", "ws/hub.kt"),
+            ),
+        )
+        val map = buildMap(slice, emptySet(), width)
+        val hub = map.boxes.first { it.id == id("ws/hub.kt") }
+        val leaf = map.boxes.first { it.id == id("ws/aaa.kt") }
+        assertTrue(hub.w > leaf.w)
+        assertTrue(hub.h > leaf.h)
+    }
+
+    @Test
     fun `collapsed folders aggregate file counts and edge weights`() {
         val slice = GraphSlice(
             listOf(
