@@ -1,5 +1,8 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CallHierarchyIncomingCallsParams
+import org.eclipse.lsp4j.CallHierarchyOutgoingCallsParams
+import org.eclipse.lsp4j.CallHierarchyPrepareParams
 import org.eclipse.lsp4j.CodeActionContext
 import org.eclipse.lsp4j.CodeActionParams
 import org.eclipse.lsp4j.CompletionContext
@@ -271,6 +274,25 @@ class LspWorkspace(private val client: LspClient) {
                 }
             }
         }
+    }
+
+    fun prepareCallHierarchy(uri: String, line: Int, character: Int): CompletableFuture<List<CallHierarchyItemInfo>> {
+        if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
+        val params = CallHierarchyPrepareParams(TextDocumentIdentifier(uri), Position(line, character))
+        return sender.request { client.server().textDocumentService.prepareCallHierarchy(params) }
+            .thenApply { items -> items.orEmpty().mapNotNull { CallHierarchyItemInfo.fromLsp(it) } }
+    }
+
+    fun incomingCalls(item: CallHierarchyItemInfo): CompletableFuture<List<CallHierarchyCall>> {
+        val params = CallHierarchyIncomingCallsParams(item.raw)
+        return sender.request { client.server().textDocumentService.callHierarchyIncomingCalls(params) }
+            .thenApply { calls -> calls.orEmpty().mapNotNull { CallHierarchyCall.fromIncoming(it) } }
+    }
+
+    fun outgoingCalls(item: CallHierarchyItemInfo): CompletableFuture<List<CallHierarchyCall>> {
+        val params = CallHierarchyOutgoingCallsParams(item.raw)
+        return sender.request { client.server().textDocumentService.callHierarchyOutgoingCalls(params) }
+            .thenApply { calls -> calls.orEmpty().mapNotNull { CallHierarchyCall.fromOutgoing(it) } }
     }
 
     fun documentSymbols(uri: String): CompletableFuture<List<DocumentSymbolEntry>> {

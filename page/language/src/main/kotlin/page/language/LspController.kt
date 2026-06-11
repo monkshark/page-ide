@@ -41,6 +41,8 @@ import page.lsp.LspBackends
 import page.lsp.LspClient
 import page.lsp.LspState
 import page.lsp.LspWorkspace
+import page.lsp.CallHierarchyCall
+import page.lsp.CallHierarchyItemInfo
 import page.lsp.CodeActionEntry
 import page.lsp.ReferenceLocation
 import page.lsp.RenameEdit
@@ -138,6 +140,9 @@ class LspController(
     @Volatile private var inlayHintSupported: Boolean = false
     @Volatile private var completionResolveSupported: Boolean = false
     @Volatile private var executeCommandSupported: Boolean = false
+    @Volatile private var callHierarchySupported: Boolean = false
+
+    val supportsCallHierarchy: Boolean get() = status.value == Status.READY && callHierarchySupported
 
     @Volatile var applyEditHandler: ((RenameWorkspaceEdit) -> Boolean)? = null
 
@@ -225,6 +230,8 @@ class LspController(
                     println("[lsp] completion resolve support = $completionResolveSupported")
                     executeCommandSupported = detectExecuteCommandSupport(result.capabilities)
                     println("[lsp] executeCommand support = $executeCommandSupported")
+                    callHierarchySupported = detectCallHierarchySupport(result.capabilities)
+                    println("[lsp] callHierarchy support = $callHierarchySupported")
                     flushPendingOpens()
                     openWorkspaceFiles()
                     applyJavaCompilerPolicies(backend)
@@ -779,6 +786,76 @@ class LspController(
                     println("[lsp] documentSymbols ✓ $uri — ${list.size} top-level sym(s) [${ms}ms]")
                 }
             }
+    }
+
+    fun prepareCallHierarchy(path: Path, line: Int, character: Int): CompletableFuture<List<CallHierarchyItemInfo>> {
+        if (!supportsCallHierarchy) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val uri = path.toUri().toString()
+        if (!ws.isOpen(uri)) return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+        return ws.prepareCallHierarchy(uri, line, character)
+            .whenComplete { items, err ->
+                val ms = (System.nanoTime() - tStart) / 1_000_000
+                if (err != null) {
+                    if (isUnsupportedOperation(err)) {
+                        callHierarchySupported = false
+                        println("[lsp] prepareCallHierarchy unsupported by server — disabling future calls [${ms}ms]")
+                    } else {
+                        println("[lsp] prepareCallHierarchy ✗ $uri @($line,$character): ${err.message} [${ms}ms]")
+                    }
+                } else {
+                    val list = items.orEmpty()
+                    println("[lsp] prepareCallHierarchy ✓ $uri @($line,$character) — ${list.size} item(s) [${ms}ms]")
+                    list.take(5).forEachIndexed { i, it ->
+                        println("  [$i] ${it.name} kind=${it.kind} ${it.uri} @(${it.selectionRange.startLine},${it.selectionRange.startCharacter})")
+                    }
+                }
+            }
+            .exceptionally { emptyList() }
+    }
+
+    fun incomingCalls(item: CallHierarchyItemInfo): CompletableFuture<List<CallHierarchyCall>> {
+        if (!supportsCallHierarchy) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+        return ws.incomingCalls(item)
+            .whenComplete { calls, err -> logCallHierarchyCalls("incomingCalls", item, calls, err, tStart) }
+            .exceptionally { emptyList() }
+    }
+
+    fun outgoingCalls(item: CallHierarchyItemInfo): CompletableFuture<List<CallHierarchyCall>> {
+        if (!supportsCallHierarchy) return CompletableFuture.completedFuture(emptyList())
+        val ws = workspace ?: return CompletableFuture.completedFuture(emptyList())
+        val tStart = System.nanoTime()
+        return ws.outgoingCalls(item)
+            .whenComplete { calls, err -> logCallHierarchyCalls("outgoingCalls", item, calls, err, tStart) }
+            .exceptionally { emptyList() }
+    }
+
+    private fun logCallHierarchyCalls(
+        what: String,
+        item: CallHierarchyItemInfo,
+        calls: List<CallHierarchyCall>?,
+        err: Throwable?,
+        tStart: Long,
+    ) {
+        val ms = (System.nanoTime() - tStart) / 1_000_000
+        if (err != null) {
+            if (isUnsupportedOperation(err)) {
+                callHierarchySupported = false
+                println("[lsp] $what unsupported by server — disabling future calls [${ms}ms]")
+            } else {
+                println("[lsp] $what ✗ '${item.name}': ${err.message} [${ms}ms]")
+            }
+        } else {
+            val list = calls.orEmpty()
+            println("[lsp] $what ✓ '${item.name}' — ${list.size} call(s) [${ms}ms]")
+            list.take(5).forEachIndexed { i, c ->
+                println("  [$i] ${c.item.name} kind=${c.item.kind} ${c.item.uri} (${c.fromRanges.size} site(s))")
+            }
+            if (list.size > 5) println("  … (+${list.size - 5} more)")
+        }
     }
 
     fun workspaceSymbolsLocated(query: String): CompletableFuture<List<WorkspaceSymbolLocated>> {

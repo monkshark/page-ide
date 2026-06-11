@@ -18,6 +18,15 @@ internal fun detectInlayHintSupport(caps: org.eclipse.lsp4j.ServerCapabilities?)
     }
 }
 
+internal fun detectCallHierarchySupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean {
+    val ch = caps?.callHierarchyProvider ?: return false
+    return when {
+        ch.isLeft -> ch.left == true
+        ch.isRight -> ch.right != null
+        else -> false
+    }
+}
+
 internal fun detectCompletionResolveSupport(caps: org.eclipse.lsp4j.ServerCapabilities?): Boolean =
     caps?.completionProvider?.resolveProvider == true
 

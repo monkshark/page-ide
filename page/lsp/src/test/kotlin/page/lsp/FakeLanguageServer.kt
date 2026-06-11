@@ -1,5 +1,11 @@
 package page.lsp
 
+import org.eclipse.lsp4j.CallHierarchyIncomingCall
+import org.eclipse.lsp4j.CallHierarchyIncomingCallsParams
+import org.eclipse.lsp4j.CallHierarchyItem
+import org.eclipse.lsp4j.CallHierarchyOutgoingCall
+import org.eclipse.lsp4j.CallHierarchyOutgoingCallsParams
+import org.eclipse.lsp4j.CallHierarchyPrepareParams
 import org.eclipse.lsp4j.CodeAction
 import org.eclipse.lsp4j.CodeActionParams
 import org.eclipse.lsp4j.Command
@@ -70,6 +76,9 @@ class FakeLanguageServer : LanguageServer {
     val inlayHintCalls = ConcurrentLinkedQueue<InlayHintParams>()
     val completionCalls = ConcurrentLinkedQueue<CompletionParams>()
     val resolveCompletionCalls = ConcurrentLinkedQueue<CompletionItem>()
+    val prepareCallHierarchyCalls = ConcurrentLinkedQueue<CallHierarchyPrepareParams>()
+    val incomingCallsCalls = ConcurrentLinkedQueue<CallHierarchyIncomingCallsParams>()
+    val outgoingCallsCalls = ConcurrentLinkedQueue<CallHierarchyOutgoingCallsParams>()
     val didChangeConfigurationCalls = ConcurrentLinkedQueue<DidChangeConfigurationParams>()
     @Volatile var hoverResponse: Hover? = null
     @Volatile var definitionResponse: Either<MutableList<out Location>, MutableList<out LocationLink>>? = null
@@ -84,6 +93,9 @@ class FakeLanguageServer : LanguageServer {
     @Volatile var inlayHintResponse: MutableList<InlayHint>? = null
     @Volatile var completionResponse: Either<MutableList<CompletionItem>, CompletionList>? = null
     @Volatile var resolveCompletionResponse: CompletionItem? = null
+    @Volatile var prepareCallHierarchyResponse: MutableList<CallHierarchyItem>? = null
+    @Volatile var incomingCallsResponse: MutableList<CallHierarchyIncomingCall>? = null
+    @Volatile var outgoingCallsResponse: MutableList<CallHierarchyOutgoingCall>? = null
     @Volatile var advertiseCompletionResolve: Boolean = true
     @Volatile var shutdownCalled = false
     @Volatile var exitCalled = false
@@ -150,6 +162,24 @@ class FakeLanguageServer : LanguageServer {
         override fun resolveCompletionItem(unresolved: CompletionItem): CompletableFuture<CompletionItem> {
             resolveCompletionCalls += unresolved
             return CompletableFuture.completedFuture(resolveCompletionResponse ?: unresolved)
+        }
+        override fun prepareCallHierarchy(
+            params: CallHierarchyPrepareParams,
+        ): CompletableFuture<MutableList<CallHierarchyItem>> {
+            prepareCallHierarchyCalls += params
+            return CompletableFuture.completedFuture(prepareCallHierarchyResponse)
+        }
+        override fun callHierarchyIncomingCalls(
+            params: CallHierarchyIncomingCallsParams,
+        ): CompletableFuture<MutableList<CallHierarchyIncomingCall>> {
+            incomingCallsCalls += params
+            return CompletableFuture.completedFuture(incomingCallsResponse)
+        }
+        override fun callHierarchyOutgoingCalls(
+            params: CallHierarchyOutgoingCallsParams,
+        ): CompletableFuture<MutableList<CallHierarchyOutgoingCall>> {
+            outgoingCallsCalls += params
+            return CompletableFuture.completedFuture(outgoingCallsResponse)
         }
     }
 

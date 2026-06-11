@@ -1,5 +1,6 @@
 package page.language
 
+import org.eclipse.lsp4j.CallHierarchyRegistrationOptions
 import org.eclipse.lsp4j.CompletionOptions
 import org.eclipse.lsp4j.ExecuteCommandOptions
 import org.eclipse.lsp4j.InlayHintRegistrationOptions
@@ -87,6 +88,25 @@ class ServerCapabilityDetectionTest {
         }))
         assertTrue(detectCompletionResolveSupport(ServerCapabilities().apply {
             completionProvider = CompletionOptions().apply { resolveProvider = true }
+        }))
+    }
+
+    @Test
+    fun `callHierarchy disabled without provider`() {
+        assertFalse(detectCallHierarchySupport(null))
+        assertFalse(detectCallHierarchySupport(ServerCapabilities()))
+        assertFalse(detectCallHierarchySupport(ServerCapabilities().apply {
+            callHierarchyProvider = Either.forLeft(false)
+        }))
+    }
+
+    @Test
+    fun `callHierarchy enabled by boolean true or registration options`() {
+        assertTrue(detectCallHierarchySupport(ServerCapabilities().apply {
+            callHierarchyProvider = Either.forLeft(true)
+        }))
+        assertTrue(detectCallHierarchySupport(ServerCapabilities().apply {
+            callHierarchyProvider = Either.forRight(CallHierarchyRegistrationOptions())
         }))
     }
 
