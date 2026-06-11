@@ -60,6 +60,8 @@ internal fun MapCanvas(
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsImpacted: Map<String, Int> = emptyMap(),
     activeId: String? = null,
+    tracePath: List<String> = emptyList(),
+    onTracePath: ((String) -> Unit)? = null,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -192,6 +194,7 @@ internal fun MapCanvas(
     val tertiary = MaterialTheme.colorScheme.tertiary
     val errorColor = MaterialTheme.colorScheme.error
     val cycleKeys = remember(toMap) { mapCycleEdges(toMap.edges) }
+    val traceKeys = remember(toMap, tracePath) { traceEdgeKeys(toMap.boxes, tracePath) }
     val vcsCounts = remember(map, vcsMarks) {
         vcsFolderCounts(vcsMarks, map.boxes.filter { it.folder }.map { it.id })
     }
@@ -351,7 +354,9 @@ internal fun MapCanvas(
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
                 val touchesSelection = edge.from == selectedId || edge.to == selectedId
                 val inCycle = (edge.from to edge.to) in cycleKeys
+                val onTrace = (edge.from to edge.to) in traceKeys
                 val lineColor = when {
+                    onTrace -> tertiary.copy(alpha = 0.95f)
                     inCycle && !focusActive -> errorColor.copy(alpha = 0.85f)
                     !focusActive -> edgeColor.copy(alpha = baseAlpha)
                     edge.from == selectedId -> primary.copy(alpha = 0.9f)
@@ -367,7 +372,7 @@ internal fun MapCanvas(
                     curve,
                     lineColor.fade(a),
                     style = Stroke(
-                        width = stroke,
+                        width = if (onTrace) maxOf(stroke, 3f * inv) else stroke,
                         cap = StrokeCap.Round,
                         pathEffect = if (inCycle) {
                             PathEffect.dashPathEffect(floatArrayOf(7f * inv, 5f * inv))
@@ -557,6 +562,14 @@ internal fun MapCanvas(
         ) {
             CompactDropdown(expanded = true, onDismissRequest = { menu = null }) {
                 val box = menuTarget.box
+                if (onTracePath != null && box != null && !box.folder &&
+                    selectedId != null && box.id != selectedId
+                ) {
+                    CompactMenuItem("Trace path from selection", onClick = {
+                        menu = null
+                        onTracePath(box.id)
+                    })
+                }
                 if (box != null && box.folder) {
                     CompactMenuItem("Show only this folder", onClick = {
                         menu = null
@@ -589,6 +602,19 @@ internal fun MapCanvas(
 }
 
 internal const val MAP_EDGE_BADGE_LIMIT = 24
+
+internal fun traceEdgeKeys(boxes: List<MapBox>, path: List<String>): Set<Pair<String, String>> {
+    if (path.size < 2) return emptySet()
+    fun representative(id: String): String? =
+        boxes.filter { belongsTo(id, it.id) }.maxByOrNull { it.depth }?.id
+    val keys = HashSet<Pair<String, String>>()
+    for (i in 0 until path.size - 1) {
+        val from = representative(path[i]) ?: continue
+        val to = representative(path[i + 1]) ?: continue
+        if (from != to) keys += from to to
+    }
+    return keys
+}
 
 internal fun mapEdgeBaseAlpha(edgeCount: Int): Float =
     0.8f - 0.5f * ((edgeCount - 12f) / 48f).coerceIn(0f, 1f)
