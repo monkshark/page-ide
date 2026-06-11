@@ -13,8 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,20 +55,18 @@ internal fun MapCanvas(
     selectedId: String?,
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
-    expandedDirs: Set<String>?,
-    onExpandedDirsChange: (Set<String>) -> Unit,
-    filter: MapFilterState,
-    onFilterChange: (MapFilterState) -> Unit,
+    view: MapViewState,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val weightStyle = TextStyle(fontSize = 9.sp, color = labelColor)
-    val effectiveExpanded = expandedDirs ?: remember(slice) { defaultExpandedDirs(slice) }
+    val filter = view.filter
+    val effectiveExpanded = view.expandedDirs ?: remember(slice) { defaultExpandedDirs(slice) }
     val measureWidth: (String) -> Float =
         { textMeasurer.measure(AnnotatedString(it), labelStyle).size.width.toFloat() }
-    val userOffsets = remember { mutableStateMapOf<String, Offset>() }
-    val expandOrder = remember { mutableStateListOf<String>() }
+    val userOffsets = view.userOffsets
+    val expandOrder = view.expandOrder
     var justExpandedId by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf<MapMenuTarget?>(null) }
     val map = remember(slice, effectiveExpanded) {
@@ -81,10 +77,10 @@ internal fun MapCanvas(
     var toMap by remember { mutableStateOf(map) }
     var panTarget by remember { mutableStateOf<Offset?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    var pan by remember { mutableStateOf(Offset.Zero) }
-    var scale by remember { mutableStateOf(0f) }
+    var pan by view::pan
+    var scale by view::scale
     var fitScale by remember { mutableStateOf(1f) }
-    var fitted by remember { mutableStateOf(false) }
+    var fitted by view::fitted
 
     fun fitTransform(): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
@@ -96,12 +92,13 @@ internal fun MapCanvas(
 
     fun viewTransform(): Pair<Offset, Float> = if (scale > 0f) pan to scale else fitTransform()
 
-    LaunchedEffect(slice, canvasSize) {
-        if (fitted || canvasSize.width <= 0 || map.width <= 0f) return@LaunchedEffect
+    LaunchedEffect(slice, canvasSize, fitted) {
+        if (canvasSize.width <= 0 || map.width <= 0f) return@LaunchedEffect
         val (p, s) = fitTransform()
+        fitScale = s
+        if (fitted) return@LaunchedEffect
         pan = p
         scale = s
-        fitScale = s
         fitted = true
     }
 
@@ -240,7 +237,7 @@ internal fun MapCanvas(
                                 if (scale <= 0f) scale = curScale
                                 panTarget = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
                             }
-                            onExpandedDirsChange(next)
+                            view.expandedDirs = next
                         } else {
                             hit.path?.let(onNodeClick)
                         }
@@ -332,7 +329,7 @@ internal fun MapCanvas(
                 }
                 val curve = Path().apply {
                     moveTo(start.x, start.y)
-                    quadraticBezierTo(control.x, control.y, end.x, end.y)
+                    quadraticTo(control.x, control.y, end.x, end.y)
                 }
                 drawPath(curve, lineColor.fade(a), style = Stroke(width = stroke, cap = StrokeCap.Round))
                 drawMapArrow(control, end, lineColor.fade(a), inv)
@@ -438,23 +435,29 @@ internal fun MapCanvas(
                 if (box != null && box.folder) {
                     CompactMenuItem("Show only this folder", onClick = {
                         menu = null
-                        onFilterChange(filter.copy(focusDir = box.id))
+                        view.filter = filter.copy(focusDir = box.id)
                     })
                     CompactMenuItem("Hide this folder", onClick = {
                         menu = null
-                        onFilterChange(filter.copy(hiddenDirs = filter.hiddenDirs + box.id))
+                        view.filter = filter.copy(hiddenDirs = filter.hiddenDirs + box.id)
                     })
                     CompactMenuItem("Hide this folder's dependencies", onClick = {
                         menu = null
-                        onFilterChange(filter.copy(mutedDirs = filter.mutedDirs + box.id))
+                        view.filter = filter.copy(mutedDirs = filter.mutedDirs + box.id)
                     })
                 }
                 if (filter.active) {
                     CompactMenuItem("Show everything", onClick = {
                         menu = null
-                        onFilterChange(MapFilterState())
+                        view.filter = MapFilterState()
                     })
                 }
+                CompactMenuItem("Reset view", onClick = {
+                    menu = null
+                    justExpandedId = null
+                    onSelect(null)
+                    view.reset()
+                })
             }
         }
     }
