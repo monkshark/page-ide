@@ -93,6 +93,7 @@ import page.editor.TextBuffer
 import page.editor.TextEdit
 import page.editor.Token
 import page.editor.TokenKind
+import page.editor.TokenShift
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.launch
@@ -122,6 +123,8 @@ import page.ui.SignatureHelpDisplay
 import page.ui.SyntaxPalette
 
 private const val ASYNC_TOKENIZE_THRESHOLD = 20_000
+
+private data class TokenizedText(val text: String, val tokens: List<Token>)
 
 @Composable
 fun EditorPanel(
@@ -193,14 +196,18 @@ fun EditorPanel(
     }.toMap()
 
     val sourceText = value.text
-    val tokens by produceState(initialValue = emptyList<Token>(), sourceText, lexer) {
+    val tokenized by produceState(initialValue = TokenizedText("", emptyList()), sourceText, lexer) {
         val lx = lexer
         if (lx == null) {
-            this.value = emptyList()
+            this.value = TokenizedText(sourceText, emptyList())
             return@produceState
         }
         if (sourceText.length > ASYNC_TOKENIZE_THRESHOLD) delay(60)
-        this.value = withContext(Dispatchers.Default) { lx.tokenize(sourceText) }
+        this.value = withContext(Dispatchers.Default) { TokenizedText(sourceText, lx.tokenize(sourceText)) }
+    }
+    val tokens = remember(tokenized, sourceText) {
+        if (tokenized.text == sourceText) tokenized.tokens
+        else TokenShift.shift(tokenized.tokens, tokenized.text, sourceText)
     }
 
     val multiKeywordComments = remember(value.text, tokens) {
