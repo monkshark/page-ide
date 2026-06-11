@@ -11,6 +11,7 @@ class AtlasViewState {
     var pitch by mutableStateOf(0.5f)
     var zoomUser by mutableStateOf(1f)
     var selectedId by mutableStateOf<String?>(null)
+    var pendingFocusId by mutableStateOf<String?>(null)
     var lastInteractNanos = 0L
     private val rotationHolds = mutableStateMapOf<Any, Boolean>()
     private var lastFrameNanos = 0L
@@ -18,6 +19,13 @@ class AtlasViewState {
     private var cameraKey: Pair<String?, Boolean>? = null
 
     fun onSliceChanged(slice: GraphSlice) {
+        val pending = pendingFocusId
+        if (pending != null && slice.nodes.any { it.id == pending }) {
+            pendingFocusId = null
+            sliceKey = slice
+            selectedId = pending
+            return
+        }
         if (sliceKey == slice) return
         sliceKey = slice
         selectedId = null

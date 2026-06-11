@@ -15,8 +15,10 @@ class MapViewState {
     val expandOrder = mutableStateListOf<String>()
     var expandedDirs by mutableStateOf<Set<String>?>(null)
     var filter by mutableStateOf(MapFilterState())
+    var focusCenterId by mutableStateOf<String?>(null)
 
     fun reset() {
+        focusCenterId = null
         pan = Offset.Zero
         scale = 0f
         fitted = false

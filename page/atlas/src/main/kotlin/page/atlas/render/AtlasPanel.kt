@@ -117,7 +117,7 @@ fun AtlasContent(
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
 ) {
-    LaunchedEffect(slice) { atlasView.onSliceChanged(slice) }
+    LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
     val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
     Column(modifier = Modifier.fillMaxSize()) {

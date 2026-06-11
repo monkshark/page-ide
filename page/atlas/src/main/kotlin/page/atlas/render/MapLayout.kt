@@ -97,6 +97,11 @@ internal fun applyUserOffsets(boxes: List<MapBox>, offsets: Map<String, Offset>)
     return out
 }
 
+fun ancestorDirIds(id: String): Set<String> {
+    val path = runCatching { Path.of(id) }.getOrNull() ?: return emptySet()
+    return generateSequence(path.parent) { it.parent }.map(Path::toString).toSet()
+}
+
 fun defaultExpandedDirs(slice: GraphSlice): Set<String> {
     val active = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.path?.parent ?: return emptySet()
     return generateSequence(active) { it.parent }.map(Path::toString).toSet()

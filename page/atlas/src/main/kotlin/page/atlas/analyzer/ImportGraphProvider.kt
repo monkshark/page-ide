@@ -88,6 +88,24 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
 
+    fun dependentCountOf(path: Path): Int? {
+        if (!ImportExtractor.supports(path)) return null
+        val targetId = nodeId(path)
+        index.refreshIfStale()
+        val files = index.files().filter { ImportExtractor.supports(it) }.take(PROJECT_MAX_NODES)
+        var count = 0
+        for (file in files) {
+            val fileId = nodeId(file)
+            if (fileId == targetId) continue
+            val analysis = cachedAnalysis(file) ?: continue
+            val depends = mergeByTarget(analysis.imports).any { raw ->
+                ImportResolver.resolve(raw, file, index)?.let(::nodeId) == targetId
+            }
+            if (depends) count++
+        }
+        return count
+    }
+
     private fun addNode(
         nodes: LinkedHashMap<String, GraphNode>,
         queue: ArrayDeque<Pair<Path, String?>>,

@@ -79,6 +79,16 @@ class ReducerTest {
     }
 
     @Test
+    fun `focus in atlas opens panel on dependency tab`() {
+        val s = AppState().copy(
+            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.GRAPH),
+        )
+        val focused = reduce(s, IdeEvent.Panel.FocusInAtlas)
+        assertTrue(focused.layout.atlasOpen)
+        assertEquals(AtlasViewTab.DEPENDENCY, focused.layout.atlasViewTab)
+    }
+
+    @Test
     fun `atlas project mode change replaces flag`() {
         val s = AppState()
         val on = reduce(s, IdeEvent.Panel.AtlasProjectModeChanged(true))
