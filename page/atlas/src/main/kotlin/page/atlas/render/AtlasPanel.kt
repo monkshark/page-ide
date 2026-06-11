@@ -75,6 +75,7 @@ fun AtlasPanel(
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
+    mapView: MapViewState = remember { MapViewState() },
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -91,6 +92,7 @@ fun AtlasPanel(
             onViewTabChange = onViewTabChange,
             showExpand = showExpand,
             onExpand = onExpand,
+            mapView = mapView,
         )
     }
 }
@@ -106,11 +108,10 @@ fun AtlasContent(
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
+    mapView: MapViewState = remember { MapViewState() },
 ) {
     var selectedId by remember(slice) { mutableStateOf<String?>(null) }
-    var mapExpandedDirs by remember { mutableStateOf<Set<String>?>(null) }
-    var mapFilter by remember { mutableStateOf(MapFilterState()) }
-    val mapSlice = remember(slice, mapFilter) { filterForMap(slice, mapFilter) }
+    val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -175,10 +176,7 @@ fun AtlasContent(
                     selectedId = selectedId,
                     onSelect = { selectedId = it },
                     onNodeClick = onNodeClick,
-                    expandedDirs = mapExpandedDirs,
-                    onExpandedDirsChange = { mapExpandedDirs = it },
-                    filter = mapFilter,
-                    onFilterChange = { mapFilter = it },
+                    view = mapView,
                 )
             }
             if (slice.nodes.size >= 300) {
