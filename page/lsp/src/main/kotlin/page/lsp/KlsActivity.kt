@@ -20,19 +20,19 @@ fun parseKlsActivity(raw: String?): KlsActivity? {
     val msg = stripKlsThreadPrefix(full)
     return when {
         msg.contains("kotlinLSPProjectDeps", ignoreCase = true) ->
-            KlsActivity.Start(KLS_GRADLE_DEPS_KIND, "Gradle: 프로젝트 의존성 해석 중…")
+            KlsActivity.Start(KLS_GRADLE_DEPS_KIND, "Gradle: resolving project dependencies…")
         msg.contains("kotlinLSPKotlinDSLDeps", ignoreCase = true) ->
-            KlsActivity.Start(KLS_GRADLE_SCRIPT_DEPS_KIND, "Gradle: 빌드 스크립트 의존성 해석 중…")
+            KlsActivity.Start(KLS_GRADLE_SCRIPT_DEPS_KIND, "Gradle: resolving build script dependencies…")
         msg.startsWith("Successfully resolved build script", ignoreCase = true) ->
             KlsActivity.End(KLS_GRADLE_SCRIPT_DEPS_KIND)
         msg.startsWith("Successfully resolved", ignoreCase = true) ->
             KlsActivity.End(KLS_GRADLE_DEPS_KIND)
         msg.startsWith("Linting", ignoreCase = true) ->
-            KlsActivity.Start(KLS_LINTING_KIND, "분석 중…")
+            KlsActivity.Start(KLS_LINTING_KIND, "Analyzing…")
         msg.startsWith("Updating full symbol index", ignoreCase = true) ->
-            KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "심볼 인덱싱 중…")
+            KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "Indexing symbols…")
         msg.startsWith("Updating symbol index", ignoreCase = true) ->
-            KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "심볼 인덱싱 중…")
+            KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "Indexing symbols…")
         msg.startsWith("Updated full symbol index", ignoreCase = true) ->
             KlsActivity.End(KLS_SYMBOL_INDEX_KIND)
         msg.startsWith("Updated symbol index", ignoreCase = true) ->

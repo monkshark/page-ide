@@ -304,7 +304,7 @@ class LspController(
         title.isNotBlank() && !message.isNullOrBlank() -> "$title — $message"
         title.isNotBlank() -> title
         !message.isNullOrBlank() -> message
-        else -> "작업 중…"
+        else -> "Working…"
     }
 
     private fun activityTimeoutMs(kind: String): Long = when (kind) {

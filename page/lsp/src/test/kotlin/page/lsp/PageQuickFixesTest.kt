@@ -16,7 +16,7 @@ class PageQuickFixesTest {
         val actions = PageQuickFixes.synthesize(uri, text, listOf(diag))
         val a = actions.first { it.kind == "quickfix.page.unusedVariable" }
         assertTrue(a.title.contains("unused"))
-        assertTrue(a.title.contains("삭제"))
+        assertTrue(a.title.contains("Delete"))
         val applied = RenameApply.applyToText(text, a.edit.changes.single().edits)
         assertFalse(applied.contains("val unused"))
         assertEquals("fun foo() {\n}\n", applied)

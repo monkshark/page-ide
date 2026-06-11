@@ -643,7 +643,7 @@ fun CodeEditor(
                     val sel = value.selection
                     val hasSelection = !sel.collapsed
                     CompactMenuItem(
-                        label = "잘라내기",
+                        label = "Cut",
                         enabled = hasSelection,
                         onClick = {
                             if (!sel.collapsed) {
@@ -655,7 +655,7 @@ fun CodeEditor(
                         },
                     )
                     CompactMenuItem(
-                        label = "복사",
+                        label = "Copy",
                         enabled = hasSelection,
                         onClick = {
                             if (!sel.collapsed) {
@@ -665,7 +665,7 @@ fun CodeEditor(
                         },
                     )
                     CompactMenuItem(
-                        label = "붙여넣기",
+                        label = "Paste",
                         onClick = {
                             val pasted = clipboard.getText()?.text.orEmpty()
                             if (pasted.isNotEmpty()) {
@@ -677,7 +677,7 @@ fun CodeEditor(
                         },
                     )
                     CompactMenuItem(
-                        label = "전체 선택",
+                        label = "Select All",
                         onClick = {
                             onValueChange(value.copy(selection = TextRange(0, value.text.length)))
                             menuExpanded = false

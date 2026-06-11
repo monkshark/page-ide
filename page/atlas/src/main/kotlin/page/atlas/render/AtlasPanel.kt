@@ -127,7 +127,7 @@ fun AtlasContent(
             Box(modifier = Modifier.weight(1f))
             if (showExpand) {
                 Text(
-                    text = "확대",
+                    text = "Expand",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onExpand() }.padding(4.dp),
@@ -149,19 +149,19 @@ fun AtlasContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ModeChip("의존성", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
-            ModeChip("그래프", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
+            ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
+            ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
             Box(modifier = Modifier.weight(1f))
             if (viewTab == AtlasViewTab.GRAPH) {
-                ModeChip("파일", !projectMode) { onProjectModeChange(false) }
-                ModeChip("프로젝트", projectMode) { onProjectModeChange(true) }
+                ModeChip("File", !projectMode) { onProjectModeChange(false) }
+                ModeChip("Project", projectMode) { onProjectModeChange(true) }
             }
         }
         Divider()
         if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (projectMode || viewTab == AtlasViewTab.DEPENDENCY) "소스 파일 없음" else "import 없음",
+                    text = if (projectMode || viewTab == AtlasViewTab.DEPENDENCY) "No source files" else "No imports",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -184,7 +184,7 @@ fun AtlasContent(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "워크스페이스 파일 300개까지만 분석됨",
+                        text = "Only the first 300 workspace files are analyzed",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
