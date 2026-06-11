@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -42,6 +45,13 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -133,7 +143,46 @@ fun AtlasContent(
     val impacted = remember(slice, effectiveMarks) {
         vcsImpacted(slice.edges, effectiveMarks.keys)
     }
-    Column(modifier = Modifier.fillMaxSize()) {
+    var searchOpen by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchIndex by remember { mutableStateOf(-1) }
+    val searchSlice = if (viewTab == AtlasViewTab.DEPENDENCY) mapSlice else slice
+    val searchMatches = remember(searchSlice, searchQuery) {
+        atlasSearchMatches(searchSlice.nodes, searchQuery)
+    }
+    val contentFocus = remember { FocusRequester() }
+    fun focusSearchMatch(delta: Int) {
+        if (searchMatches.isEmpty()) return
+        searchIndex = (searchIndex + delta).mod(searchMatches.size)
+        val node = searchMatches[searchIndex]
+        atlasView.selectedId = node.id
+        atlasView.pendingFocusId = node.id
+        mapView.focusCenterId = node.id
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(contentFocus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
+                    searchOpen = true
+                    true
+                } else {
+                    false
+                }
+            }
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            runCatching { contentFocus.requestFocus() }
+                        }
+                    }
+                }
+            },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -185,6 +234,26 @@ fun AtlasContent(
             }
         }
         Divider()
+        if (searchOpen) {
+            AtlasSearchBar(
+                query = searchQuery,
+                onQueryChange = {
+                    searchQuery = it
+                    searchIndex = -1
+                },
+                matchIndex = if (searchIndex < 0) 0 else searchIndex + 1,
+                matchCount = searchMatches.size,
+                onNext = { focusSearchMatch(1) },
+                onPrev = { focusSearchMatch(-1) },
+                onClose = {
+                    searchOpen = false
+                    searchQuery = ""
+                    searchIndex = -1
+                    runCatching { contentFocus.requestFocus() }
+                },
+            )
+            Divider()
+        }
         if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
