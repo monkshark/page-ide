@@ -186,6 +186,21 @@ fun AtlasContent(
                     onNodeClick = onNodeClick,
                     view = mapView,
                 )
+                val drill = remember(mapSlice, selectedId) {
+                    mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)
+                }
+                val sel = selectedId
+                if (sel != null && drill.any) {
+                    val selectedIsFolder = remember(mapSlice, sel) {
+                        mapSlice.nodes.any { it.id != sel && belongsTo(it.id, sel) }
+                    }
+                    MapDrilldownPanel(
+                        drill = drill,
+                        showCounterparts = selectedIsFolder,
+                        onOpen = onNodeClick,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
             }
             if (slice.nodes.size >= 300) {
                 Divider()
