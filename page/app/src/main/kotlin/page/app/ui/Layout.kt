@@ -33,6 +33,7 @@ import page.app.mvi.IdeEvent
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
+import page.atlas.render.VcsMark
 import page.atlas.render.AtlasViewState
 import page.atlas.render.MapViewState
 import page.app.state.EditorWorkspaceState
@@ -145,6 +146,7 @@ internal fun IdeMainLayout(
     atlasLoadProgress: Float? = null,
     atlasUsedByCount: Int? = null,
     onAtlasFocusActive: (() -> Unit)? = null,
+    atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -428,6 +430,9 @@ internal fun IdeMainLayout(
                     mapView = atlasMapView,
                     atlasView = atlasView,
                     loadProgress = atlasLoadProgress,
+                    vcsMarks = atlasVcsMarks,
+                    vcsEnabled = ui.atlasVcsOverlay,
+                    onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
                 )
             }
             if (codeActionPreviewVisible) {
@@ -609,6 +614,9 @@ internal fun IdeMainLayout(
                 mapView = atlasMapView,
                 atlasView = atlasView,
                 loadProgress = atlasLoadProgress,
+                vcsMarks = atlasVcsMarks,
+                vcsEnabled = ui.atlasVcsOverlay,
+                onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
             )
         }
         ExpandedPanel.NONE -> Unit

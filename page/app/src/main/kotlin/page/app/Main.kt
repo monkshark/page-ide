@@ -452,6 +452,17 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
         atlasLoadProgress = null
     }
+    val vcsProvider = remember(rootDir) { rootDir?.let { page.git.GitStatusProvider(it) } }
+    var atlasVcsMarks by remember { mutableStateOf<Map<String, page.atlas.render.VcsMark>>(emptyMap()) }
+    LaunchedEffect(vcsProvider, atlasOpen, atlasExpanded, atlasSlice) {
+        if ((!atlasOpen && !atlasExpanded) || vcsProvider == null || atlasSlice.nodes.isEmpty()) {
+            atlasVcsMarks = emptyMap()
+            return@LaunchedEffect
+        }
+        atlasVcsMarks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { vcsMarksFrom(vcsProvider.statuses()) }.getOrDefault(emptyMap())
+        }
+    }
     var atlasUsedByCount by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(atlasProvider, focusedActivePath) {
         atlasUsedByCount = null
@@ -663,6 +674,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasLoadProgress = atlasLoadProgress,
                     atlasUsedByCount = atlasUsedByCount,
                     onAtlasFocusActive = focusActiveInAtlas,
+                    atlasVcsMarks = atlasVcsMarks,
                   )
                 }
                 if (findInFiles) {

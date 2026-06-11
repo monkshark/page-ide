@@ -57,6 +57,7 @@ internal fun MapCanvas(
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
     view: MapViewState,
+    vcsMarks: Map<String, VcsMark> = emptyMap(),
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -189,6 +190,10 @@ internal fun MapCanvas(
     val tertiary = MaterialTheme.colorScheme.tertiary
     val errorColor = MaterialTheme.colorScheme.error
     val cycleKeys = remember(toMap) { mapCycleEdges(toMap.edges) }
+    val vcsCounts = remember(map, vcsMarks) {
+        vcsFolderCounts(vcsMarks, map.boxes.filter { it.folder }.map { it.id })
+    }
+    val vcsBadgeStyle = TextStyle(fontSize = 9.sp)
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val folderFill = MaterialTheme.colorScheme.surfaceVariant
     val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
@@ -456,6 +461,32 @@ internal fun MapCanvas(
                             ),
                         )
                     }
+                }
+                val mark = if (box.folder) null else vcsMarks[box.id]
+                if (mark != null) {
+                    drawCircle(
+                        color = vcsColor(mark).copy(alpha = boxA),
+                        radius = 3f,
+                        center = Offset(box.x + box.w - 6f, box.y + 6f),
+                    )
+                }
+                val changed = if (box.folder) vcsCounts[box.id] ?: 0 else 0
+                if (changed > 0) {
+                    val text = textMeasurer.measure(AnnotatedString("$changed"), vcsBadgeStyle)
+                    val badgeW = text.size.width + 8f
+                    val badgeH = text.size.height + 2f
+                    val badgeTopLeft = Offset(box.x + box.w - badgeW - 4f, box.y + 2f)
+                    drawRoundRect(
+                        color = vcsColor(VcsMark.MODIFIED).copy(alpha = 0.85f * boxA),
+                        topLeft = badgeTopLeft,
+                        size = Size(badgeW, badgeH),
+                        cornerRadius = CornerRadius(badgeH / 2f),
+                    )
+                    drawText(
+                        textLayoutResult = text,
+                        color = Color.White.copy(alpha = boxA),
+                        topLeft = Offset(badgeTopLeft.x + 4f, badgeTopLeft.y + 1f),
+                    )
                 }
                 if (box.id == selectedId) {
                     drawRoundRect(

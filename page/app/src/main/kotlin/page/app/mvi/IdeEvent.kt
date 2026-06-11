@@ -46,6 +46,7 @@ internal sealed interface IdeEvent {
         data object FocusInAtlas : Panel
         data class AtlasProjectModeChanged(val enabled: Boolean) : Panel
         data class AtlasViewTabChanged(val tab: AtlasViewTab) : Panel
+        data class AtlasVcsOverlayChanged(val enabled: Boolean) : Panel
         data class ExpandPanel(val target: ExpandedPanel) : Panel
         data object CollapsePanel : Panel
         data class ResizeSidebar(val deltaDp: Dp) : Panel
