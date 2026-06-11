@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +40,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
@@ -281,11 +281,13 @@ private fun ConfigForm(
         FormField(
             label = "Name",
             value = config.name,
+            resetKey = config.id,
             onValueChange = { onChange(config.copy(name = it)) },
         )
         FormField(
             label = "Command",
             value = config.command,
+            resetKey = config.id,
             placeholder = "e.g. python · npx · cargo",
             onValueChange = { onChange(config.copy(command = it)) },
             mono = true,
@@ -293,6 +295,7 @@ private fun ConfigForm(
         FormField(
             label = "Arguments (space-separated)",
             value = config.args.joinToString(" "),
+            resetKey = config.id,
             placeholder = "e.g. run main.py",
             onValueChange = { raw -> onChange(config.copy(args = parseArgs(raw))) },
             mono = true,
@@ -300,6 +303,7 @@ private fun ConfigForm(
         FormField(
             label = "Working directory",
             value = config.workingDir.orEmpty(),
+            resetKey = config.id,
             placeholder = "Leave empty to use workspace root",
             onValueChange = { onChange(config.copy(workingDir = it.ifBlank { null })) },
             mono = true,
@@ -307,6 +311,7 @@ private fun ConfigForm(
         FormField(
             label = "Environment variables (KEY=VALUE, one per line)",
             value = envToText(config.env),
+            resetKey = config.id,
             placeholder = "PORT=8080\nNODE_ENV=development",
             onValueChange = { raw -> onChange(config.copy(env = parseEnv(raw))) },
             mono = true,
@@ -319,6 +324,7 @@ private fun ConfigForm(
 private fun FormField(
     label: String,
     value: String,
+    resetKey: Any?,
     onValueChange: (String) -> Unit,
     placeholder: String = "",
     mono: Boolean = false,
@@ -331,9 +337,8 @@ private fun FormField(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
-        var text by remember(value) { mutableStateOf(TextFieldValue(value)) }
-        LaunchedEffect(value) {
-            if (text.text != value) text = TextFieldValue(value)
+        var text by remember(resetKey) {
+            mutableStateOf(TextFieldValue(value, TextRange(value.length)))
         }
         Surface(
             color = MaterialTheme.colorScheme.surface,
