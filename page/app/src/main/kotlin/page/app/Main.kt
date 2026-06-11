@@ -473,12 +473,15 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runCatching { atlasProvider.dependentCountOf(path) }.getOrNull()
         }
     }
-    val focusActiveInAtlas: () -> Unit = focusActiveInAtlas@{
-        val path = focusedActivePath ?: return@focusActiveInAtlas
+    val focusInAtlas: (java.nio.file.Path) -> Unit = { path ->
         val id = path.toAbsolutePath().normalize().toString()
         atlasView.pendingFocusId = id
         atlasMapView.focusCenterId = id
         onIdeEvent(IdeEvent.Panel.FocusInAtlas)
+    }
+    val focusActiveInAtlas: () -> Unit = focusActiveInAtlas@{
+        val path = focusedActivePath ?: return@focusActiveInAtlas
+        focusInAtlas(path)
     }
 
     val openInTab = app.openInTab
@@ -641,7 +644,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onEvent = onIdeEvent,
                     lspRouter = currentLspRouter,
                     onCloseTab = { side, index -> requestCloseTab(side, index) },
-                    fileTree = app.fileTreePanelActions(),
+                    fileTree = app.fileTreePanelActions().copy(onOpenInAtlas = focusInAtlas),
                     search = app.editorSearchActions(),
                     onWindowShortcut = handleShortcut,
                     onJumpToProblem = { path, line, character ->
@@ -666,7 +669,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onEditorScrollChange = { p, snap ->
                         onIdeEvent(IdeEvent.EditorScroll.Changed(p, snap))
                     },
-                    tabContextActionsFor = { side -> tabContextActionsFor(side) },
+                    tabContextActionsFor = { side -> tabContextActionsFor(side).copy(onOpenInAtlas = focusInAtlas) },
                     settings = app.settingsBinding(),
                     atlasSlice = atlasSlice,
                     atlasMapView = atlasMapView,

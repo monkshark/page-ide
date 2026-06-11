@@ -80,6 +80,7 @@ fun TreeRow(
     onCopyFiles: (Set<Path>) -> Unit,
     onPasteInto: (Path) -> Unit,
     onOpenMany: (Set<Path>) -> Unit,
+    onOpenInAtlas: ((Path) -> Unit)? = null,
     dragState: TreeDragState? = null,
     onDragStartFrom: ((Path, TreeDragController.Mode) -> Unit)? = null,
     onDragRelease: (() -> Unit)? = null,
@@ -195,6 +196,9 @@ fun TreeRow(
                     })
                 }
                 if (!multi) {
+                    if (onOpenInAtlas != null && !node.isDirectory) {
+                        add(ContextMenuItem("Open in Atlas") { onOpenInAtlas(node.path) })
+                    }
                     add(ContextMenuItem("Show in Explorer") { onReveal(node.path) })
                     add(ContextMenuItem("Copy path") { onCopyPath(node.path) })
                     add(ContextMenuItem("Copy relative path") { onCopyRelativePath(node.path) })
