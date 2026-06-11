@@ -21,13 +21,13 @@ class KlsActivityTest {
     @Test
     fun `kotlinLSPProjectDeps task starts gradle-deps activity`() {
         val r = parseKlsActivity("[Thread-1] Run: kotlinLSPProjectDeps")
-        assertEquals(KlsActivity.Start(KLS_GRADLE_DEPS_KIND, "Gradle: 프로젝트 의존성 해석 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_GRADLE_DEPS_KIND, "Gradle: resolving project dependencies…"), r)
     }
 
     @Test
     fun `kotlinLSPKotlinDSLDeps task starts gradle-script-deps activity`() {
         val r = parseKlsActivity("[Thread-1] Run: kotlinLSPKotlinDSLDeps")
-        assertEquals(KlsActivity.Start(KLS_GRADLE_SCRIPT_DEPS_KIND, "Gradle: 빌드 스크립트 의존성 해석 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_GRADLE_SCRIPT_DEPS_KIND, "Gradle: resolving build script dependencies…"), r)
     }
 
     @Test
@@ -45,7 +45,7 @@ class KlsActivityTest {
     @Test
     fun `Linting starts linting activity`() {
         val r = parseKlsActivity("[Thread-1] Linting file:///foo/Bar.kt")
-        assertEquals(KlsActivity.Start(KLS_LINTING_KIND, "분석 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_LINTING_KIND, "Analyzing…"), r)
     }
 
     @Test
@@ -68,13 +68,13 @@ class KlsActivityTest {
     @Test
     fun `Updating symbol index starts symbol-index activity`() {
         val r = parseKlsActivity("[Thread-1] Updating symbol index")
-        assertEquals(KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "심볼 인덱싱 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "Indexing symbols…"), r)
     }
 
     @Test
     fun `Updating full symbol index also starts symbol-index`() {
         val r = parseKlsActivity("[Thread-1] Updating full symbol index for module foo")
-        assertEquals(KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "심볼 인덱싱 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_SYMBOL_INDEX_KIND, "Indexing symbols…"), r)
     }
 
     @Test
@@ -92,13 +92,13 @@ class KlsActivityTest {
     @Test
     fun `short message without thread prefix is parsed as-is`() {
         val r = parseKlsActivity("Linting")
-        assertEquals(KlsActivity.Start(KLS_LINTING_KIND, "분석 중…"), r)
+        assertEquals(KlsActivity.Start(KLS_LINTING_KIND, "Analyzing…"), r)
     }
 
     @Test
     fun `case-insensitive matching covers lowercase variants`() {
         assertEquals(
-            KlsActivity.Start(KLS_LINTING_KIND, "분석 중…"),
+            KlsActivity.Start(KLS_LINTING_KIND, "Analyzing…"),
             parseKlsActivity("[Thread-1] linting file:///x.kt"),
         )
         assertEquals(

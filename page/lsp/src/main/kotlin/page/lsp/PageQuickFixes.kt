@@ -13,11 +13,11 @@ object PageQuickFixes {
             when (d.code) {
                 "UNUSED_VARIABLE" -> {
                     deleteDeclarationLine(uri, text, d)?.let(out::add)
-                    prefixIdentifierWithUnderscore(uri, text, d, kindForVarRename, "변수")?.let(out::add)
+                    prefixIdentifierWithUnderscore(uri, text, d, kindForVarRename, "variable")?.let(out::add)
                 }
                 "UNUSED_PARAMETER" -> {
                     suppressUnusedParameter(uri, text, d)?.let(out::add)
-                    prefixIdentifierWithUnderscore(uri, text, d, kindForParamRename, "파라미터")?.let(out::add)
+                    prefixIdentifierWithUnderscore(uri, text, d, kindForParamRename, "parameter")?.let(out::add)
                 }
                 "NO_ELSE_IN_WHEN" -> addElseBranch(uri, text, d)?.let(out::add)
                 "UNNECESSARY_NOT_NULL_ASSERTION" -> removeNotNullAssertion(uri, text, d)?.let(out::add)
@@ -81,7 +81,7 @@ object PageQuickFixes {
             ),
         )
         return CodeActionEntry(
-            title = "사용하지 않는 변수 '$name' 선언 라인 삭제",
+            title = "Delete declaration line of unused variable '$name'",
             kind = kindForVar,
             isPreferred = true,
             edit = edit,
@@ -119,7 +119,7 @@ object PageQuickFixes {
             ),
         )
         return CodeActionEntry(
-            title = "사용하지 않는 파라미터 '$name' — @Suppress(\"UNUSED_PARAMETER\") 추가",
+            title = "Add @Suppress(\"UNUSED_PARAMETER\") to unused parameter '$name'",
             kind = kindForParam,
             isPreferred = true,
             edit = edit,
@@ -158,14 +158,14 @@ object PageQuickFixes {
         text: String,
         d: Diagnostic,
         kind: String,
-        nounKr: String,
+        noun: String,
     ): CodeActionEntry? {
         val name = sliceLineSubstring(text, d.start.line, d.start.character, d.end.line, d.end.character)
             ?: return null
         if (name.isBlank() || name.startsWith("_")) return null
         val replacement = "_$name"
         return singleEditAction(
-            title = "사용하지 않는 $nounKr '$name' 을(를) '$replacement' 로 변경",
+            title = "Rename unused $noun '$name' to '$replacement'",
             kind = kind,
             preferred = false,
             uri = uri,
@@ -193,7 +193,7 @@ object PageQuickFixes {
         val (sl, sc) = offsetToLineCol(text, absStart)
         val (el, ec) = offsetToLineCol(text, absEnd)
         return singleEditAction(
-            title = "불필요한 '!!' 단언 삭제",
+            title = "Remove unnecessary '!!' assertion",
             kind = kindForNotNullAssertion,
             preferred = true,
             uri = uri,
@@ -221,7 +221,7 @@ object PageQuickFixes {
         val (sl, sc) = offsetToLineCol(text, absStart)
         val (el, ec) = offsetToLineCol(text, absEnd)
         return singleEditAction(
-            title = "불필요한 '?.' 를 '.' 로 변경",
+            title = "Replace unnecessary '?.' with '.'",
             kind = kindForSafeCall,
             preferred = true,
             uri = uri,
@@ -246,7 +246,7 @@ object PageQuickFixes {
         val (sl, sc) = offsetToLineCol(text, lastIdx)
         val (el, ec) = offsetToLineCol(text, lastIdx + 1)
         return singleEditAction(
-            title = "Long 리터럴 접미사 'l' 을 'L' 로 변경",
+            title = "Replace Long literal suffix 'l' with 'L'",
             kind = kindForLongSuffix,
             preferred = true,
             uri = uri,
@@ -272,7 +272,7 @@ object PageQuickFixes {
         val (sl, sc) = offsetToLineCol(text, leftEdge)
         val (el, ec) = offsetToLineCol(text, to)
         return singleEditAction(
-            title = "불필요한 'as' 캐스트 삭제",
+            title = "Remove useless 'as' cast",
             kind = kindForUselessCast,
             preferred = true,
             uri = uri,
@@ -305,7 +305,7 @@ object PageQuickFixes {
             endChar = 0
         }
         return singleEditAction(
-            title = "불필요한 'else' 분기 삭제",
+            title = "Remove redundant 'else' branch",
             kind = kindForRedundantElse,
             preferred = true,
             uri = uri,
@@ -331,7 +331,7 @@ object PageQuickFixes {
         val (sl, sc) = offsetToLineCol(text, start)
         val (el, ec) = offsetToLineCol(text, to)
         return singleEditAction(
-            title = "불필요한 '?:' 절 제거",
+            title = "Remove useless '?:' clause",
             kind = kindForUselessElvis,
             preferred = true,
             uri = uri,
@@ -512,7 +512,7 @@ object PageQuickFixes {
             ),
         )
         return CodeActionEntry(
-            title = "when 에 'else -> TODO()' 분기 추가",
+            title = "Add 'else -> TODO()' branch to 'when'",
             kind = kindForWhen,
             isPreferred = true,
             edit = edit,
