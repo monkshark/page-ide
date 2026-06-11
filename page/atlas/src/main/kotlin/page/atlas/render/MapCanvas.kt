@@ -284,6 +284,8 @@ internal fun MapCanvas(
             }
         }
         val drawBoxes = applyUserOffsets(interp, userOffsets).zip(alphas)
+        val neighbors = mapNeighbors(toMap.edges, selectedId)
+        val focusActive = selectedId != null && neighbors.any
         withTransform({
             translate(base.x, base.y)
             scale(viewScale, viewScale, Offset.Zero)
@@ -302,8 +304,6 @@ internal fun MapCanvas(
                     if ((edge.from to edge.to) !in toKeys) edgesToDraw += edge to (1f - t)
                 }
             }
-            val selectionHasEdges = selectedId != null &&
-                edgesToDraw.any { (edge, _) -> edge.from == selectedId || edge.to == selectedId }
             val baseAlpha = mapEdgeBaseAlpha(edgesToDraw.size)
             val showAllBadges = edgesToDraw.size <= MAP_EDGE_BADGE_LIMIT
             for ((edge, a) in edgesToDraw) {
@@ -322,7 +322,7 @@ internal fun MapCanvas(
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
                 val touchesSelection = edge.from == selectedId || edge.to == selectedId
                 val lineColor = when {
-                    !selectionHasEdges -> edgeColor.copy(alpha = baseAlpha)
+                    !focusActive -> edgeColor.copy(alpha = baseAlpha)
                     edge.from == selectedId -> primary.copy(alpha = 0.9f)
                     edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
                     else -> edgeColor.copy(alpha = 0.15f)
@@ -354,6 +354,14 @@ internal fun MapCanvas(
             for ((box, a) in drawBoxes) {
                 val topLeft = Offset(box.x, box.y)
                 val size = Size(box.w, box.h)
+                val dimmed = focusActive && !(box.folder && box.expanded) &&
+                    isMapBoxDimmed(box.id, selectedId, neighbors)
+                val boxA = if (dimmed) a * 0.35f else a
+                val emphasis = when {
+                    box.id in neighbors.dependents -> tertiary
+                    box.id in neighbors.dependencies -> primary
+                    else -> null
+                }
                 when {
                     box.folder && box.expanded -> {
                         drawRoundRect(folderFill.copy(alpha = 0.16f * a), topLeft, size, CornerRadius(8f))
@@ -368,18 +376,19 @@ internal fun MapCanvas(
                         drawText(header, labelColor.fade(a), Offset(box.x + 8f, box.y + 2f))
                     }
                     box.folder -> {
-                        drawRoundRect(secondary.copy(alpha = 0.16f * a), topLeft, size, CornerRadius(6f))
+                        drawRoundRect(secondary.copy(alpha = 0.16f * boxA), topLeft, size, CornerRadius(6f))
                         drawRoundRect(
-                            color = if (box.activeTrail) primary.copy(alpha = 0.6f * a) else secondary.copy(alpha = 0.4f * a),
+                            color = emphasis?.copy(alpha = 0.8f * boxA)
+                                ?: if (box.activeTrail) primary.copy(alpha = 0.6f * boxA) else secondary.copy(alpha = 0.4f * boxA),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(6f),
-                            style = Stroke(width = if (box.activeTrail) 1.5f else 1f),
+                            style = Stroke(width = if (emphasis != null || box.activeTrail) 1.5f else 1f),
                         )
                         val text = textMeasurer.measure(AnnotatedString("${box.label} (${box.fileCount})"), labelStyle)
                         drawText(
                             textLayoutResult = text,
-                            color = labelColor.fade(a),
+                            color = labelColor.fade(boxA),
                             topLeft = Offset(
                                 box.x + (box.w - text.size.width) / 2f,
                                 box.y + (box.h - text.size.height) / 2f,
@@ -388,22 +397,22 @@ internal fun MapCanvas(
                     }
                     else -> {
                         drawRoundRect(
-                            color = if (box.active) primary.copy(alpha = 0.18f * a) else folderFill.copy(alpha = 0.35f * a),
+                            color = if (box.active) primary.copy(alpha = 0.18f * boxA) else folderFill.copy(alpha = 0.35f * boxA),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(5f),
                         )
                         drawRoundRect(
-                            color = (if (box.active) primary else outlineVariant).fade(a),
+                            color = (emphasis ?: if (box.active) primary else outlineVariant).fade(boxA),
                             topLeft = topLeft,
                             size = size,
                             cornerRadius = CornerRadius(5f),
-                            style = Stroke(width = if (box.active) 1.5f else 1f),
+                            style = Stroke(width = if (emphasis != null || box.active) 1.5f else 1f),
                         )
                         val text = textMeasurer.measure(AnnotatedString(box.label), labelStyle)
                         drawText(
                             textLayoutResult = text,
-                            color = labelColor.fade(a),
+                            color = labelColor.fade(boxA),
                             topLeft = Offset(
                                 box.x + (box.w - text.size.width) / 2f,
                                 box.y + (box.h - text.size.height) / 2f,
@@ -420,6 +429,32 @@ internal fun MapCanvas(
                         style = Stroke(width = 1.5f),
                     )
                 }
+            }
+        }
+        if (focusActive) {
+            val selBox = drawBoxes.firstOrNull { it.first.id == selectedId }?.first
+            if (selBox != null) {
+                val title = textMeasurer.measure(AnnotatedString(selBox.label), labelStyle)
+                val inText = textMeasurer.measure(
+                    AnnotatedString("used by ${neighbors.dependents.size}"),
+                    labelStyle,
+                )
+                val outText = textMeasurer.measure(
+                    AnnotatedString("uses ${neighbors.dependencies.size}"),
+                    labelStyle,
+                )
+                val gap = 10f
+                val padX = 8f
+                val padY = 3f
+                val w = title.size.width + inText.size.width + outText.size.width + gap * 2 + padX * 2
+                val h = maxOf(title.size.height, inText.size.height, outText.size.height) + padY * 2
+                drawRoundRect(badgeFill, Offset(8f, 8f), Size(w, h), CornerRadius(h / 2f))
+                var tx = 8f + padX
+                drawText(title, labelColor, Offset(tx, 8f + padY))
+                tx += title.size.width + gap
+                drawText(inText, tertiary, Offset(tx, 8f + padY))
+                tx += inText.size.width + gap
+                drawText(outText, primary, Offset(tx, 8f + padY))
             }
         }
     }
