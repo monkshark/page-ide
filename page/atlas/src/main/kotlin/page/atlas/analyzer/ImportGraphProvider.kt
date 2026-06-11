@@ -47,7 +47,14 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
 
-    override fun nodesForProject(activePath: Path?, activeText: String?): GraphSlice {
+    override fun nodesForProject(activePath: Path?, activeText: String?): GraphSlice =
+        nodesForProject(activePath, activeText) { _, _ -> }
+
+    fun nodesForProject(
+        activePath: Path?,
+        activeText: String?,
+        onProgress: (Int, Int) -> Unit,
+    ): GraphSlice {
         index.refreshIfStale()
         val files = index.files().filter { ImportExtractor.supports(it) }.take(PROJECT_MAX_NODES)
         if (files.isEmpty()) return GraphSlice.EMPTY
@@ -61,7 +68,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved, kind)
         }
         val queue = ArrayDeque<Pair<Path, String?>>()
-        for (file in files) {
+        for ((done, file) in files.withIndex()) {
+            onProgress(done, files.size)
             val fileId = nodeId(file)
             val analysis =
                 if (fileId == activeId && activeText != null) ImportExtractor.analyze(file, activeText)
