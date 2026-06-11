@@ -109,6 +109,8 @@ fun AtlasContent(
 ) {
     var selectedId by remember(slice) { mutableStateOf<String?>(null) }
     var mapExpandedDirs by remember { mutableStateOf<Set<String>?>(null) }
+    var mapFilter by remember { mutableStateOf(MapFilterState()) }
+    val mapSlice = remember(slice, mapFilter) { filterForMap(slice, mapFilter) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -169,12 +171,14 @@ fun AtlasContent(
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 MapCanvas(
-                    slice = slice,
+                    slice = mapSlice,
                     selectedId = selectedId,
                     onSelect = { selectedId = it },
                     onNodeClick = onNodeClick,
                     expandedDirs = mapExpandedDirs,
                     onExpandedDirsChange = { mapExpandedDirs = it },
+                    filter = mapFilter,
+                    onFilterChange = { mapFilter = it },
                 )
             }
             if (slice.nodes.size >= 300) {
