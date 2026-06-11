@@ -41,7 +41,7 @@ data class MapModel(
     }
 }
 
-internal const val MAP_GAP = 40f
+internal const val MAP_GAP = 64f
 internal const val MAP_PUSH_GAP = 22f
 internal const val MAP_PAD = 18f
 internal const val MAP_HEADER_H = 16f
