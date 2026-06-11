@@ -1230,6 +1230,10 @@ class LspController(
     private fun openWorkspaceFiles() {
         val root = workspaceRoot ?: return
         val backend = activeBackend ?: return
+        if (!backend.workspaceAutoOpen) {
+            println("[lsp] workspace auto-open skipped — ${backend.id} publishes workspace-wide diagnostics on its own")
+            return
+        }
         scope.launch(Dispatchers.IO) {
             val ws = workspace ?: return@launch
             var opened = 0
@@ -1414,6 +1418,7 @@ class LspController(
         private val WORKSPACE_AUTO_OPEN_EXCLUDES = setOf(
             ".git", ".hg", ".svn", ".idea", ".idea_modules", ".vs", ".vscode",
             ".gradle", "build", "out", "bin", "target", "node_modules", ".page-ide",
+            ".dart_tool", "ephemeral",
         )
         const val STARTUP_KIND = "startup"
         const val GRADLE_DEPS_KIND = KLS_GRADLE_DEPS_KIND

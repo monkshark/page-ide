@@ -11,6 +11,7 @@ data class LanguageDefinition(
     val runCommand: String?,
     val launchArgs: List<String> = listOf("--stdio"),
     val lspLanguageId: String = id,
+    val workspaceAutoOpen: Boolean = true,
 ) {
     fun supports(extension: String?): Boolean {
         if (extension == null) return false

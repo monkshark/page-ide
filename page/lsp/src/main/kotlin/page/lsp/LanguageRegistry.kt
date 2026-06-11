@@ -56,6 +56,7 @@ object LanguageRegistry {
                 runCommand = obj.get("runCommand").takeIf { !it.isJsonNull }?.asString,
                 launchArgs = obj.getAsJsonArray("launchArgs")?.map { it.asString } ?: listOf("--stdio"),
                 lspLanguageId = obj.get("lspLanguageId")?.takeIf { !it.isJsonNull }?.asString ?: obj.get("id").asString,
+                workspaceAutoOpen = obj.get("workspaceAutoOpen")?.takeIf { !it.isJsonNull }?.asBoolean ?: true,
             )
         }
         return out
