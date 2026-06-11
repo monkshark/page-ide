@@ -173,7 +173,7 @@ internal fun MapCanvas(
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val folderFill = MaterialTheme.colorScheme.surfaceVariant
     val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-    val edgeColor = labelColor.copy(alpha = 0.8f)
+    val edgeColor = labelColor
 
     Canvas(
         modifier = Modifier
@@ -291,6 +291,69 @@ internal fun MapCanvas(
             translate(base.x, base.y)
             scale(viewScale, viewScale, Offset.Zero)
         }) {
+            val byId = HashMap<String, MapBox>(drawBoxes.size)
+            for ((box, _) in drawBoxes) byId[box.id] = box
+            val inv = 1f / viewScale
+            val fromKeys = fromMap.edges.mapTo(HashSet()) { it.from to it.to }
+            val edgesToDraw = ArrayList<Pair<MapEdge, Float>>(toMap.edges.size)
+            for (edge in toMap.edges) {
+                edgesToDraw += edge to (if (t >= 1f || (edge.from to edge.to) in fromKeys) 1f else t)
+            }
+            if (t < 1f) {
+                val toKeys = toMap.edges.mapTo(HashSet()) { it.from to it.to }
+                for (edge in fromMap.edges) {
+                    if ((edge.from to edge.to) !in toKeys) edgesToDraw += edge to (1f - t)
+                }
+            }
+            val selectionHasEdges = selectedId != null &&
+                edgesToDraw.any { (edge, _) -> edge.from == selectedId || edge.to == selectedId }
+            val baseAlpha = mapEdgeBaseAlpha(edgesToDraw.size)
+            val showAllBadges = edgesToDraw.size <= MAP_EDGE_BADGE_LIMIT
+            for ((edge, a) in edgesToDraw) {
+                val from = byId[edge.from] ?: continue
+                val to = byId[edge.to] ?: continue
+                val centerFrom = Offset(from.x + from.w / 2f, from.y + from.h / 2f)
+                val centerTo = Offset(to.x + to.w / 2f, to.y + to.h / 2f)
+                val chord = borderPoint(to, centerFrom) - borderPoint(from, centerTo)
+                val chordLen = hypot(chord.x, chord.y)
+                if (chordLen < 1f) continue
+                val unit = Offset(chord.x / chordLen, chord.y / chordLen)
+                val bow = min(chordLen * 0.16f, 40f)
+                val control = (centerFrom + centerTo) / 2f + Offset(-unit.y, unit.x) * bow
+                val start = borderPoint(from, control)
+                val end = borderPoint(to, control)
+                val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
+                val touchesSelection = edge.from == selectedId || edge.to == selectedId
+                val lineColor = when {
+                    !selectionHasEdges -> edgeColor.copy(alpha = baseAlpha)
+                    edge.from == selectedId -> primary.copy(alpha = 0.9f)
+                    edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
+                    else -> edgeColor.copy(alpha = 0.15f)
+                }
+                val curve = Path().apply {
+                    moveTo(start.x, start.y)
+                    quadraticBezierTo(control.x, control.y, end.x, end.y)
+                }
+                drawPath(curve, lineColor.fade(a), style = Stroke(width = stroke, cap = StrokeCap.Round))
+                drawMapArrow(control, end, lineColor.fade(a), inv)
+                if (edge.weight > 1 && (showAllBadges || touchesSelection)) {
+                    val mid = (start + end) / 4f + control / 2f
+                    val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)
+                    val halfW = text.size.width / 2f + 3f
+                    val halfH = text.size.height / 2f + 1f
+                    drawRoundRect(
+                        color = badgeFill.fade(a),
+                        topLeft = mid - Offset(halfW, halfH),
+                        size = Size(halfW * 2f, halfH * 2f),
+                        cornerRadius = CornerRadius(halfH),
+                    )
+                    drawText(
+                        textLayoutResult = text,
+                        color = labelColor.fade(a),
+                        topLeft = mid - Offset(text.size.width / 2f, text.size.height / 2f),
+                    )
+                }
+            }
             for ((box, a) in drawBoxes) {
                 val topLeft = Offset(box.x, box.y)
                 val size = Size(box.w, box.h)
@@ -361,66 +424,6 @@ internal fun MapCanvas(
                     )
                 }
             }
-            val byId = HashMap<String, MapBox>(drawBoxes.size)
-            for ((box, _) in drawBoxes) byId[box.id] = box
-            val inv = 1f / viewScale
-            val fromKeys = fromMap.edges.mapTo(HashSet()) { it.from to it.to }
-            val edgesToDraw = ArrayList<Pair<MapEdge, Float>>(toMap.edges.size)
-            for (edge in toMap.edges) {
-                edgesToDraw += edge to (if (t >= 1f || (edge.from to edge.to) in fromKeys) 1f else t)
-            }
-            if (t < 1f) {
-                val toKeys = toMap.edges.mapTo(HashSet()) { it.from to it.to }
-                for (edge in fromMap.edges) {
-                    if ((edge.from to edge.to) !in toKeys) edgesToDraw += edge to (1f - t)
-                }
-            }
-            val selectionHasEdges = selectedId != null &&
-                edgesToDraw.any { (edge, _) -> edge.from == selectedId || edge.to == selectedId }
-            for ((edge, a) in edgesToDraw) {
-                val from = byId[edge.from] ?: continue
-                val to = byId[edge.to] ?: continue
-                val centerFrom = Offset(from.x + from.w / 2f, from.y + from.h / 2f)
-                val centerTo = Offset(to.x + to.w / 2f, to.y + to.h / 2f)
-                val chord = borderPoint(to, centerFrom) - borderPoint(from, centerTo)
-                val chordLen = hypot(chord.x, chord.y)
-                if (chordLen < 1f) continue
-                val unit = Offset(chord.x / chordLen, chord.y / chordLen)
-                val bow = min(chordLen * 0.16f, 40f)
-                val control = (centerFrom + centerTo) / 2f + Offset(-unit.y, unit.x) * bow
-                val start = borderPoint(from, control)
-                val end = borderPoint(to, control)
-                val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
-                val lineColor = when {
-                    !selectionHasEdges -> edgeColor
-                    edge.from == selectedId -> primary.copy(alpha = 0.9f)
-                    edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
-                    else -> edgeColor.copy(alpha = 0.2f)
-                }
-                val curve = Path().apply {
-                    moveTo(start.x, start.y)
-                    quadraticBezierTo(control.x, control.y, end.x, end.y)
-                }
-                drawPath(curve, lineColor.fade(a), style = Stroke(width = stroke, cap = StrokeCap.Round))
-                drawMapArrow(control, end, lineColor.fade(a), inv)
-                if (edge.weight > 1) {
-                    val mid = (start + end) / 4f + control / 2f
-                    val text = textMeasurer.measure(AnnotatedString("${edge.weight}"), weightStyle)
-                    val halfW = text.size.width / 2f + 3f
-                    val halfH = text.size.height / 2f + 1f
-                    drawRoundRect(
-                        color = badgeFill.fade(a),
-                        topLeft = mid - Offset(halfW, halfH),
-                        size = Size(halfW * 2f, halfH * 2f),
-                        cornerRadius = CornerRadius(halfH),
-                    )
-                    drawText(
-                        textLayoutResult = text,
-                        color = labelColor.fade(a),
-                        topLeft = mid - Offset(text.size.width / 2f, text.size.height / 2f),
-                    )
-                }
-            }
         }
     }
     val menuTarget = menu
@@ -456,6 +459,11 @@ internal fun MapCanvas(
         }
     }
 }
+
+internal const val MAP_EDGE_BADGE_LIMIT = 24
+
+internal fun mapEdgeBaseAlpha(edgeCount: Int): Float =
+    0.8f - 0.5f * ((edgeCount - 12f) / 48f).coerceIn(0f, 1f)
 
 private data class MapMenuTarget(val box: MapBox?, val pos: Offset)
 
