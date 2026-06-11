@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -70,7 +71,9 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 import page.atlas.graph.EdgeKind
+import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 
@@ -155,6 +158,17 @@ fun AtlasContent(
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchIndex by remember { mutableStateOf(-1) }
+    var tracePath by remember(slice) { mutableStateOf<List<String>>(emptyList()) }
+    var traceMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(traceMessage) {
+        if (traceMessage != null) {
+            delay(2500)
+            traceMessage = null
+        }
+    }
+    LaunchedEffect(selectedId) {
+        if (selectedId == null) tracePath = emptyList()
+    }
     val searchSlice = if (viewTab == AtlasViewTab.DEPENDENCY) mapSlice else slice
     val searchMatches = remember(searchSlice, searchQuery) {
         atlasSearchMatches(searchSlice.nodes, searchQuery)
@@ -290,6 +304,19 @@ fun AtlasContent(
                     vcsMarks = effectiveMarks,
                     vcsImpacted = impacted,
                     activeId = activeFileId,
+                    tracePath = tracePath,
+                    onTracePath = { targetId ->
+                        val from = atlasView.selectedId
+                        if (from != null) {
+                            val found = GraphQueries.findPath(mapSlice.edges, from, targetId)
+                            if (found.isNullOrEmpty()) {
+                                tracePath = emptyList()
+                                traceMessage = "No dependency path found"
+                            } else {
+                                tracePath = listOf(from) + found.map { it.to }
+                            }
+                        }
+                    },
                 )
                 val drill = remember(mapSlice, selectedId) {
                     mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)
@@ -308,6 +335,21 @@ fun AtlasContent(
                         onOpen = onNodeClick,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                         impacted = impactEntries,
+                    )
+                }
+                traceMessage?.let { msg ->
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(12.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(10.dp),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
             }
