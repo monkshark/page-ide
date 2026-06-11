@@ -1,11 +1,14 @@
 package page.app
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
+import page.atlas.render.MapFilterState
+import page.atlas.render.MapViewState
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.runtime.TerminalManager
@@ -16,6 +19,7 @@ internal class SessionCoordinator(
     private val layoutUiState: LayoutUiState,
     private val workspaceState: WorkspaceState,
     private val terminalManagerProvider: () -> TerminalManager,
+    private val atlasMapView: MapViewState = MapViewState(),
 ) {
     private val terminalManager: TerminalManager get() = terminalManagerProvider()
 
@@ -64,6 +68,23 @@ internal class SessionCoordinator(
                 p to EditorScrollSnapshot(vertical = snap.vertical, horizontal = snap.horizontal)
             }
             .toMap()
+        session.atlasMap?.let { restoreAtlasMap(it) }
+    }
+
+    private fun restoreAtlasMap(atlas: SessionAtlasMap) {
+        atlasMapView.pan = Offset(atlas.panX, atlas.panY)
+        atlasMapView.scale = atlas.scale.coerceIn(0f, 10f)
+        atlasMapView.fitted = atlasMapView.scale > 0f
+        atlasMapView.userOffsets.clear()
+        for ((id, p) in atlas.boxOffsets) atlasMapView.userOffsets[id] = Offset(p.x, p.y)
+        atlasMapView.expandOrder.clear()
+        atlasMapView.expandOrder.addAll(atlas.expandOrder)
+        atlasMapView.expandedDirs = atlas.expandedDirs?.toSet()
+        atlasMapView.filter = MapFilterState(
+            focusDir = atlas.focusDir,
+            hiddenDirs = atlas.hiddenDirs.toSet(),
+            mutedDirs = atlas.mutedDirs.toSet(),
+        )
     }
 
     fun snapshot(): SessionFile = SessionFile(
@@ -93,5 +114,18 @@ internal class SessionCoordinator(
         editorScrollByPath = editorWorkspace.editorScrollByPath
             .mapKeys { it.key.toString() }
             .mapValues { SessionScrollSnapshot(vertical = it.value.vertical, horizontal = it.value.horizontal) },
+        atlasMap = snapshotAtlasMap(),
+    )
+
+    private fun snapshotAtlasMap(): SessionAtlasMap = SessionAtlasMap(
+        panX = atlasMapView.pan.x,
+        panY = atlasMapView.pan.y,
+        scale = atlasMapView.scale,
+        boxOffsets = atlasMapView.userOffsets.mapValues { SessionPoint(it.value.x, it.value.y) },
+        expandOrder = atlasMapView.expandOrder.toList(),
+        expandedDirs = atlasMapView.expandedDirs?.toList()?.sorted(),
+        focusDir = atlasMapView.filter.focusDir,
+        hiddenDirs = atlasMapView.filter.hiddenDirs.toList().sorted(),
+        mutedDirs = atlasMapView.filter.mutedDirs.toList().sorted(),
     )
 }

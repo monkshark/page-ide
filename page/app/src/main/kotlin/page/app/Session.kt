@@ -30,6 +30,23 @@ data class SessionPane(
     val activeIndex: Int = -1,
 )
 
+data class SessionPoint(
+    val x: Float = 0f,
+    val y: Float = 0f,
+)
+
+data class SessionAtlasMap(
+    val panX: Float = 0f,
+    val panY: Float = 0f,
+    val scale: Float = 0f,
+    val boxOffsets: Map<String, SessionPoint> = emptyMap(),
+    val expandOrder: List<String> = emptyList(),
+    val expandedDirs: List<String>? = null,
+    val focusDir: String? = null,
+    val hiddenDirs: List<String> = emptyList(),
+    val mutedDirs: List<String> = emptyList(),
+)
+
 data class SessionFile(
     val version: Int = 1,
     val primary: SessionPane = SessionPane(),
@@ -56,6 +73,7 @@ data class SessionFile(
     val foldedStartLinesByPath: Map<String, List<Int>> = emptyMap(),
     val expandedDirs: List<String> = emptyList(),
     val editorScrollByPath: Map<String, SessionScrollSnapshot> = emptyMap(),
+    val atlasMap: SessionAtlasMap? = null,
 )
 
 internal fun restoreExpandedDirs(snapshot: List<String>): Set<Path> {
