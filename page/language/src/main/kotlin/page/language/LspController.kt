@@ -74,6 +74,8 @@ class LspController(
     val status: MutableState<Status> = mutableStateOf(Status.IDLE)
     var startedAtMs: Long = System.currentTimeMillis()
         private set
+    private var readyAtMs = 0L
+    private var firstServerFeedbackLogged = false
     val statusDetail: MutableState<String> = mutableStateOf("")
     val missingDefinition: MutableState<LanguageDefinition?> = mutableStateOf(null)
     val missingAttempted: MutableState<List<String>> = mutableStateOf(emptyList())
@@ -146,6 +148,7 @@ class LspController(
         startAttempted = true
         activeBackend = backend
         startActivityJanitor()
+        val resolveStartedMs = System.currentTimeMillis()
         println("[lsp] resolving ${backend.displayName} (workspace=$workspaceRoot)")
         val env = HashMap(System.getenv())
         PageRuntimeEnv.applyTo(env)
@@ -164,10 +167,12 @@ class LspController(
         startedAtMs = System.currentTimeMillis()
         statusDetail.value = "starting (${resolution.origin}: ${resolution.executable})"
         startActivity(STARTUP_KIND, "Starting…")
-        println("[lsp] STARTING — ${resolution.origin}: ${resolution.executable}")
+        println("[lsp] STARTING — ${resolution.origin}: ${resolution.executable} (resolve=${startedAtMs - resolveStartedMs}ms)")
         val myGeneration = ++clientGeneration
         try {
+            val spawnStartedMs = System.currentTimeMillis()
             val c = backend.spawn(resolution.executable, workspaceRoot, onStderrLine = ::onLspStderr, env = env)
+            val spawnMs = System.currentTimeMillis() - spawnStartedMs
             c.onDiagnostics { params -> if (myGeneration == clientGeneration) onDiagnostics(params) }
             c.onLogMessage { mp ->
                 val rendered = if (mp.type == org.eclipse.lsp4j.MessageType.Error) condenseStackTrace(mp.message ?: "") else mp.message
@@ -185,6 +190,7 @@ class LspController(
                 println("[lsp] applyEdit ◀ server — ${edit.changes.sumOf { it.edits.size }} edit(s), applied=$applied")
                 applied
             }
+            val initializeStartedMs = System.currentTimeMillis()
             val startFuture = c.start()
             scope.launch {
                 kotlinx.coroutines.delay(60_000)
@@ -207,8 +213,10 @@ class LspController(
                     throwable.printStackTrace()
                 } else {
                     status.value = Status.READY
+                    readyAtMs = System.currentTimeMillis()
+                    firstServerFeedbackLogged = false
                     statusDetail.value = "${backend.displayName} ready (capabilities=${result.capabilities != null})"
-                    println("[lsp] READY — capabilities=${result.capabilities != null}")
+                    println("[lsp] READY — capabilities=${result.capabilities != null} (spawn=${spawnMs}ms initialize=${readyAtMs - initializeStartedMs}ms)")
                     prepareRenameSupported = detectPrepareRenameSupport(result.capabilities)
                     println("[lsp] prepareRename support = $prepareRenameSupported")
                     inlayHintSupported = detectInlayHintSupport(result.capabilities)
@@ -251,6 +259,12 @@ class LspController(
         activities.remove(kind)
     }
 
+    private fun logFirstServerFeedback(what: String) {
+        if (firstServerFeedbackLogged || readyAtMs == 0L) return
+        firstServerFeedbackLogged = true
+        println("[lsp] first server feedback ($what) +${System.currentTimeMillis() - readyAtMs}ms after READY")
+    }
+
     internal fun markMissing(backendId: String, attempted: List<String>, detail: String) {
         missingDefinition.value = LanguageRegistry.byId(backendId)
         missingAttempted.value = attempted
@@ -287,6 +301,7 @@ class LspController(
         when (event) {
             is LspProgress.Begin -> {
                 println("[lsp] progress ◀ Begin token=${event.token} title='${event.title}' message='${event.message ?: ""}'")
+                logFirstServerFeedback("progress")
                 endActivity(ANALYSIS_KIND)
                 progressTitles[event.token] = event.title
                 startActivity(kind, progressLabel(event.title, event.message), progressFraction(event.percentage))
@@ -431,12 +446,17 @@ class LspController(
         pendingOpens.clear()
         for ((uri, p) in snapshot) {
             try {
+                val text = p.text.ifEmpty {
+                    runCatching { java.nio.file.Files.readString(p.path) }
+                        .onSuccess { println("[lsp] flush text was empty — loaded ${it.length} chars from disk for $uri") }
+                        .getOrDefault("")
+                }
                 if (ws.isOpen(uri)) {
-                    println("[lsp] flush → didChange $uri")
-                    ws.didChange(uri, p.text)
+                    println("[lsp] flush → didChange $uri (${text.length} chars)")
+                    ws.didChange(uri, text)
                 } else {
-                    println("[lsp] flush → didOpen $uri (lang=${p.languageId}, ${p.text.length} chars)")
-                    ws.didOpen(uri, p.languageId, p.text)
+                    println("[lsp] flush → didOpen $uri (lang=${p.languageId}, ${text.length} chars)")
+                    ws.didOpen(uri, p.languageId, text)
                 }
             } catch (t: Throwable) {
                 println("[lsp] flush failed for $uri: ${t.message}")
@@ -1460,6 +1480,7 @@ class LspController(
     private fun onDiagnostics(params: PublishDiagnosticsParams) {
         val uri = params.uri ?: return
         if (isNoiseUri(uri)) return
+        logFirstServerFeedback("diagnostics")
         if (activities.containsKey(ANALYSIS_KIND)) endActivity(ANALYSIS_KIND)
         val key = canonicalUri(uri)
         val mapped = params.diagnostics.orEmpty().map(Diagnostic::fromLsp)
