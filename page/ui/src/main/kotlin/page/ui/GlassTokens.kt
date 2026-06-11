@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class GlassPalette { Cool, Warm, Frost, Forest, Midnight, Sand }
+enum class GlassPalette { Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
 
 @Immutable
 data class GlassColors(
@@ -125,6 +125,34 @@ private val FrostSyntax = SyntaxPalette(
     annotation = Color(0xFF8250DF),
     type = Color(0xFF953800),
     identifier = Color(0xFF1F2328),
+)
+
+private val GraphiteSyntax = SyntaxPalette(
+    keyword = Color(0xFFCC7832),
+    string = Color(0xFF6A8759),
+    number = Color(0xFF6897BB),
+    comment = Color(0xFF808080),
+    docComment = Color(0xFF629755),
+    todoTag = Color(0xFFA8C023),
+    annotation = Color(0xFFBBB529),
+    type = Color(0xFFFFC66D),
+    identifier = Color(0xFFA9B7C6),
+)
+
+private val GraphiteColors = GlassColors(
+    background = Color(0xFF1E1F22),
+    surface = Color(0xFF26282B),
+    surfaceRaised = Color(0xFF2B2D30),
+    outline = Color(0xFF393B40),
+    primary = Color(0xFF6897BB),
+    onPrimary = Color(0xFF1E1F22),
+    accent = Color(0xFF6A8759),
+    text = Color(0xFFBCBEC4),
+    muted = Color(0xFF787C84),
+    error = Color(0xFFDB5C5C),
+    warn = Color(0xFFC8A24A),
+    syntax = GraphiteSyntax,
+    isLight = false,
 )
 
 private val CoolColors = GlassColors(
@@ -262,6 +290,7 @@ private val SandColors = GlassColors(
 fun glassTokensFor(palette: GlassPalette): GlassTokens = GlassTokens(
     palette = palette,
     color = when (palette) {
+        GlassPalette.Graphite -> GraphiteColors
         GlassPalette.Cool -> CoolColors
         GlassPalette.Warm -> WarmColors
         GlassPalette.Frost -> FrostColors
