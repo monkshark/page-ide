@@ -22,11 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -76,6 +77,7 @@ fun AtlasPanel(
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
+    atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -94,6 +96,7 @@ fun AtlasPanel(
             showExpand = showExpand,
             onExpand = onExpand,
             mapView = mapView,
+            atlasView = atlasView,
             loadProgress = loadProgress,
         )
     }
@@ -111,9 +114,11 @@ fun AtlasContent(
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
+    atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
 ) {
-    var selectedId by remember(slice) { mutableStateOf<String?>(null) }
+    LaunchedEffect(slice) { atlasView.onSliceChanged(slice) }
+    val selectedId = atlasView.selectedId
     val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -182,7 +187,7 @@ fun AtlasContent(
                 MapCanvas(
                     slice = mapSlice,
                     selectedId = selectedId,
-                    onSelect = { selectedId = it },
+                    onSelect = { atlasView.selectedId = it },
                     onNodeClick = onNodeClick,
                     view = mapView,
                 )
@@ -221,8 +226,9 @@ fun AtlasContent(
                     slice = slice,
                     projectMode = projectMode,
                     selectedId = selectedId,
-                    onSelect = { selectedId = it },
+                    onSelect = { atlasView.selectedId = it },
                     onNodeClick = onNodeClick,
+                    view = atlasView,
                 )
             }
             Divider()
@@ -306,17 +312,16 @@ private fun AtlasCanvas(
     selectedId: String?,
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
+    view: AtlasViewState,
 ) {
-    var yaw by remember { mutableStateOf(0.6f) }
-    var pitch by remember { mutableStateOf(0.5f) }
-    var zoomUser by remember { mutableStateOf(1f) }
+    var yaw by view::yaw
+    var pitch by view::pitch
+    var zoomUser by view::zoomUser
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverPos by remember { mutableStateOf<Offset?>(null) }
-    var lastInteract by remember { mutableStateOf(0L) }
     val activeId = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
     LaunchedEffect(activeId, projectMode) {
-        zoomUser = 1f
-        pitch = 0.5f
+        view.onCameraSubject(activeId, projectMode)
     }
     val scene = remember(slice) { buildScene(slice) }
     var fromScene by remember { mutableStateOf(scene) }
@@ -374,16 +379,15 @@ private fun AtlasCanvas(
     val hoverId = hoverPos?.let { nodeAt(it)?.id }
     val focusId = selectedId ?: hoverId
     val highlighted = focusId?.let { (neighborsByHover[it].orEmpty() + it) }
-    val rotationPaused by rememberUpdatedState(hoverId != null || selectedId != null)
-    LaunchedEffect(Unit) {
-        var last = 0L
+    val rotationPaused = hoverId != null || selectedId != null
+    val rotationOwner = remember { Any() }
+    SideEffect { view.holdRotation(rotationOwner, rotationPaused) }
+    DisposableEffect(view) {
+        onDispose { view.releaseRotation(rotationOwner) }
+    }
+    LaunchedEffect(view) {
         while (true) {
-            withFrameNanos { now ->
-                if (last != 0L && now - lastInteract > 3_000_000_000L && !rotationPaused) {
-                    yaw += (now - last) / 1_000_000_000f * 0.1f
-                }
-                last = now
-            }
+            withFrameNanos { now -> view.autoRotateTick(now) }
         }
     }
 
@@ -397,7 +401,7 @@ private fun AtlasCanvas(
                     change.consume()
                     yaw += dragAmount.x * 0.008f
                     pitch = (pitch + dragAmount.y * 0.008f).coerceIn(-0.2f, 1.25f)
-                    lastInteract = System.nanoTime()
+                    view.lastInteractNanos = System.nanoTime()
                 }
             }
             .pointerInput(Unit) {
@@ -409,7 +413,7 @@ private fun AtlasCanvas(
                                 val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
                                 if (delta != 0f) {
                                     zoomUser = (zoomUser * if (delta > 0f) 0.9f else 1.1f).coerceIn(0.2f, 5f)
-                                    lastInteract = System.nanoTime()
+                                    view.lastInteractNanos = System.nanoTime()
                                 }
                             }
                             PointerEventType.Move -> {
@@ -426,14 +430,14 @@ private fun AtlasCanvas(
                 detectTapGestures(
                     onTap = { tap ->
                         onSelect(nodeAt(tap)?.id)
-                        lastInteract = System.nanoTime()
+                        view.lastInteractNanos = System.nanoTime()
                     },
                     onDoubleTap = { tap ->
                         val hit = nodeAt(tap)
                         if (hit != null) {
                             slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
                         }
-                        lastInteract = System.nanoTime()
+                        view.lastInteractNanos = System.nanoTime()
                     },
                 )
             },

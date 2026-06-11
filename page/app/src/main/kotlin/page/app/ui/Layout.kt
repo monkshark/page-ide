@@ -33,6 +33,7 @@ import page.app.mvi.IdeEvent
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
+import page.atlas.render.AtlasViewState
 import page.atlas.render.MapViewState
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
@@ -140,6 +141,7 @@ internal fun IdeMainLayout(
     settings: SettingsBinding = SettingsBinding(),
     atlasSlice: GraphSlice = GraphSlice.EMPTY,
     atlasMapView: MapViewState = remember { MapViewState() },
+    atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasLoadProgress: Float? = null,
 ) {
     val onToggle = fileTree.onToggle
@@ -422,6 +424,7 @@ internal fun IdeMainLayout(
                     showExpand = true,
                     onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
                     mapView = atlasMapView,
+                    atlasView = atlasView,
                     loadProgress = atlasLoadProgress,
                 )
             }
@@ -600,6 +603,7 @@ internal fun IdeMainLayout(
                 viewTab = ui.atlasViewTab,
                 onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
                 mapView = atlasMapView,
+                atlasView = atlasView,
                 loadProgress = atlasLoadProgress,
             )
         }
