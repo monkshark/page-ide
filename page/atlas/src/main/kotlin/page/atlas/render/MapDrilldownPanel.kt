@@ -27,6 +27,7 @@ internal fun MapDrilldownPanel(
     showCounterparts: Boolean,
     onOpen: (FilePath) -> Unit,
     modifier: Modifier = Modifier,
+    impacted: List<DrillEntry> = emptyList(),
 ) {
     Column(
         modifier = modifier
@@ -39,6 +40,7 @@ internal fun MapDrilldownPanel(
     ) {
         DrillSection("Used by", drill.usedBy, MaterialTheme.colorScheme.tertiary, showCounterparts, onOpen)
         DrillSection("Uses", drill.uses, MaterialTheme.colorScheme.primary, showCounterparts, onOpen)
+        DrillSection("May be affected", impacted, vcsImpactColor, false, onOpen)
     }
 }
 
