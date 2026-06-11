@@ -130,6 +130,9 @@ fun AtlasContent(
     val selectedId = atlasView.selectedId
     val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
     val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
+    val impacted = remember(slice, effectiveMarks) {
+        vcsImpacted(slice.edges, effectiveMarks.keys)
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -204,20 +207,25 @@ fun AtlasContent(
                     onNodeClick = onNodeClick,
                     view = mapView,
                     vcsMarks = effectiveMarks,
+                    vcsImpacted = impacted,
                 )
                 val drill = remember(mapSlice, selectedId) {
                     mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)
                 }
+                val impactEntries = remember(mapSlice, impacted) {
+                    vcsImpactEntries(mapSlice.nodes, impacted)
+                }
                 val sel = selectedId
-                if (sel != null && drill.any) {
+                if ((sel != null && drill.any) || impactEntries.isNotEmpty()) {
                     val selectedIsFolder = remember(mapSlice, sel) {
-                        mapSlice.nodes.any { it.id != sel && belongsTo(it.id, sel) }
+                        sel != null && mapSlice.nodes.any { it.id != sel && belongsTo(it.id, sel) }
                     }
                     MapDrilldownPanel(
-                        drill = drill,
+                        drill = if (sel != null) drill else MapDrilldown.EMPTY,
                         showCounterparts = selectedIsFolder,
                         onOpen = onNodeClick,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                        impacted = impactEntries,
                     )
                 }
             }
@@ -244,6 +252,7 @@ fun AtlasContent(
                     onNodeClick = onNodeClick,
                     view = atlasView,
                     vcsMarks = effectiveMarks,
+                    vcsImpacted = impacted,
                 )
             }
             Divider()
@@ -329,6 +338,7 @@ private fun AtlasCanvas(
     onNodeClick: (FilePath) -> Unit,
     view: AtlasViewState,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
+    vcsImpacted: Map<String, Int> = emptyMap(),
 ) {
     var yaw by view::yaw
     var pitch by view::pitch
@@ -547,6 +557,12 @@ private fun AtlasCanvas(
             val mark = vcsMarks[p.id]
             if (mark != null) {
                 drawCircle(vcsColor(mark).copy(alpha = alpha * 0.9f), radius = r + 2.5f, center = pos, style = Stroke(width = 1.5f))
+            } else {
+                val impactDepth = vcsImpacted[p.id]
+                if (impactDepth != null) {
+                    val impactA = alpha * if (impactDepth <= 1) 0.85f else 0.4f
+                    drawCircle(vcsImpactColor.copy(alpha = impactA), radius = r + 2.5f, center = pos, style = Stroke(width = 1f))
+                }
             }
             if (p.id == selectedId) {
                 val ringR = r + if (mark != null) 5f else 3f

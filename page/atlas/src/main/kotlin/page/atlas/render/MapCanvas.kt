@@ -58,6 +58,7 @@ internal fun MapCanvas(
     onNodeClick: (FilePath) -> Unit,
     view: MapViewState,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
+    vcsImpacted: Map<String, Int> = emptyMap(),
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -461,6 +462,15 @@ internal fun MapCanvas(
                             ),
                         )
                     }
+                }
+                val impactDepth = if (box.folder) null else vcsImpacted[box.id]
+                if (impactDepth != null) {
+                    drawCircle(
+                        color = vcsImpactColor.copy(alpha = boxA * if (impactDepth <= 1) 0.9f else 0.45f),
+                        radius = 3f,
+                        center = Offset(box.x + box.w - 6f, box.y + 6f),
+                        style = Stroke(width = 1.5f),
+                    )
                 }
                 val mark = if (box.folder) null else vcsMarks[box.id]
                 if (mark != null) {
