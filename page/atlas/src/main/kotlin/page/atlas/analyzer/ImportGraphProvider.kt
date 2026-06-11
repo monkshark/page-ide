@@ -221,6 +221,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         EdgeKind.IMPORT -> 0
         EdgeKind.IMPLEMENTS -> 1
         EdgeKind.EXTENDS -> 2
+        EdgeKind.CALLS -> 0
     }
 
     private fun snakeCase(name: String): String =
