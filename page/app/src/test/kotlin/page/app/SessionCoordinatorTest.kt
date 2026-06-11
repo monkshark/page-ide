@@ -122,6 +122,7 @@ class SessionCoordinatorTest {
         view.expandOrder.add("dir")
         view.expandedDirs = setOf("dir")
         view.filter = MapFilterState(focusDir = "dir", hiddenDirs = setOf("h"), mutedDirs = setOf("m"))
+        view.pinnedIds = setOf("p1", "p2")
         SessionStore.save(ws, coordinator(ws, view).snapshot())
 
         val restored = MapViewState()
@@ -136,6 +137,7 @@ class SessionCoordinatorTest {
         assertEquals("dir", restored.filter.focusDir)
         assertEquals(setOf("h"), restored.filter.hiddenDirs)
         assertEquals(setOf("m"), restored.filter.mutedDirs)
+        assertEquals(setOf("p1", "p2"), restored.pinnedIds)
     }
 
     @Test

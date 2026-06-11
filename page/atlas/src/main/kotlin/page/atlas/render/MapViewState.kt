@@ -16,6 +16,11 @@ class MapViewState {
     var expandedDirs by mutableStateOf<Set<String>?>(null)
     var filter by mutableStateOf(MapFilterState())
     var focusCenterId by mutableStateOf<String?>(null)
+    var pinnedIds by mutableStateOf<Set<String>>(emptySet())
+
+    fun togglePin(id: String) {
+        pinnedIds = if (id in pinnedIds) pinnedIds - id else pinnedIds + id
+    }
 
     fun reset() {
         focusCenterId = null
@@ -26,5 +31,6 @@ class MapViewState {
         expandOrder.clear()
         expandedDirs = null
         filter = MapFilterState()
+        pinnedIds = emptySet()
     }
 }

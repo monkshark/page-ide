@@ -86,6 +86,7 @@ internal class SessionCoordinator(
             hiddenDirs = atlas.hiddenDirs.toSet(),
             mutedDirs = atlas.mutedDirs.toSet(),
         )
+        atlasMapView.pinnedIds = atlas.pinned.toSet()
     }
 
     fun snapshot(): SessionFile = SessionFile(
@@ -129,5 +130,6 @@ internal class SessionCoordinator(
         focusDir = atlasMapView.filter.focusDir,
         hiddenDirs = atlasMapView.filter.hiddenDirs.toList().sorted(),
         mutedDirs = atlasMapView.filter.mutedDirs.toList().sorted(),
+        pinned = atlasMapView.pinnedIds.toList().sorted(),
     )
 }
