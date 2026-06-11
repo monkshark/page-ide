@@ -76,6 +76,7 @@ fun AtlasPanel(
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
+    loadProgress: Float? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -93,6 +94,7 @@ fun AtlasPanel(
             showExpand = showExpand,
             onExpand = onExpand,
             mapView = mapView,
+            loadProgress = loadProgress,
         )
     }
 }
@@ -109,6 +111,7 @@ fun AtlasContent(
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
+    loadProgress: Float? = null,
 ) {
     var selectedId by remember(slice) { mutableStateOf<String?>(null) }
     val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
@@ -163,8 +166,13 @@ fun AtlasContent(
         Divider()
         if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val progress = loadProgress
                 Text(
-                    text = if (projectMode || viewTab == AtlasViewTab.DEPENDENCY) "No source files" else "No imports",
+                    text = when {
+                        progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
+                        projectMode || viewTab == AtlasViewTab.DEPENDENCY -> "No source files"
+                        else -> "No imports"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -412,6 +412,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
 
     val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
+    var atlasLoadProgress by remember { mutableStateOf<Float?>(null) }
     val atlasOpen = layoutUiState.atlasOpen
     val atlasProjectMode = layoutUiState.atlasProjectMode
     val atlasViewTab = layoutUiState.atlasViewTab
@@ -422,20 +423,25 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             (!dependencyTab && !atlasProjectMode && focusedActivePath == null)
         ) {
             atlasSlice = GraphSlice.EMPTY
+            atlasLoadProgress = null
             return@LaunchedEffect
         }
         kotlinx.coroutines.delay(300)
+        val reportProgress = atlasSlice.nodes.isEmpty()
+        val onProgress: (Int, Int) -> Unit = { done, total ->
+            if (reportProgress && total > 0) atlasLoadProgress = done.toFloat() / total
+        }
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 when {
                     dependencyTab -> {
-                        val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                        val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText, onProgress)
                         val file = focusedActivePath
                             ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
                             ?: GraphSlice.EMPTY
                         page.atlas.graph.GraphQueries.merge(project, file)
                     }
-                    atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText)
+                    atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText, onProgress)
                     else -> atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
                 }
             }.getOrElse { t ->
@@ -443,6 +449,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 GraphSlice.EMPTY
             }
         }
+        atlasLoadProgress = null
     }
 
     val openInTab = app.openInTab
@@ -634,6 +641,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     settings = app.settingsBinding(),
                     atlasSlice = atlasSlice,
                     atlasMapView = atlasMapView,
+                    atlasLoadProgress = atlasLoadProgress,
                   )
                 }
                 if (findInFiles) {

@@ -161,6 +161,17 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `project slice reports per-file progress`(@TempDir root: Path) {
+        val pkg = Files.createDirectories(root.resolve("pkg"))
+        for (i in 1..3) Files.writeString(pkg.resolve("m$i.py"), "import json")
+        val updates = ArrayList<Pair<Int, Int>>()
+        ImportGraphProvider(root).nodesForProject(null, null) { done, total -> updates += done to total }
+        assertEquals(3, updates.size)
+        assertEquals(listOf(0, 1, 2), updates.map { it.first })
+        assertTrue(updates.all { it.second == 3 })
+    }
+
+    @Test
     fun `project slice promotes inheritance edges`(@TempDir root: Path) {
         val base = root.resolve("src/base.ts")
         Files.createDirectories(base.parent)
