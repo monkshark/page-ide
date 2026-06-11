@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -167,6 +168,8 @@ internal fun MapCanvas(
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val tertiary = MaterialTheme.colorScheme.tertiary
+    val errorColor = MaterialTheme.colorScheme.error
+    val cycleKeys = remember(toMap) { mapCycleEdges(toMap.edges) }
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val folderFill = MaterialTheme.colorScheme.surfaceVariant
     val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
@@ -321,17 +324,32 @@ internal fun MapCanvas(
                 val end = borderPoint(to, control)
                 val stroke = (1.5f + ln(edge.weight.toFloat())).coerceAtMost(4f) * inv
                 val touchesSelection = edge.from == selectedId || edge.to == selectedId
+                val inCycle = (edge.from to edge.to) in cycleKeys
                 val lineColor = when {
+                    inCycle && !focusActive -> errorColor.copy(alpha = 0.85f)
                     !focusActive -> edgeColor.copy(alpha = baseAlpha)
                     edge.from == selectedId -> primary.copy(alpha = 0.9f)
                     edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
+                    inCycle -> errorColor.copy(alpha = 0.35f)
                     else -> edgeColor.copy(alpha = 0.15f)
                 }
                 val curve = Path().apply {
                     moveTo(start.x, start.y)
                     quadraticTo(control.x, control.y, end.x, end.y)
                 }
-                drawPath(curve, lineColor.fade(a), style = Stroke(width = stroke, cap = StrokeCap.Round))
+                drawPath(
+                    curve,
+                    lineColor.fade(a),
+                    style = Stroke(
+                        width = stroke,
+                        cap = StrokeCap.Round,
+                        pathEffect = if (inCycle) {
+                            PathEffect.dashPathEffect(floatArrayOf(7f * inv, 5f * inv))
+                        } else {
+                            null
+                        },
+                    ),
+                )
                 drawMapArrow(control, end, lineColor.fade(a), inv)
                 if (edge.weight > 1 && (showAllBadges || touchesSelection)) {
                     val mid = (start + end) / 4f + control / 2f
