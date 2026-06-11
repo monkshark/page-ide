@@ -143,6 +143,8 @@ internal fun IdeMainLayout(
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasLoadProgress: Float? = null,
+    atlasUsedByCount: Int? = null,
+    onAtlasFocusActive: (() -> Unit)? = null,
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -513,6 +515,8 @@ internal fun IdeMainLayout(
             onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
             onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
             onRuntimeClick = { id -> runtimeDialogOpen = id },
+            usedByCount = atlasUsedByCount,
+            onUsedByClick = onAtlasFocusActive,
         )
     }
     if (installGuideOpen && shellCtrl != null) {

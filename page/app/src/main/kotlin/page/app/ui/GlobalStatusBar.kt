@@ -58,6 +58,8 @@ internal fun GlobalStatusBar(
     onProblemsToggle: () -> Unit,
     onTodoToggle: () -> Unit,
     onRuntimeClick: ((String) -> Unit)?,
+    usedByCount: Int? = null,
+    onUsedByClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val pane = editor.focused()
@@ -132,6 +134,7 @@ internal fun GlobalStatusBar(
                     label = "warnings",
                     onClick = onProblemsToggle,
                 )
+                if (usedByCount != null) UsedByBadge(count = usedByCount, onClick = onUsedByClick)
             }
             TodoStatusBadge(
                 count = todoCount,
@@ -412,6 +415,19 @@ private fun TodoStatusBadge(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@Composable
+private fun UsedByBadge(count: Int, onClick: (() -> Unit)? = null) {
+    val color = if (onClick != null) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+    Text(
+        text = "Used by $count",
+        modifier = mod,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+    )
 }
 
 @Composable

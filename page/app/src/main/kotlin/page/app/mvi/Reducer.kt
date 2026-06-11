@@ -3,6 +3,7 @@ package page.app.mvi
 import androidx.compose.ui.unit.dp
 import page.app.EditorScrollMemory
 import page.app.PaneSide
+import page.atlas.render.AtlasViewTab
 import page.ui.GlassPalette
 
 internal fun reduce(state: AppState, event: IdeEvent): AppState = when (event) {
@@ -142,6 +143,7 @@ private fun reduceLayout(s: LayoutState, e: IdeEvent.Panel): LayoutState = when 
     IdeEvent.Panel.CloseOutput -> s.copy(outputOpen = false)
     IdeEvent.Panel.ToggleAtlas -> s.copy(atlasOpen = !s.atlasOpen)
     IdeEvent.Panel.CloseAtlas -> s.copy(atlasOpen = false)
+    IdeEvent.Panel.FocusInAtlas -> s.copy(atlasOpen = true, atlasViewTab = AtlasViewTab.DEPENDENCY)
     is IdeEvent.Panel.AtlasProjectModeChanged -> s.copy(atlasProjectMode = e.enabled)
     is IdeEvent.Panel.AtlasViewTabChanged -> s.copy(atlasViewTab = e.tab)
     is IdeEvent.Panel.ExpandPanel ->

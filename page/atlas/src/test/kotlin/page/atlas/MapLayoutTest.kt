@@ -12,6 +12,7 @@ import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.render.MapBox
+import page.atlas.render.ancestorDirIds
 import page.atlas.render.applyUserOffsets
 import page.atlas.render.belongsTo
 import page.atlas.render.buildMap
@@ -32,6 +33,15 @@ class MapLayoutTest {
 
     private fun overlaps(a: MapBox, b: MapBox): Boolean =
         a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+    @Test
+    fun `ancestorDirIds returns parent chain for a file id`() {
+        val ancestors = ancestorDirIds(id("ws/a/b/x.kt"))
+        assertTrue(id("ws/a/b") in ancestors)
+        assertTrue(id("ws/a") in ancestors)
+        assertTrue(id("ws") in ancestors)
+        assertFalse(id("ws/a/b/x.kt") in ancestors)
+    }
 
     @Test
     fun `collapsed folders aggregate file counts and edge weights`() {

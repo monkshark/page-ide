@@ -36,6 +36,36 @@ class AtlasViewStateTest {
     }
 
     @Test
+    fun pendingFocusSelectsNodeWhenPresent() {
+        val view = AtlasViewState()
+        view.onSliceChanged(slice("a", "b"))
+        view.pendingFocusId = "b"
+        view.onSliceChanged(slice("a", "b", "c"))
+        assertEquals("b", view.selectedId)
+        assertNull(view.pendingFocusId)
+    }
+
+    @Test
+    fun pendingFocusConsumedOnEqualSlice() {
+        val view = AtlasViewState()
+        view.onSliceChanged(slice("a", "b"))
+        view.pendingFocusId = "a"
+        view.onSliceChanged(slice("a", "b"))
+        assertEquals("a", view.selectedId)
+        assertNull(view.pendingFocusId)
+    }
+
+    @Test
+    fun pendingFocusSurvivesSliceWithoutNode() {
+        val view = AtlasViewState()
+        view.onSliceChanged(slice("a", "b"))
+        view.pendingFocusId = "z"
+        view.onSliceChanged(slice("a", "c"))
+        assertNull(view.selectedId)
+        assertEquals("z", view.pendingFocusId)
+    }
+
+    @Test
     fun cameraResetsOncePerSubject() {
         val view = AtlasViewState()
         view.onCameraSubject("file-a", projectMode = false)

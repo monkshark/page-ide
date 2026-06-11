@@ -73,6 +73,25 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `dependentCountOf counts files importing the target`(@TempDir root: Path) {
+        val a = root.resolve("src/com/example/A.kt")
+        Files.createDirectories(a.parent)
+        Files.writeString(a, "package com.example\n\nclass A")
+        val b = root.resolve("src/com/example/B.kt")
+        Files.writeString(b, "package com.example\n\nimport com.example.A\n\nclass B")
+        val provider = ImportGraphProvider(root)
+        assertEquals(1, provider.dependentCountOf(a))
+        assertEquals(0, provider.dependentCountOf(b))
+    }
+
+    @Test
+    fun `dependentCountOf returns null for unsupported files`(@TempDir root: Path) {
+        val readme = root.resolve("README.md")
+        Files.writeString(readme, "hello")
+        assertEquals(null, ImportGraphProvider(root).dependentCountOf(readme))
+    }
+
+    @Test
     fun `duplicate imports are deduplicated`(@TempDir root: Path) {
         val active = root.resolve("main.py")
         val text = """

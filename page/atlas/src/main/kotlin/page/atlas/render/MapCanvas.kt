@@ -103,6 +103,25 @@ internal fun MapCanvas(
         fitted = true
     }
 
+    LaunchedEffect(map, view.focusCenterId, canvasSize) {
+        val focusId = view.focusCenterId ?: return@LaunchedEffect
+        if (canvasSize.width <= 0 || map.width <= 0f) return@LaunchedEffect
+        val box = applyUserOffsets(map.boxes, userOffsets).firstOrNull { it.id == focusId }
+        if (box == null) {
+            val next = effectiveExpanded + ancestorDirIds(focusId)
+            if (next != effectiveExpanded) view.expandedDirs = next else view.focusCenterId = null
+            return@LaunchedEffect
+        }
+        val (_, curScale) = viewTransform()
+        pan = Offset(
+            canvasSize.width / 2f - (box.x + box.w / 2f) * curScale,
+            canvasSize.height / 2f - (box.y + box.h / 2f) * curScale,
+        )
+        if (scale <= 0f) scale = curScale
+        fitted = true
+        view.focusCenterId = null
+    }
+
     LaunchedEffect(map) {
         if (toMap == map) return@LaunchedEffect
         val prevById = toMap.boxes.associateBy { it.id }

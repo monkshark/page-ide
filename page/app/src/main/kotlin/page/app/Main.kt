@@ -452,6 +452,23 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
         atlasLoadProgress = null
     }
+    var atlasUsedByCount by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(atlasProvider, focusedActivePath) {
+        atlasUsedByCount = null
+        val path = focusedActivePath ?: return@LaunchedEffect
+        if (atlasProvider == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(700)
+        atlasUsedByCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { atlasProvider.dependentCountOf(path) }.getOrNull()
+        }
+    }
+    val focusActiveInAtlas: () -> Unit = focusActiveInAtlas@{
+        val path = focusedActivePath ?: return@focusActiveInAtlas
+        val id = path.toAbsolutePath().normalize().toString()
+        atlasView.pendingFocusId = id
+        atlasMapView.focusCenterId = id
+        onIdeEvent(IdeEvent.Panel.FocusInAtlas)
+    }
 
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
@@ -644,6 +661,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasMapView = atlasMapView,
                     atlasView = atlasView,
                     atlasLoadProgress = atlasLoadProgress,
+                    atlasUsedByCount = atlasUsedByCount,
+                    onAtlasFocusActive = focusActiveInAtlas,
                   )
                 }
                 if (findInFiles) {
