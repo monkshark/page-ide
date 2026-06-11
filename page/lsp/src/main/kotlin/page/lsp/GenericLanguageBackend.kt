@@ -17,6 +17,7 @@ class GenericLanguageBackend(
     override val id: String = definition.id
     override val displayName: String = definition.displayName
     override val lspLanguageId: String = definition.lspLanguageId
+    override val workspaceAutoOpen: Boolean = definition.workspaceAutoOpen
 
     override fun supports(extension: String?): Boolean = definition.supports(extension)
 

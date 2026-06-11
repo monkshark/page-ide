@@ -38,6 +38,14 @@ class LanguageRegistryTest {
     }
 
     @Test
+    fun dartFamilySkipsWorkspaceAutoOpen() {
+        assertEquals(false, LanguageRegistry.byId("dart")?.workspaceAutoOpen)
+        assertEquals(false, LanguageRegistry.byId("flutter")?.workspaceAutoOpen)
+        assertEquals(true, LanguageRegistry.byId("kotlin")?.workspaceAutoOpen)
+        assertEquals(true, LanguageRegistry.byId("java")?.workspaceAutoOpen)
+    }
+
+    @Test
     fun bundledRegistryHasUniqueIds() {
         val all = LanguageRegistry.all()
         val ids = all.map { it.id }

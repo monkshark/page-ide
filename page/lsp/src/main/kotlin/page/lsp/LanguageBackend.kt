@@ -6,6 +6,7 @@ interface LanguageBackend {
     val id: String
     val displayName: String
     val lspLanguageId: String get() = id
+    val workspaceAutoOpen: Boolean get() = true
 
     fun supports(extension: String?): Boolean
 

@@ -241,7 +241,8 @@
                           "launchArgs":  [
                                              "language-server",
                                              "--protocol=lsp"
-                                         ]
+                                         ],
+                          "workspaceAutoOpen":  false
                       },
                       {
                           "id":  "flutter",
@@ -265,7 +266,8 @@
                           "runCommand":  "flutter run",
                           "launchArgs":  [
                                              "--protocol=lsp"
-                                         ]
+                                         ],
+                          "workspaceAutoOpen":  false
                       },
                       {
                           "id":  "bash",
