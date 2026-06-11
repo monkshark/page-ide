@@ -347,6 +347,7 @@ private fun AtlasCanvas(
         if (side <= 0f) zoomUser else side * 0.42f / radius * zoomUser
     }
     val kindById = remember(slice) { slice.nodes.associate { it.id to it.kind } }
+    val weightById = remember(slice) { hubWeights(slice) }
     val labelById = remember(slice) { slice.nodes.associate { it.id to it.label } }
     val neighborsByHover = remember(slice) {
         val map = HashMap<String, MutableSet<String>>()
@@ -365,7 +366,10 @@ private fun AtlasCanvas(
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val textMeasurer = rememberTextMeasurer()
 
-    fun nodeRadius(kind: NodeKind?): Float = if (kind == NodeKind.ACTIVE) 11f else 8f
+    fun nodeRadius(id: String): Float {
+        val base = if (kindById[id] == NodeKind.ACTIVE) 11f else 8f
+        return base * (weightById[id] ?: 1f)
+    }
 
     fun projected(): List<ProjectedNode> {
         if (canvasSize.width <= 0 || canvasSize.height <= 0) return emptyList()
@@ -373,7 +377,7 @@ private fun AtlasCanvas(
     }
 
     fun nodeAt(pos: Offset): ProjectedNode? = projected()
-        .filter { hypot(pos.x - it.x, pos.y - it.y) <= max(nodeRadius(kindById[it.id]) * it.scale, 14f) }
+        .filter { hypot(pos.x - it.x, pos.y - it.y) <= max(nodeRadius(it.id) * it.scale, 14f) }
         .minByOrNull { hypot(pos.x - it.x, pos.y - it.y) }
 
     val hoverId = hoverPos?.let { nodeAt(it)?.id }
@@ -470,7 +474,7 @@ private fun AtlasCanvas(
             val alpha = if (dimmed) 0.08f else depthAlpha((from.depth + to.depth) / 2f)
             val start = Offset(from.x, from.y)
             val end = Offset(to.x, to.y)
-            val targetRadius = nodeRadius(kindById[edge.to]) * to.scale
+            val targetRadius = nodeRadius(edge.to) * to.scale
             when (edge.kind) {
                 EdgeKind.IMPORT -> drawLine(
                     color = edgeColor.copy(alpha = alpha),
@@ -502,7 +506,7 @@ private fun AtlasCanvas(
                 NodeKind.EXTERNAL -> externalColor
             }
             val pos = Offset(p.x, p.y)
-            val r = (nodeRadius(kind) * p.scale).coerceAtLeast(2f)
+            val r = (nodeRadius(p.id) * p.scale).coerceAtLeast(2f)
             var alpha = depthAlpha(p.depth)
             if (p.id in freshIds) alpha *= morphT
             if (highlighted != null && p.id !in highlighted) alpha *= 0.18f

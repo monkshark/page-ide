@@ -160,12 +160,14 @@ fun buildMap(
     }
 
     val activeId = activeNode?.id
+    val nodeWeights = hubWeights(slice)
     val rank = HashMap<String, Int>()
     for ((index, dirId) in expandOrder.asReversed().withIndex()) {
         if (dirId in expanded) rank.putIfAbsent(dirId, index)
     }
     val pushes = HashMap<String, Offset>()
-    val topKids = orderedKids(root, 0, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
+    val topKids =
+        orderedKids(root, 0, expanded, trail, activeId, labelWidth, nodeWeights, offsets, rank, justExpanded, pushes)
     val (boxes, width, height) = shelfPack(topKids, offsets, rank, justExpanded, pushes)
     return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height, pushes)
 }
@@ -266,6 +268,7 @@ private fun orderedKids(
     trail: Set<String>,
     activeId: String?,
     labelWidth: (String) -> Float,
+    weights: Map<String, Float>,
     offsets: Map<String, Offset>,
     rank: Map<String, Int>,
     justExpanded: String?,
@@ -275,13 +278,20 @@ private fun orderedKids(
     val filesById = dir.files.associateBy { it.id }
     return dir.unitOrder.mapNotNull { key ->
         dirsById[key]?.let {
-            layoutDir(it, depth, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
-        } ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth) }
+            layoutDir(it, depth, expanded, trail, activeId, labelWidth, weights, offsets, rank, justExpanded, pushes)
+        } ?: filesById[key]?.let { placedFile(it, depth, activeId, labelWidth, weights[it.id] ?: 1f) }
     }
 }
 
-private fun placedFile(node: GraphNode, depth: Int, activeId: String?, labelWidth: (String) -> Float): Placed {
-    val w = labelWidth(node.label) + MAP_TEXT_PAD
+private fun placedFile(
+    node: GraphNode,
+    depth: Int,
+    activeId: String?,
+    labelWidth: (String) -> Float,
+    weight: Float,
+): Placed {
+    val w = (labelWidth(node.label) + MAP_TEXT_PAD) * weight
+    val h = MAP_FILE_H * weight
     val box = MapBox(
         id = node.id,
         label = node.label,
@@ -295,9 +305,9 @@ private fun placedFile(node: GraphNode, depth: Int, activeId: String?, labelWidt
         x = 0f,
         y = 0f,
         w = w,
-        h = MAP_FILE_H,
+        h = h,
     )
-    return Placed(node.id, w, MAP_FILE_H, w, MAP_FILE_H, listOf(box))
+    return Placed(node.id, w, h, w, h, listOf(box))
 }
 
 private fun layoutDir(
@@ -307,6 +317,7 @@ private fun layoutDir(
     trail: Set<String>,
     activeId: String?,
     labelWidth: (String) -> Float,
+    weights: Map<String, Float>,
     offsets: Map<String, Offset>,
     rank: Map<String, Int>,
     justExpanded: String?,
@@ -332,7 +343,8 @@ private fun layoutDir(
         )
         return Placed(dir.id, chipW, MAP_CHIP_H, chipW, MAP_CHIP_H, listOf(box))
     }
-    val kids = orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth, offsets, rank, justExpanded, pushes)
+    val kids =
+        orderedKids(dir, depth + 1, expanded, trail, activeId, labelWidth, weights, offsets, rank, justExpanded, pushes)
     val (inner, contentW, contentH) = shelfPack(kids, offsets, rank, justExpanded, pushes)
     val w = max(contentW, labelWidth(dir.label)) + MAP_PAD * 2
     val h = contentH + MAP_HEADER_H + MAP_PAD * 2
