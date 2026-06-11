@@ -473,6 +473,14 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runCatching { atlasProvider.dependentCountOf(path) }.getOrNull()
         }
     }
+    val atlasActiveId = remember(focusedActivePath) {
+        focusedActivePath?.toAbsolutePath()?.normalize()?.toString()
+    }
+    LaunchedEffect(layoutUiState.atlasFollowActive, atlasOpen, atlasExpanded, atlasActiveId) {
+        if (!layoutUiState.atlasFollowActive || (!atlasOpen && !atlasExpanded)) return@LaunchedEffect
+        val id = atlasActiveId ?: return@LaunchedEffect
+        atlasMapView.focusCenterId = id
+    }
     val focusInAtlas: (java.nio.file.Path) -> Unit = { path ->
         val id = path.toAbsolutePath().normalize().toString()
         atlasView.pendingFocusId = id
@@ -678,6 +686,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasUsedByCount = atlasUsedByCount,
                     onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
+                    atlasActiveId = atlasActiveId,
                   )
                 }
                 if (findInFiles) {

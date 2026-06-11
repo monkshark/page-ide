@@ -148,6 +148,7 @@ internal fun IdeMainLayout(
     atlasUsedByCount: Int? = null,
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
+    atlasActiveId: String? = null,
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -436,6 +437,9 @@ internal fun IdeMainLayout(
                     vcsMarks = atlasVcsMarks,
                     vcsEnabled = ui.atlasVcsOverlay,
                     onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
+                    activeFileId = atlasActiveId,
+                    followActive = ui.atlasFollowActive,
+                    onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
                 )
             }
             if (codeActionPreviewVisible) {
@@ -620,6 +624,9 @@ internal fun IdeMainLayout(
                 vcsMarks = atlasVcsMarks,
                 vcsEnabled = ui.atlasVcsOverlay,
                 onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
+                activeFileId = atlasActiveId,
+                followActive = ui.atlasFollowActive,
+                onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
             )
         }
         ExpandedPanel.NONE -> Unit

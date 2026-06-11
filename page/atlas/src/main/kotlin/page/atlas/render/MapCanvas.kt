@@ -59,6 +59,7 @@ internal fun MapCanvas(
     view: MapViewState,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsImpacted: Map<String, Int> = emptyMap(),
+    activeId: String? = null,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -505,6 +506,17 @@ internal fun MapCanvas(
                         size = Size(box.w + 4f, box.h + 4f),
                         cornerRadius = CornerRadius(8f),
                         style = Stroke(width = 1.5f),
+                    )
+                } else if (!box.folder && box.id == activeId) {
+                    drawRoundRect(
+                        color = tertiary.copy(alpha = 0.8f * a),
+                        topLeft = topLeft - Offset(2f, 2f),
+                        size = Size(box.w + 4f, box.h + 4f),
+                        cornerRadius = CornerRadius(8f),
+                        style = Stroke(
+                            width = 1.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 4f)),
+                        ),
                     )
                 }
             }

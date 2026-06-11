@@ -108,6 +108,16 @@ class ReducerTest {
     }
 
     @Test
+    fun `atlas follow active defaults off and change replaces flag`() {
+        val s = AppState()
+        assertFalse(s.layout.atlasFollowActive)
+        val on = reduce(s, IdeEvent.Panel.AtlasFollowActiveChanged(true))
+        assertTrue(on.layout.atlasFollowActive)
+        val off = reduce(on, IdeEvent.Panel.AtlasFollowActiveChanged(false))
+        assertFalse(off.layout.atlasFollowActive)
+    }
+
+    @Test
     fun `atlas view tab defaults to dependency and change replaces value`() {
         val s = AppState()
         assertEquals(AtlasViewTab.DEPENDENCY, s.layout.atlasViewTab)

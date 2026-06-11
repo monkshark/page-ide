@@ -68,6 +68,7 @@ internal class SessionCoordinator(
                 p to EditorScrollSnapshot(vertical = snap.vertical, horizontal = snap.horizontal)
             }
             .toMap()
+        layoutUiState.atlasFollowActive = session.atlasFollow
         session.atlasMap?.let { restoreAtlasMap(it) }
     }
 
@@ -115,6 +116,7 @@ internal class SessionCoordinator(
             .mapKeys { it.key.toString() }
             .mapValues { SessionScrollSnapshot(vertical = it.value.vertical, horizontal = it.value.horizontal) },
         atlasMap = snapshotAtlasMap(),
+        atlasFollow = layoutUiState.atlasFollowActive,
     )
 
     private fun snapshotAtlasMap(): SessionAtlasMap = SessionAtlasMap(
