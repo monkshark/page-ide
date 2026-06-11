@@ -92,6 +92,9 @@ fun AtlasPanel(
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsEnabled: Boolean = true,
     onVcsEnabledChange: (Boolean) -> Unit = {},
+    activeFileId: String? = null,
+    followActive: Boolean = false,
+    onFollowActiveChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -114,6 +117,9 @@ fun AtlasPanel(
             vcsMarks = vcsMarks,
             vcsEnabled = vcsEnabled,
             onVcsEnabledChange = onVcsEnabledChange,
+            activeFileId = activeFileId,
+            followActive = followActive,
+            onFollowActiveChange = onFollowActiveChange,
         )
     }
 }
@@ -135,6 +141,9 @@ fun AtlasContent(
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsEnabled: Boolean = true,
     onVcsEnabledChange: (Boolean) -> Unit = {},
+    activeFileId: String? = null,
+    followActive: Boolean = false,
+    onFollowActiveChange: (Boolean) -> Unit = {},
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
@@ -228,6 +237,9 @@ fun AtlasContent(
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
             }
+            if (viewTab == AtlasViewTab.DEPENDENCY) {
+                ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
+            }
             if (viewTab == AtlasViewTab.GRAPH) {
                 ModeChip("File", !projectMode) { onProjectModeChange(false) }
                 ModeChip("Project", projectMode) { onProjectModeChange(true) }
@@ -277,6 +289,7 @@ fun AtlasContent(
                     view = mapView,
                     vcsMarks = effectiveMarks,
                     vcsImpacted = impacted,
+                    activeId = activeFileId,
                 )
                 val drill = remember(mapSlice, selectedId) {
                     mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)

@@ -202,6 +202,18 @@ class SessionStoreTest {
     }
 
     @Test
+    fun `atlasFollow round-trips and defaults off`() {
+        val ws = newWorkspace()
+        SessionStore.save(ws, SessionFile(atlasFollow = true))
+        val loaded = SessionStore.load(ws)
+        assertNotNull(loaded)
+        assertEquals(true, loaded.atlasFollow)
+        val ws2 = newWorkspace()
+        SessionStore.save(ws2, SessionFile())
+        assertEquals(false, SessionStore.load(ws2)?.atlasFollow)
+    }
+
+    @Test
     fun `legacy session without new fields loads with empty defaults`() {
         val ws = newWorkspace()
         SessionStore.save(ws, SessionFile())

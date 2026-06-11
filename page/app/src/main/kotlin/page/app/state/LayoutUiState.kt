@@ -79,6 +79,9 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
     var atlasVcsOverlay: Boolean
         get() = store.layout.atlasVcsOverlay
         set(value) = store.updateLayout { it.copy(atlasVcsOverlay = value) }
+    var atlasFollowActive: Boolean
+        get() = store.layout.atlasFollowActive
+        set(value) = store.updateLayout { it.copy(atlasFollowActive = value) }
     var expandedPanel: ExpandedPanel
         get() = store.layout.expandedPanel
         set(value) = store.updateLayout { it.copy(expandedPanel = value) }

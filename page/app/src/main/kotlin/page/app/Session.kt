@@ -74,6 +74,7 @@ data class SessionFile(
     val expandedDirs: List<String> = emptyList(),
     val editorScrollByPath: Map<String, SessionScrollSnapshot> = emptyMap(),
     val atlasMap: SessionAtlasMap? = null,
+    val atlasFollow: Boolean = false,
 )
 
 internal fun restoreExpandedDirs(snapshot: List<String>): Set<Path> {
