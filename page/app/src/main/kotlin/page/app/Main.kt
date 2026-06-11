@@ -279,6 +279,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         ).also { ideEffectHandler.bind(it::handleEffect) }
     }
     val atlasMapView = remember { page.atlas.render.MapViewState() }
+    val atlasView = remember { page.atlas.render.AtlasViewState() }
     val sessionCoordinator = remember {
         SessionCoordinator(
             editorWorkspace = editorWorkspace,
@@ -641,6 +642,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     settings = app.settingsBinding(),
                     atlasSlice = atlasSlice,
                     atlasMapView = atlasMapView,
+                    atlasView = atlasView,
                     atlasLoadProgress = atlasLoadProgress,
                   )
                 }
