@@ -446,6 +446,10 @@ private fun LegendItem(label: String, kind: EdgeKind) {
                     drawLine(relationColor, from, to, strokeWidth = 1.5f, pathEffect = dashEffect())
                     drawArrowHead(from, to, 0f, relationColor, filled = false)
                 }
+                EdgeKind.CALLS -> {
+                    drawLine(relationColor, from, to, strokeWidth = 1f)
+                    drawArrowHead(from, to, 0f, relationColor, filled = true)
+                }
             }
         }
         Text(
@@ -648,6 +652,10 @@ private fun AtlasCanvas(
                     )
                     drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = false)
                 }
+                EdgeKind.CALLS -> {
+                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 1f)
+                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
+                }
             }
         }
         for (p in projectedNodes) {
@@ -656,6 +664,7 @@ private fun AtlasCanvas(
                 NodeKind.ACTIVE -> activeColor
                 NodeKind.WORKSPACE_FILE -> workspaceColor
                 NodeKind.EXTERNAL -> externalColor
+                NodeKind.SYMBOL -> relationColor
             }
             val pos = Offset(p.x, p.y)
             val r = (nodeRadius(p.id) * p.scale).coerceAtLeast(2f)

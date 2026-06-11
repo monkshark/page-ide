@@ -2,9 +2,9 @@ package page.atlas.graph
 
 import java.nio.file.Path
 
-enum class NodeKind { ACTIVE, WORKSPACE_FILE, EXTERNAL }
+enum class NodeKind { ACTIVE, WORKSPACE_FILE, EXTERNAL, SYMBOL }
 
-enum class EdgeKind { IMPORT, IMPLEMENTS, EXTENDS }
+enum class EdgeKind { IMPORT, IMPLEMENTS, EXTENDS, CALLS }
 
 data class GraphNode(
     val id: String,
