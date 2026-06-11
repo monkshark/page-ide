@@ -514,6 +514,8 @@ class LspController(
         pendingChanges.remove(uri)?.cancel()
         if (ws.isOpen(uri)) {
             runCatching { ws.didChange(uri, text) }
+                .onSuccess { println("[lsp] didChange (completion sync) → $uri (${text.length} chars)") }
+                .onFailure { println("[lsp] didChange (completion sync) failed for $uri: ${it.message}") }
         }
         val trig = triggerCharacter ?: "<invoke>"
         val prefix = computePrefix(text, line, character)
@@ -1489,6 +1491,9 @@ class LspController(
 
         if (reinject) {
             println("[lsp] publishDiagnostics $uri — kept ${cached!!.second.size} unnecessary diag(s) for restored content")
+        }
+        if (mapped.isEmpty()) {
+            println("[lsp] publishDiagnostics $uri — 0 diagnostic(s)")
         }
         if (mapped.isNotEmpty()) {
             println("[lsp] publishDiagnostics $uri — ${mapped.size} diagnostic(s)")

@@ -11,7 +11,13 @@ internal class LspSender(private val name: String = "lsp-sender") {
         0, 1, 10, TimeUnit.SECONDS, LinkedBlockingQueue(),
     ) { r -> Thread(r, name).apply { isDaemon = true } }
 
+    private fun warnBacklog() {
+        val depth = executor.queue.size
+        if (depth >= 4) println("[lsp] $name backlog: $depth message(s) queued — server may not be draining stdin")
+    }
+
     fun post(block: () -> Unit) {
+        warnBacklog()
         executor.execute {
             runCatching(block).onFailure {
                 println("[lsp] $name notify failed: ${it.message}")
@@ -20,6 +26,7 @@ internal class LspSender(private val name: String = "lsp-sender") {
     }
 
     fun <T> request(block: () -> CompletableFuture<T>): CompletableFuture<T> {
+        warnBacklog()
         val out = CompletableFuture<T>()
         executor.execute {
             if (out.isDone) return@execute
