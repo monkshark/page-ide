@@ -84,4 +84,33 @@ class MapFilterTest {
         assertTrue(out.nodes.isEmpty())
         assertTrue(out.edges.isEmpty())
     }
+
+    @Test
+    fun `pinned node survives hiddenDirs`() {
+        val out = filterForMap(slice, MapFilterState(hiddenDirs = setOf(uiDir)), pinned = setOf(uiC))
+        assertEquals(setOf(coreA, coreB, uiC), out.nodes.map { it.id }.toSet())
+        assertEquals(setOf(GraphEdge(coreA, coreB), GraphEdge(coreA, uiC)), out.edges.toSet())
+    }
+
+    @Test
+    fun `pinned node survives outside focusDir`() {
+        val out = filterForMap(slice, MapFilterState(focusDir = coreDir), pinned = setOf(uiC))
+        assertEquals(setOf(coreA, coreB, uiC), out.nodes.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `edges touching a pinned node survive mutedDirs`() {
+        val out = filterForMap(slice, MapFilterState(mutedDirs = setOf(uiDir)), pinned = setOf(uiC))
+        assertEquals(slice.edges.toSet(), out.edges.toSet())
+
+        val without = filterForMap(slice, MapFilterState(mutedDirs = setOf(uiDir)))
+        assertEquals(listOf(GraphEdge(coreA, coreB)), without.edges)
+    }
+
+    @Test
+    fun `pin does not resurrect edges to nodes that stay hidden`() {
+        val out = filterForMap(slice, MapFilterState(hiddenDirs = setOf(uiDir)), pinned = setOf(uiSubD))
+        assertEquals(setOf(coreA, coreB, uiSubD), out.nodes.map { it.id }.toSet())
+        assertEquals(listOf(GraphEdge(coreA, coreB)), out.edges)
+    }
 }

@@ -45,6 +45,7 @@ data class SessionAtlasMap(
     val focusDir: String? = null,
     val hiddenDirs: List<String> = emptyList(),
     val mutedDirs: List<String> = emptyList(),
+    val pinned: List<String> = emptyList(),
 )
 
 data class SessionFile(

@@ -404,6 +404,7 @@ internal fun MapCanvas(
                 val topLeft = Offset(box.x, box.y)
                 val size = Size(box.w, box.h)
                 val dimmed = focusActive && !(box.folder && box.expanded) &&
+                    box.id !in view.pinnedIds &&
                     isMapBoxDimmed(box.id, selectedId, neighbors)
                 val boxA = if (dimmed) a * 0.35f else a
                 val emphasis = when {
@@ -468,6 +469,13 @@ internal fun MapCanvas(
                             ),
                         )
                     }
+                }
+                if (!box.folder && box.id in view.pinnedIds) {
+                    drawCircle(
+                        color = tertiary.copy(alpha = boxA),
+                        radius = 2.5f,
+                        center = Offset(box.x + 6f, box.y + 6f),
+                    )
                 }
                 val impactDepth = if (box.folder) null else vcsImpacted[box.id]
                 if (impactDepth != null) {
@@ -569,6 +577,15 @@ internal fun MapCanvas(
                         menu = null
                         onTracePath(box.id)
                     })
+                }
+                if (box != null && !box.folder) {
+                    CompactMenuItem(
+                        if (box.id in view.pinnedIds) "Unpin node" else "Pin node",
+                        onClick = {
+                            menu = null
+                            view.togglePin(box.id)
+                        },
+                    )
                 }
                 if (box != null && box.folder) {
                     CompactMenuItem("Show only this folder", onClick = {

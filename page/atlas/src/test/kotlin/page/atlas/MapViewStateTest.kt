@@ -33,6 +33,7 @@ class MapViewStateTest {
         view.expandOrder.add("dir")
         view.expandedDirs = setOf("dir")
         view.filter = MapFilterState(focusDir = "dir", hiddenDirs = setOf("x"), mutedDirs = setOf("y"))
+        view.pinnedIds = setOf("a")
 
         view.reset()
 
@@ -43,5 +44,21 @@ class MapViewStateTest {
         assertTrue(view.expandOrder.isEmpty())
         assertNull(view.expandedDirs)
         assertFalse(view.filter.active)
+        assertTrue(view.pinnedIds.isEmpty())
+    }
+
+    @Test
+    fun `togglePin adds then removes the id`() {
+        val view = MapViewState()
+        assertTrue(view.pinnedIds.isEmpty())
+
+        view.togglePin("a")
+        assertEquals(setOf("a"), view.pinnedIds)
+
+        view.togglePin("b")
+        assertEquals(setOf("a", "b"), view.pinnedIds)
+
+        view.togglePin("a")
+        assertEquals(setOf("b"), view.pinnedIds)
     }
 }

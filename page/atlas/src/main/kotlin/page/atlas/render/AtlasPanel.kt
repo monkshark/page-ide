@@ -150,7 +150,9 @@ fun AtlasContent(
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
-    val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
+    val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
+        filterForMap(slice, mapView.filter, mapView.pinnedIds)
+    }
     val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
     val impacted = remember(slice, effectiveMarks) {
         vcsImpacted(slice.edges, effectiveMarks.keys)
