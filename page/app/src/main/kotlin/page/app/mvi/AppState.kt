@@ -46,7 +46,7 @@ internal data class LayoutState(
 internal data class ChromeState(
     val settingsDialogOpen: Boolean = false,
     val runDialogOpen: Boolean = false,
-    val palette: GlassPalette = GlassPalette.Cool,
+    val palette: GlassPalette = GlassPalette.Graphite,
     val paletteToastUntil: Long = 0L,
     val editorFocusVersion: Int = 0,
     val pendingTreeFocusTick: Int = 0,

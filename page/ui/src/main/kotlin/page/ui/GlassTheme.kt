@@ -31,7 +31,7 @@ object Glass {
 }
 
 @Composable
-fun GlassTheme(palette: GlassPalette = GlassPalette.Cool, content: @Composable () -> Unit) {
+fun GlassTheme(palette: GlassPalette = GlassPalette.Graphite, content: @Composable () -> Unit) {
     val tokens = remember(palette) { glassTokensFor(palette) }
     val scheme = remember(tokens) {
         val c = tokens.color
