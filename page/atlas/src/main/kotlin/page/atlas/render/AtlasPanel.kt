@@ -79,6 +79,9 @@ fun AtlasPanel(
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
+    vcsMarks: Map<String, VcsMark> = emptyMap(),
+    vcsEnabled: Boolean = true,
+    onVcsEnabledChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -98,6 +101,9 @@ fun AtlasPanel(
             mapView = mapView,
             atlasView = atlasView,
             loadProgress = loadProgress,
+            vcsMarks = vcsMarks,
+            vcsEnabled = vcsEnabled,
+            onVcsEnabledChange = onVcsEnabledChange,
         )
     }
 }
@@ -116,10 +122,14 @@ fun AtlasContent(
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
+    vcsMarks: Map<String, VcsMark> = emptyMap(),
+    vcsEnabled: Boolean = true,
+    onVcsEnabledChange: (Boolean) -> Unit = {},
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
     val mapSlice = remember(slice, mapView.filter) { filterForMap(slice, mapView.filter) }
+    val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -163,6 +173,9 @@ fun AtlasContent(
             ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
             ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
             Box(modifier = Modifier.weight(1f))
+            if (vcsMarks.isNotEmpty()) {
+                ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
+            }
             if (viewTab == AtlasViewTab.GRAPH) {
                 ModeChip("File", !projectMode) { onProjectModeChange(false) }
                 ModeChip("Project", projectMode) { onProjectModeChange(true) }
@@ -190,6 +203,7 @@ fun AtlasContent(
                     onSelect = { atlasView.selectedId = it },
                     onNodeClick = onNodeClick,
                     view = mapView,
+                    vcsMarks = effectiveMarks,
                 )
                 val drill = remember(mapSlice, selectedId) {
                     mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)
@@ -229,6 +243,7 @@ fun AtlasContent(
                     onSelect = { atlasView.selectedId = it },
                     onNodeClick = onNodeClick,
                     view = atlasView,
+                    vcsMarks = effectiveMarks,
                 )
             }
             Divider()
@@ -313,6 +328,7 @@ private fun AtlasCanvas(
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
     view: AtlasViewState,
+    vcsMarks: Map<String, VcsMark> = emptyMap(),
 ) {
     var yaw by view::yaw
     var pitch by view::pitch
@@ -528,8 +544,13 @@ private fun AtlasCanvas(
                 radius = r,
                 center = pos,
             )
+            val mark = vcsMarks[p.id]
+            if (mark != null) {
+                drawCircle(vcsColor(mark).copy(alpha = alpha * 0.9f), radius = r + 2.5f, center = pos, style = Stroke(width = 1.5f))
+            }
             if (p.id == selectedId) {
-                drawCircle(labelColor.copy(alpha = alpha * 0.8f), radius = r + 3f, center = pos, style = Stroke(width = 1.5f))
+                val ringR = r + if (mark != null) 5f else 3f
+                drawCircle(labelColor.copy(alpha = alpha * 0.8f), radius = ringR, center = pos, style = Stroke(width = 1.5f))
             }
             val showLabel = p.id == hoverId ||
                 p.id == selectedId ||

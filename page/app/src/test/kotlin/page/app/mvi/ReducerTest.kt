@@ -98,6 +98,16 @@ class ReducerTest {
     }
 
     @Test
+    fun `atlas vcs overlay defaults on and change replaces flag`() {
+        val s = AppState()
+        assertTrue(s.layout.atlasVcsOverlay)
+        val off = reduce(s, IdeEvent.Panel.AtlasVcsOverlayChanged(false))
+        assertFalse(off.layout.atlasVcsOverlay)
+        val on = reduce(off, IdeEvent.Panel.AtlasVcsOverlayChanged(true))
+        assertTrue(on.layout.atlasVcsOverlay)
+    }
+
+    @Test
     fun `atlas view tab defaults to dependency and change replaces value`() {
         val s = AppState()
         assertEquals(AtlasViewTab.DEPENDENCY, s.layout.atlasViewTab)
