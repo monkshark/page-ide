@@ -220,6 +220,9 @@ class LspController(
                     flushPendingOpens()
                     openWorkspaceFiles()
                     applyJavaCompilerPolicies(backend)
+                    if (!backend.workspaceAutoOpen) {
+                        startActivity(ANALYSIS_KIND, "Analyzing project…")
+                    }
                 }
             }
             client = c
@@ -234,7 +237,7 @@ class LspController(
         }
     }
 
-    private fun startActivity(kind: String, label: String, progress: Float? = null) {
+    internal fun startActivity(kind: String, label: String, progress: Float? = null) {
         val now = System.currentTimeMillis()
         val existing = activities[kind]
         if (existing == null) {
@@ -279,10 +282,12 @@ class LspController(
 
     private val progressTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    private fun applyProgressEvent(event: LspProgress) {
+    internal fun applyProgressEvent(event: LspProgress) {
         val kind = "progress:${event.token}"
         when (event) {
             is LspProgress.Begin -> {
+                println("[lsp] progress ◀ Begin token=${event.token} title='${event.title}' message='${event.message ?: ""}'")
+                endActivity(ANALYSIS_KIND)
                 progressTitles[event.token] = event.title
                 startActivity(kind, progressLabel(event.title, event.message), progressFraction(event.percentage))
             }
@@ -291,6 +296,7 @@ class LspController(
                 startActivity(kind, progressLabel(title, event.message), progressFraction(event.percentage))
             }
             is LspProgress.End -> {
+                println("[lsp] progress ◀ End token=${event.token}")
                 progressTitles.remove(event.token)
                 endActivity(kind)
             }
@@ -307,11 +313,12 @@ class LspController(
         else -> "Working…"
     }
 
-    private fun activityTimeoutMs(kind: String): Long = when (kind) {
-        STARTUP_KIND -> 120_000L
-        GRADLE_DEPS_KIND, GRADLE_SCRIPT_DEPS_KIND -> 600_000L
-        SYMBOL_INDEX_KIND -> 180_000L
-        LINTING_KIND -> 30_000L
+    internal fun activityTimeoutMs(kind: String): Long = when {
+        kind == STARTUP_KIND -> 120_000L
+        kind == GRADLE_DEPS_KIND || kind == GRADLE_SCRIPT_DEPS_KIND -> 600_000L
+        kind == SYMBOL_INDEX_KIND -> 180_000L
+        kind == LINTING_KIND -> 30_000L
+        kind == ANALYSIS_KIND || kind.startsWith("progress:") -> 600_000L
         else -> 60_000L
     }
 
@@ -1421,6 +1428,7 @@ class LspController(
             ".dart_tool", "ephemeral",
         )
         const val STARTUP_KIND = "startup"
+        const val ANALYSIS_KIND = "analysis"
         const val GRADLE_DEPS_KIND = KLS_GRADLE_DEPS_KIND
         const val GRADLE_SCRIPT_DEPS_KIND = KLS_GRADLE_SCRIPT_DEPS_KIND
         const val SYMBOL_INDEX_KIND = KLS_SYMBOL_INDEX_KIND
@@ -1450,6 +1458,7 @@ class LspController(
     private fun onDiagnostics(params: PublishDiagnosticsParams) {
         val uri = params.uri ?: return
         if (isNoiseUri(uri)) return
+        if (activities.containsKey(ANALYSIS_KIND)) endActivity(ANALYSIS_KIND)
         val key = canonicalUri(uri)
         val mapped = params.diagnostics.orEmpty().map(Diagnostic::fromLsp)
         val incomingHasUnnecessary = mapped.any { it.unnecessary }
