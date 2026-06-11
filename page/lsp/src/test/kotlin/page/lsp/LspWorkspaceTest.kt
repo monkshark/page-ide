@@ -136,6 +136,7 @@ class LspWorkspaceTest {
         workspace.reopen(uri, "fresh")
 
         waitUntil { harness.fakeServer.didCloseCalls.isNotEmpty() }
+        waitUntil { harness.fakeServer.didOpenCalls.size >= 2 }
         assertTrue(workspace.isOpen(uri))
         assertEquals("fresh", workspace.textOf(uri))
         assertEquals(1, workspace.versionOf(uri))

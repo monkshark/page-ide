@@ -50,6 +50,8 @@ class LspWorkspace(private val client: LspClient) {
 
     private val openDocs = ConcurrentHashMap<String, OpenDoc>()
 
+    private val sender = LspSender()
+
     private val resolveRegistry = ConcurrentHashMap<Long, org.eclipse.lsp4j.CompletionItem>()
     private val resolveTokenSeq = AtomicLong(0)
 
@@ -65,7 +67,7 @@ class LspWorkspace(private val client: LspClient) {
         val doc = OpenDoc(languageId, version = 1, text = text)
         openDocs[uri] = doc
         val item = TextDocumentItem(uri, languageId, doc.version, text)
-        client.server().textDocumentService.didOpen(DidOpenTextDocumentParams(item))
+        sender.post { client.server().textDocumentService.didOpen(DidOpenTextDocumentParams(item)) }
     }
 
     fun didChange(uri: String, newText: String) {
@@ -74,42 +76,53 @@ class LspWorkspace(private val client: LspClient) {
         doc.text = newText
         val versioned = VersionedTextDocumentIdentifier(uri, doc.version)
         val change = TextDocumentContentChangeEvent(newText)
-        client.server().textDocumentService.didChange(
-            DidChangeTextDocumentParams(versioned, listOf(change))
-        )
+        sender.post {
+            client.server().textDocumentService.didChange(
+                DidChangeTextDocumentParams(versioned, listOf(change))
+            )
+        }
     }
 
     fun didClose(uri: String) {
         openDocs.remove(uri) ?: return
-        client.server().textDocumentService.didClose(
-            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
-        )
+        sender.post {
+            client.server().textDocumentService.didClose(
+                DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+            )
+        }
     }
 
     fun didSave(uri: String) {
         val doc = openDocs[uri] ?: return
-        client.server().textDocumentService.didSave(
-            DidSaveTextDocumentParams(TextDocumentIdentifier(uri), doc.text)
-        )
+        val text = doc.text
+        sender.post {
+            client.server().textDocumentService.didSave(
+                DidSaveTextDocumentParams(TextDocumentIdentifier(uri), text)
+            )
+        }
     }
 
     fun didChangeWatchedFiles(events: List<Pair<String, FileChangeType>>) {
         if (events.isEmpty()) return
         val lspEvents = events.map { (uri, type) -> FileEvent(uri, type) }
-        client.server().workspaceService.didChangeWatchedFiles(DidChangeWatchedFilesParams(lspEvents))
+        sender.post {
+            client.server().workspaceService.didChangeWatchedFiles(DidChangeWatchedFilesParams(lspEvents))
+        }
     }
 
     fun reopen(uri: String, newText: String) {
         val existing = openDocs[uri] ?: return
         val languageId = existing.languageId
         openDocs.remove(uri)
-        client.server().textDocumentService.didClose(
-            DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
-        )
+        sender.post {
+            client.server().textDocumentService.didClose(
+                DidCloseTextDocumentParams(TextDocumentIdentifier(uri))
+            )
+        }
         val doc = OpenDoc(languageId, version = 1, text = newText)
         openDocs[uri] = doc
         val item = TextDocumentItem(uri, languageId, doc.version, newText)
-        client.server().textDocumentService.didOpen(DidOpenTextDocumentParams(item))
+        sender.post { client.server().textDocumentService.didOpen(DidOpenTextDocumentParams(item)) }
     }
 
     fun openUris(): Set<String> = openDocs.keys.toSet()
@@ -134,7 +147,7 @@ class LspWorkspace(private val client: LspClient) {
         val registerToken: (org.eclipse.lsp4j.CompletionItem) -> Long? = { orig ->
             resolveTokenSeq.incrementAndGet().also { resolveRegistry[it] = orig }
         }
-        return client.server().textDocumentService.completion(params).thenApply { either ->
+        return sender.request { client.server().textDocumentService.completion(params) }.thenApply { either ->
             when {
                 either == null -> CompletionList.EMPTY
                 either.isLeft -> CompletionList.fromLspItems(either.left.orEmpty(), triggerCharacter, prefix, registerToken)
@@ -145,7 +158,7 @@ class LspWorkspace(private val client: LspClient) {
 
     fun resolveCompletionItem(token: Long): CompletableFuture<ResolvedCompletion?> {
         val original = resolveRegistry[token] ?: return CompletableFuture.completedFuture(null)
-        return client.server().textDocumentService.resolveCompletionItem(original)
+        return sender.request { client.server().textDocumentService.resolveCompletionItem(original) }
             .thenApply { resolved -> resolved?.let { ResolvedCompletion.fromLsp(it) } }
             .exceptionally { null }
     }
@@ -153,13 +166,13 @@ class LspWorkspace(private val client: LspClient) {
     fun hover(uri: String, line: Int, character: Int): CompletableFuture<HoverInfo?> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(null)
         val params = HoverParams(TextDocumentIdentifier(uri), Position(line, character))
-        return client.server().textDocumentService.hover(params).thenApply { HoverInfo.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.hover(params) }.thenApply { HoverInfo.fromLsp(it) }
     }
 
     fun definition(uri: String, line: Int, character: Int): CompletableFuture<List<DefinitionTarget>> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val params = DefinitionParams(TextDocumentIdentifier(uri), Position(line, character))
-        return client.server().textDocumentService.definition(params).thenApply { DefinitionTarget.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.definition(params) }.thenApply { DefinitionTarget.fromLsp(it) }
     }
 
     fun references(
@@ -171,7 +184,7 @@ class LspWorkspace(private val client: LspClient) {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val context = ReferenceContext().apply { isIncludeDeclaration = includeDeclaration }
         val params = ReferenceParams(TextDocumentIdentifier(uri), Position(line, character), context)
-        return client.server().textDocumentService.references(params).thenApply { ReferenceLocation.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.references(params) }.thenApply { ReferenceLocation.fromLsp(it) }
     }
 
     fun signatureHelp(
@@ -191,7 +204,7 @@ class LspWorkspace(private val client: LspClient) {
         val ctx = SignatureHelpContext(triggerKind, isRetrigger)
         if (triggerCharacter != null) ctx.triggerCharacter = triggerCharacter
         params.context = ctx
-        return client.server().textDocumentService.signatureHelp(params).thenApply { SignatureHelpInfo.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.signatureHelp(params) }.thenApply { SignatureHelpInfo.fromLsp(it) }
     }
 
     fun prepareRename(uri: String, line: Int, character: Int): CompletableFuture<RenamePrepare?> {
@@ -200,19 +213,19 @@ class LspWorkspace(private val client: LspClient) {
             textDocument = TextDocumentIdentifier(uri)
             position = Position(line, character)
         }
-        return client.server().textDocumentService.prepareRename(params).thenApply { RenamePrepare.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.prepareRename(params) }.thenApply { RenamePrepare.fromLsp(it) }
     }
 
     fun rename(uri: String, line: Int, character: Int, newName: String): CompletableFuture<RenameWorkspaceEdit> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(RenameWorkspaceEdit.EMPTY)
         val params = RenameParams(TextDocumentIdentifier(uri), Position(line, character), newName)
-        return client.server().textDocumentService.rename(params).thenApply { RenameWorkspaceEdit.fromLsp(it) }
+        return sender.request { client.server().textDocumentService.rename(params) }.thenApply { RenameWorkspaceEdit.fromLsp(it) }
     }
 
     @Suppress("DEPRECATION")
     fun workspaceSymbols(query: String): CompletableFuture<List<WorkspaceSymbolEntry>> {
         val params = WorkspaceSymbolParams(query)
-        return client.server().workspaceService.symbol(params).thenApply { either ->
+        return sender.request { client.server().workspaceService.symbol(params) }.thenApply { either ->
             when {
                 either == null -> emptyList()
                 either.isLeft -> either.left.orEmpty().map {
@@ -228,7 +241,7 @@ class LspWorkspace(private val client: LspClient) {
     @Suppress("DEPRECATION")
     fun workspaceSymbolsLocated(query: String): CompletableFuture<List<WorkspaceSymbolLocated>> {
         val params = WorkspaceSymbolParams(query)
-        return client.server().workspaceService.symbol(params).thenApply { either ->
+        return sender.request { client.server().workspaceService.symbol(params) }.thenApply { either ->
             when {
                 either == null -> emptyList()
                 either.isLeft -> either.left.orEmpty().map { si ->
@@ -263,7 +276,7 @@ class LspWorkspace(private val client: LspClient) {
     fun documentSymbols(uri: String): CompletableFuture<List<DocumentSymbolEntry>> {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val params = DocumentSymbolParams(TextDocumentIdentifier(uri))
-        return client.server().textDocumentService.documentSymbol(params).thenApply { results ->
+        return sender.request { client.server().textDocumentService.documentSymbol(params) }.thenApply { results ->
             results.orEmpty().mapNotNull { either ->
                 when {
                     either == null -> null
@@ -285,7 +298,7 @@ class LspWorkspace(private val client: LspClient) {
             TextDocumentIdentifier(uri),
             FormattingOptions(tabSize, insertSpaces),
         )
-        return client.server().textDocumentService.formatting(params).thenApply { edits ->
+        return sender.request { client.server().textDocumentService.formatting(params) }.thenApply { edits ->
             edits.orEmpty().mapNotNull { te ->
                 val r = te.range ?: return@mapNotNull null
                 RenameEdit(
@@ -309,7 +322,7 @@ class LspWorkspace(private val client: LspClient) {
         if (!openDocs.containsKey(uri)) return CompletableFuture.completedFuture(emptyList())
         val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
         val params = InlayHintParams(TextDocumentIdentifier(uri), range)
-        return client.server().textDocumentService.inlayHint(params).thenApply { list ->
+        return sender.request { client.server().textDocumentService.inlayHint(params) }.thenApply { list ->
             InlayHintItem.fromLspList(list)
         }
     }
@@ -327,14 +340,13 @@ class LspWorkspace(private val client: LspClient) {
         val range = Range(Position(startLine, startCharacter), Position(endLine, endCharacter))
         val context = CodeActionContext(diagnostics).apply { if (only != null) this.only = only }
         val params = CodeActionParams(TextDocumentIdentifier(uri), range, context)
-        val svc = client.server().textDocumentService
-        return svc.codeAction(params).thenCompose { list ->
+        return sender.request { client.server().textDocumentService.codeAction(params) }.thenCompose { list ->
             val items = list.orEmpty()
             val entries = items.map { either ->
                 when {
                     either == null -> CompletableFuture.completedFuture<CodeActionEntry?>(null)
                     either.isLeft -> CompletableFuture.completedFuture(CodeActionEntry.fromLspCommand(either.left))
-                    either.isRight -> resolveIfNeeded(svc, either.right)
+                    either.isRight -> resolveIfNeeded(either.right)
                     else -> CompletableFuture.completedFuture<CodeActionEntry?>(null)
                 }
             }
@@ -345,7 +357,6 @@ class LspWorkspace(private val client: LspClient) {
     }
 
     private fun resolveIfNeeded(
-        svc: org.eclipse.lsp4j.services.TextDocumentService,
         action: org.eclipse.lsp4j.CodeAction,
     ): CompletableFuture<CodeActionEntry?> {
         val initial = CodeActionEntry.fromLspCodeAction(action)
@@ -354,9 +365,8 @@ class LspWorkspace(private val client: LspClient) {
             return CompletableFuture.completedFuture(initial)
         }
         println("[lsp] codeAction resolve → \"${action.title}\" (empty edit — requesting resolve)")
-        return runCatching { svc.resolveCodeAction(action) }
-            .getOrNull()
-            ?.handle<CodeActionEntry?> { resolved, err ->
+        return sender.request { client.server().textDocumentService.resolveCodeAction(action) }
+            .handle<CodeActionEntry?> { resolved, err ->
                 if (err != null) {
                     println("[lsp] codeAction resolve ✗ \"${action.title}\": ${err.message}")
                     initial
@@ -366,12 +376,11 @@ class LspWorkspace(private val client: LspClient) {
                     out
                 }
             }
-            ?: CompletableFuture.completedFuture(initial)
     }
 
     fun executeCommand(command: String, arguments: List<Any?>): CompletableFuture<Boolean> {
         val params = ExecuteCommandParams(command, arguments)
-        return client.server().workspaceService.executeCommand(params)
+        return sender.request { client.server().workspaceService.executeCommand(params) }
             .handle { _, err ->
                 if (err != null) {
                     println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
@@ -384,7 +393,7 @@ class LspWorkspace(private val client: LspClient) {
 
     fun executeCommandForResult(command: String, arguments: List<Any?>): CompletableFuture<Any?> {
         val params = ExecuteCommandParams(command, arguments)
-        return client.server().workspaceService.executeCommand(params)
+        return sender.request { client.server().workspaceService.executeCommand(params) }
             .handle { result, err ->
                 if (err != null) {
                     println("[lsp] executeCommand ✗ \"$command\": ${err.message}")
