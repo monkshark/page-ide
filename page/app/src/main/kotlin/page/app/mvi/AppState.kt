@@ -19,7 +19,7 @@ import page.runtime.RunConfigsState
 import page.ui.GlassPalette
 import java.nio.file.Path
 
-internal enum class ExpandedPanel { NONE, ATLAS, TREE }
+internal enum class ExpandedPanel { NONE, ATLAS }
 
 internal data class LayoutState(
     val sidebarWidth: Dp = 260.dp,

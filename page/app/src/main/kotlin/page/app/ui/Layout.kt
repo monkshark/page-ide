@@ -263,8 +263,6 @@ internal fun IdeMainLayout(
                 onPanelFocusChanged = onTreeFocusChanged,
                 pendingFocusTick = pendingTreeFocusTick,
                 revision = workspace.treeRevision,
-                showExpand = true,
-                onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.TREE)) },
                 modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
             )
             ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
@@ -596,35 +594,6 @@ internal fun IdeMainLayout(
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,
                 onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
-            )
-        }
-        ExpandedPanel.TREE -> ExpandedPanelOverlay(
-            onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
-            title = "PROJECT",
-        ) {
-            FileTreePanel(
-                root = workspace.rootDir,
-                expanded = workspace.expanded,
-                selection = workspace.treeSelection,
-                onToggle = onToggle,
-                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
-                onOpenFile = onOpenFile,
-                onCreateFile = onCreateFileIn,
-                onCreateFolder = onCreateFolderIn,
-                onRename = onRenameEntry,
-                onDeleteOne = onDeleteEntry,
-                onDeleteMany = onDeleteEntries,
-                onReveal = onRevealInFiles,
-                onCopyPath = onCopyPath,
-                onCopyRelativePath = onCopyRelativePath,
-                onPasteInto = onPasteInto,
-                onUndo = onUndoFileOp,
-                canUndo = canUndoFileOp,
-                onDropPlan = onDropPlan,
-                onExternalDrop = onExternalDrop,
-                onDropRejected = onDropRejected,
-                revision = workspace.treeRevision,
-                modifier = Modifier.fillMaxSize(),
             )
         }
         ExpandedPanel.NONE -> Unit

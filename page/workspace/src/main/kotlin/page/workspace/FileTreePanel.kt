@@ -6,7 +6,6 @@ import androidx.compose.foundation.ContextMenuArea
 import androidx.compose.foundation.ContextMenuItem
 import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -103,8 +102,6 @@ fun FileTreePanel(
     onPanelFocusChanged: (Boolean) -> Unit = {},
     revision: Int = 0,
     pendingFocusTick: Int = 0,
-    showExpand: Boolean = false,
-    onExpand: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val anchorState = remember(root) { mutableStateOf<Path?>(null) }
@@ -296,7 +293,7 @@ fun FileTreePanel(
     ) {
         CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
             Column(modifier = Modifier.fillMaxSize()) {
-                SectionHeader(showExpand = showExpand, onExpand = onExpand)
+                SectionHeader()
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                     thickness = 1.dp,
@@ -611,7 +608,7 @@ private fun FloatingDragLabel(
 }
 
 @Composable
-private fun SectionHeader(showExpand: Boolean = false, onExpand: () -> Unit = {}) {
+private fun SectionHeader() {
     androidx.compose.foundation.layout.Row(
         modifier = Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -623,15 +620,6 @@ private fun SectionHeader(showExpand: Boolean = false, onExpand: () -> Unit = {}
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             letterSpacing = 0.8.sp,
         )
-        if (showExpand) {
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "확대",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 10.sp,
-                modifier = Modifier.clickable { onExpand() }.padding(4.dp),
-            )
-        }
     }
 }
 
