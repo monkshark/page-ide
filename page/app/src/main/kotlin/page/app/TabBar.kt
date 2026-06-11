@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 import page.editor.OpenTab
 import page.editor.TabBook
 import page.ui.CompactContextMenuRepresentation
+import java.nio.file.Path
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -85,6 +86,7 @@ data class TabContextActions(
     val onMoveToOtherPane: ((Int) -> Unit)?,
     val onSplit: ((Int) -> Unit)?,
     val onRename: (Int) -> Unit,
+    val onOpenInAtlas: ((Path) -> Unit)? = null,
 )
 
 @Composable
@@ -329,6 +331,9 @@ private fun buildTabMenuItems(
     items += ContextMenuItem("Copy Path") { actions.onCopyAbsolutePath(index) }
     items += ContextMenuItem("Copy Relative Path") { actions.onCopyRelativePath(index) }
     items += ContextMenuItem("Show in Explorer") { actions.onShowInExplorer(index) }
+    actions.onOpenInAtlas?.let { fn ->
+        items += ContextMenuItem("Open in Atlas") { fn(tab.path) }
+    }
     actions.onMoveToOtherPane?.let { fn ->
         items += ContextMenuItem("Move to Other Pane") { fn(index) }
     }

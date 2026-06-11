@@ -59,6 +59,7 @@ internal data class FileTreePanelActions(
     val onDeleteEntry: (Path) -> Unit,
     val onDeleteEntries: (Set<Path>) -> Unit,
     val onRevealInFiles: (Path) -> Unit,
+    val onOpenInAtlas: ((Path) -> Unit)? = null,
     val onCopyPath: (Path) -> Unit,
     val onCopyRelativePath: (Path) -> Unit,
     val onPasteInto: (Path) -> Unit,
@@ -156,6 +157,7 @@ internal fun IdeMainLayout(
     val onDeleteEntry = fileTree.onDeleteEntry
     val onDeleteEntries = fileTree.onDeleteEntries
     val onRevealInFiles = fileTree.onRevealInFiles
+    val onOpenInAtlas = fileTree.onOpenInAtlas
     val onCopyPath = fileTree.onCopyPath
     val onCopyRelativePath = fileTree.onCopyRelativePath
     val onPasteInto = fileTree.onPasteInto
@@ -261,6 +263,7 @@ internal fun IdeMainLayout(
                 onDeleteOne = onDeleteEntry,
                 onDeleteMany = onDeleteEntries,
                 onReveal = onRevealInFiles,
+                onOpenInAtlas = onOpenInAtlas,
                 onCopyPath = onCopyPath,
                 onCopyRelativePath = onCopyRelativePath,
                 onPasteInto = onPasteInto,

@@ -91,6 +91,7 @@ fun FileTreePanel(
     onDeleteOne: (Path) -> Unit = {},
     onDeleteMany: (Set<Path>) -> Unit = {},
     onReveal: (Path) -> Unit = {},
+    onOpenInAtlas: ((Path) -> Unit)? = null,
     onCopyPath: (Path) -> Unit = {},
     onCopyRelativePath: (Path) -> Unit = {},
     onPasteInto: (Path) -> Unit = {},
@@ -520,6 +521,7 @@ fun FileTreePanel(
                                         onOpenMany = { paths ->
                                             paths.filter { !Files.isDirectory(it) }.forEach(onOpenFile)
                                         },
+                                        onOpenInAtlas = onOpenInAtlas,
                                         dragState = dragState,
                                         onDragStartFrom = handleDragStartFrom,
                                         onDragRelease = commitDrop,
