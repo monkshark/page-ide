@@ -89,6 +89,16 @@ class ReducerTest {
     }
 
     @Test
+    fun `show atlas calls opens panel on calls tab`() {
+        val s = AppState().copy(
+            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.DEPENDENCY),
+        )
+        val shown = reduce(s, IdeEvent.Panel.ShowAtlasCalls)
+        assertTrue(shown.layout.atlasOpen)
+        assertEquals(AtlasViewTab.CALLS, shown.layout.atlasViewTab)
+    }
+
+    @Test
     fun `atlas project mode change replaces flag`() {
         val s = AppState()
         val on = reduce(s, IdeEvent.Panel.AtlasProjectModeChanged(true))

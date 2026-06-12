@@ -103,6 +103,8 @@ import page.editor.TabBook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import page.lsp.CodeActionEntry
 import page.lsp.RenameApply
@@ -496,6 +498,54 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val openInTabAt = app.openInTabAt
     val onReplaceInFiles = app.onReplaceInFiles
     val jumpToProblem = app.jumpToProblem
+    val atlasCallsView = remember { page.atlas.render.AtlasViewState() }
+    var atlasCallsSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
+    var atlasCallsSession by remember { mutableStateOf<page.atlas.graph.SymbolGraphSession?>(null) }
+    val atlasCallsMutex = remember { Mutex() }
+    val showCallGraph: (java.nio.file.Path, Int, Int) -> Unit = { path, line, character ->
+        val ctrl = currentLspRouter.controllerFor(path)
+        if (ctrl != null) appScope.launch {
+            val started = withContext(Dispatchers.IO) {
+                atlasCallsMutex.withLock {
+                    runCatching {
+                        val item = ctrl.prepareCallHierarchy(path, line, character)
+                            .get(10, java.util.concurrent.TimeUnit.SECONDS)
+                            .firstOrNull() ?: return@runCatching null
+                        val session = page.atlas.graph.SymbolGraphSession(LspCallHierarchySource(ctrl))
+                        session to session.start(item.toSymbolSpec())
+                    }.getOrElse { t ->
+                        println("[atlas] call graph failed: ${t::class.simpleName}: ${t.message}")
+                        null
+                    }
+                }
+            }
+            if (started != null) {
+                val (session, slice) = started
+                atlasCallsSession = session
+                atlasCallsView.pendingFocusId = session.rootId
+                atlasCallsSlice = slice
+                onIdeEvent(IdeEvent.Panel.ShowAtlasCalls)
+            }
+        }
+    }
+    val onAtlasCallsExpand: (String) -> Unit = { nodeId ->
+        val session = atlasCallsSession
+        if (session != null && session.canExpand(nodeId)) appScope.launch {
+            val slice = withContext(Dispatchers.IO) {
+                atlasCallsMutex.withLock { runCatching { session.expand(nodeId) }.getOrNull() }
+            }
+            if (slice != null && atlasCallsSession === session) {
+                atlasCallsView.pendingFocusId = nodeId
+                atlasCallsSlice = slice
+            }
+        }
+    }
+    val onAtlasCallsOpen: (String) -> Unit = { nodeId ->
+        atlasCallsSession?.symbolAt(nodeId)?.let { spec ->
+            runCatching { java.nio.file.Paths.get(java.net.URI(spec.uri)) }.getOrNull()
+                ?.let { p -> jumpToProblem(p, spec.line, spec.character) }
+        }
+    }
     val applyRename = app.applyRename
     LaunchedEffect(lspRouter) {
         app.installApplyEditHandler { block -> java.awt.EventQueue.invokeLater(block) }
@@ -687,6 +737,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
                     atlasActiveId = atlasActiveId,
+                    atlasCallsSlice = atlasCallsSlice,
+                    atlasCallsView = atlasCallsView,
+                    onAtlasCallsExpand = onAtlasCallsExpand,
+                    onAtlasCallsOpen = onAtlasCallsOpen,
+                    onShowCallGraph = showCallGraph,
                   )
                 }
                 if (findInFiles) {
