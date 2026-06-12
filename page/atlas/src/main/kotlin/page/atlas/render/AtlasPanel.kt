@@ -98,6 +98,10 @@ fun AtlasPanel(
     activeFileId: String? = null,
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
+    callsSlice: GraphSlice = GraphSlice.EMPTY,
+    callsView: AtlasViewState = remember { AtlasViewState() },
+    onCallsExpand: (String) -> Unit = {},
+    onCallsOpen: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -123,6 +127,10 @@ fun AtlasPanel(
             activeFileId = activeFileId,
             followActive = followActive,
             onFollowActiveChange = onFollowActiveChange,
+            callsSlice = callsSlice,
+            callsView = callsView,
+            onCallsExpand = onCallsExpand,
+            onCallsOpen = onCallsOpen,
         )
     }
 }
@@ -147,8 +155,13 @@ fun AtlasContent(
     activeFileId: String? = null,
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
+    callsSlice: GraphSlice = GraphSlice.EMPTY,
+    callsView: AtlasViewState = remember { AtlasViewState() },
+    onCallsExpand: (String) -> Unit = {},
+    onCallsOpen: (String) -> Unit = {},
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
+    LaunchedEffect(callsSlice, callsView.pendingFocusId) { callsView.onSliceChanged(callsSlice) }
     val selectedId = atlasView.selectedId
     val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
@@ -171,7 +184,11 @@ fun AtlasContent(
     LaunchedEffect(selectedId) {
         if (selectedId == null) tracePath = emptyList()
     }
-    val searchSlice = if (viewTab == AtlasViewTab.DEPENDENCY) mapSlice else slice
+    val searchSlice = when (viewTab) {
+        AtlasViewTab.DEPENDENCY -> mapSlice
+        AtlasViewTab.GRAPH -> slice
+        AtlasViewTab.CALLS -> callsSlice
+    }
     val searchMatches = remember(searchSlice, searchQuery) {
         atlasSearchMatches(searchSlice.nodes, searchQuery)
     }
@@ -180,9 +197,14 @@ fun AtlasContent(
         if (searchMatches.isEmpty()) return
         searchIndex = (searchIndex + delta).mod(searchMatches.size)
         val node = searchMatches[searchIndex]
-        atlasView.selectedId = node.id
-        atlasView.pendingFocusId = node.id
-        mapView.focusCenterId = node.id
+        if (viewTab == AtlasViewTab.CALLS) {
+            callsView.selectedId = node.id
+            callsView.pendingFocusId = node.id
+        } else {
+            atlasView.selectedId = node.id
+            atlasView.pendingFocusId = node.id
+            mapView.focusCenterId = node.id
+        }
     }
     Column(
         modifier = Modifier
@@ -249,6 +271,9 @@ fun AtlasContent(
         ) {
             ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
             ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
+            if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
+                ModeChip("Calls", viewTab == AtlasViewTab.CALLS) { onViewTabChange(AtlasViewTab.CALLS) }
+            }
             Box(modifier = Modifier.weight(1f))
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
@@ -282,7 +307,34 @@ fun AtlasContent(
             )
             Divider()
         }
-        if (slice.nodes.isEmpty()) {
+        if (viewTab == AtlasViewTab.CALLS) {
+            if (callsSlice.nodes.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Right-click a symbol and choose Show Call Graph in Atlas",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    AtlasCanvas(
+                        slice = callsSlice,
+                        projectMode = false,
+                        selectedId = callsView.selectedId,
+                        onSelect = { id ->
+                            callsView.selectedId = id
+                            if (id != null) onCallsExpand(id)
+                        },
+                        onNodeClick = onNodeClick,
+                        onNodeOpen = onCallsOpen,
+                        view = callsView,
+                    )
+                }
+                Divider()
+                LegendRow(listOf("calls" to EdgeKind.CALLS))
+            }
+        } else if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
                 Text(
@@ -409,7 +461,13 @@ private fun Divider() {
 }
 
 @Composable
-private fun LegendRow() {
+private fun LegendRow(
+    items: List<Pair<String, EdgeKind>> = listOf(
+        "import" to EdgeKind.IMPORT,
+        "extends" to EdgeKind.EXTENDS,
+        "implements" to EdgeKind.IMPLEMENTS,
+    ),
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -418,9 +476,9 @@ private fun LegendRow() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        LegendItem("import", EdgeKind.IMPORT)
-        LegendItem("extends", EdgeKind.EXTENDS)
-        LegendItem("implements", EdgeKind.IMPLEMENTS)
+        for ((label, kind) in items) {
+            LegendItem(label, kind)
+        }
     }
 }
 
@@ -467,6 +525,7 @@ private fun AtlasCanvas(
     onSelect: (String?) -> Unit,
     onNodeClick: (FilePath) -> Unit,
     view: AtlasViewState,
+    onNodeOpen: ((String) -> Unit)? = null,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsImpacted: Map<String, Int> = emptyMap(),
 ) {
@@ -595,7 +654,9 @@ private fun AtlasCanvas(
                     onDoubleTap = { tap ->
                         val hit = nodeAt(tap)
                         if (hit != null) {
-                            slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
+                            val open = onNodeOpen
+                            if (open != null) open(hit.id)
+                            else slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
                         }
                         view.lastInteractNanos = System.nanoTime()
                     },

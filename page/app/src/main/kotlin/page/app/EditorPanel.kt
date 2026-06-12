@@ -153,6 +153,7 @@ fun EditorPanel(
     onRequestRename: ((line: Int, character: Int, newName: String) -> CompletableFuture<RenameWorkspaceEdit>)? = null,
     onApplyRename: ((RenameWorkspaceEdit) -> Unit)? = null,
     onRequestReferences: ((line: Int, character: Int, symbolName: String) -> Unit)? = null,
+    onShowCallGraph: ((line: Int, character: Int) -> Unit)? = null,
     onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
@@ -1309,6 +1310,23 @@ fun EditorPanel(
                         },
                         message = d.message,
                     )
+                },
+                contextMenuActions = buildList {
+                    val callGraph = onShowCallGraph
+                    if (callGraph != null) {
+                        add(
+                            page.ui.EditorContextAction("Show Call Graph in Atlas") {
+                                val text = value.text
+                                val offset = value.selection.end.coerceIn(0, text.length)
+                                val word = wordRangeAt(text, offset)
+                                val symbolName = if (word != null) text.substring(word.first, word.second) else ""
+                                if (!isInStringOrComment(tokens, text, offset) && isRenamableIdentifier(symbolName)) {
+                                    val pos = TextBuffer(text).lineColOf(offset)
+                                    callGraph(pos.line, pos.col)
+                                }
+                            },
+                        )
+                    }
                 },
                 languageMode = remember(activePath) {
                     val ext = activePath?.fileName?.toString()?.substringAfterLast('.', "")?.lowercase()

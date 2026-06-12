@@ -51,6 +51,7 @@ internal fun PaneRegion(
     onJumpToProblem: (Path, Int, Int) -> Unit = { _, _, _ -> },
     onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
     onRequestReferences: (Path, Int, Int, String) -> Unit = { _, _, _, _ -> },
+    onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
     initialFoldedStartLines: Set<Int> = emptySet(),
@@ -171,6 +172,9 @@ internal fun PaneRegion(
                     onRequestReferences = active?.path?.let { p ->
                         { line, ch, sym -> onRequestReferences(p, line, ch, sym) }
                     },
+                    onShowCallGraph = active?.path
+                        ?.takeIf { activeCtrl?.supportsCallHierarchy == true }
+                        ?.let { p -> { line, ch -> onShowCallGraph(p, line, ch) } },
                     onRequestInlayHints = active?.path
                         ?.takeIf { activeCtrl?.status?.value == LspController.Status.READY }
                         ?.let { p ->

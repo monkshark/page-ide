@@ -1,3 +1,3 @@
 package page.atlas.render
 
-enum class AtlasViewTab { DEPENDENCY, GRAPH }
+enum class AtlasViewTab { DEPENDENCY, GRAPH, CALLS }

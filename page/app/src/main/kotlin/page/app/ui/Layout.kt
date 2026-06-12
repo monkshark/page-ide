@@ -149,6 +149,11 @@ internal fun IdeMainLayout(
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
     atlasActiveId: String? = null,
+    atlasCallsSlice: GraphSlice = GraphSlice.EMPTY,
+    atlasCallsView: AtlasViewState = remember { AtlasViewState() },
+    onAtlasCallsExpand: (String) -> Unit = {},
+    onAtlasCallsOpen: (String) -> Unit = {},
+    onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -342,6 +347,7 @@ internal fun IdeMainLayout(
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
+                                onShowCallGraph = onShowCallGraph,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -375,6 +381,7 @@ internal fun IdeMainLayout(
                                 onJumpToProblem = onJumpToProblem,
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
+                                onShowCallGraph = onShowCallGraph,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -407,6 +414,7 @@ internal fun IdeMainLayout(
                         onJumpToProblem = onJumpToProblem,
                         onApplyRename = onApplyRename,
                         onRequestReferences = onRequestReferences,
+                        onShowCallGraph = onShowCallGraph,
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -440,6 +448,10 @@ internal fun IdeMainLayout(
                     activeFileId = atlasActiveId,
                     followActive = ui.atlasFollowActive,
                     onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
+                    callsSlice = atlasCallsSlice,
+                    callsView = atlasCallsView,
+                    onCallsExpand = onAtlasCallsExpand,
+                    onCallsOpen = onAtlasCallsOpen,
                 )
             }
             if (codeActionPreviewVisible) {
@@ -627,6 +639,10 @@ internal fun IdeMainLayout(
                 activeFileId = atlasActiveId,
                 followActive = ui.atlasFollowActive,
                 onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
+                callsSlice = atlasCallsSlice,
+                callsView = atlasCallsView,
+                onCallsExpand = onAtlasCallsExpand,
+                onCallsOpen = onAtlasCallsOpen,
             )
         }
         ExpandedPanel.NONE -> Unit

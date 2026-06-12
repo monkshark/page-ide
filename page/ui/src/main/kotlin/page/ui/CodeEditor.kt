@@ -99,6 +99,11 @@ import page.editor.EditHistory
 import page.editor.EditSnapshot
 import page.editor.PageScroll
 
+data class EditorContextAction(
+    val label: String,
+    val onClick: () -> Unit,
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CodeEditor(
@@ -130,6 +135,7 @@ fun CodeEditor(
     viewportHeightProvider: (() -> Float)? = null,
     focusRequestVersion: Int = 0,
     caretBringIntoViewEnabled: Boolean = true,
+    contextMenuActions: List<EditorContextAction> = emptyList(),
     languageMode: String? = null,
     autoPairs: Boolean = true,
     autoHtmlTags: Boolean = true,
@@ -683,6 +689,15 @@ fun CodeEditor(
                             menuExpanded = false
                         },
                     )
+                    for (action in contextMenuActions) {
+                        CompactMenuItem(
+                            label = action.label,
+                            onClick = {
+                                action.onClick()
+                                menuExpanded = false
+                            },
+                        )
+                    }
                 }
             }
         }

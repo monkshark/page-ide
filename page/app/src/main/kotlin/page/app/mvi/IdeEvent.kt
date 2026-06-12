@@ -44,6 +44,7 @@ internal sealed interface IdeEvent {
         data object ToggleAtlas : Panel
         data object CloseAtlas : Panel
         data object FocusInAtlas : Panel
+        data object ShowAtlasCalls : Panel
         data class AtlasProjectModeChanged(val enabled: Boolean) : Panel
         data class AtlasViewTabChanged(val tab: AtlasViewTab) : Panel
         data class AtlasVcsOverlayChanged(val enabled: Boolean) : Panel
