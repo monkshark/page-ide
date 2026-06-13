@@ -11,11 +11,15 @@ import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
 import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeStore
+import page.app.mvi.SideView
 import page.atlas.render.AtlasViewTab
 import page.editor.IndexedFile
 import page.lsp.DocumentSymbolEntry
 
 internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
+    var activeSideView: SideView?
+        get() = store.layout.activeSideView
+        set(value) = store.updateLayout { it.copy(activeSideView = value) }
     var sidebarWidth: Dp
         get() = store.layout.sidebarWidth
         set(value) = store.updateLayout { it.copy(sidebarWidth = value) }

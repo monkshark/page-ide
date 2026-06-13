@@ -33,6 +33,7 @@ internal sealed interface IdeEvent {
     }
 
     sealed interface Panel : IdeEvent {
+        data class SelectSideView(val view: SideView?) : Panel
         data object ToggleProblems : Panel
         data object CloseProblems : Panel
         data object ToggleTodo : Panel

@@ -175,6 +175,38 @@ class ReducerTest {
     }
 
     @Test
+    fun `side view defaults to files`() {
+        assertEquals(SideView.FILES, AppState().layout.activeSideView)
+    }
+
+    @Test
+    fun `select side view replaces active view`() {
+        val s = AppState()
+        val search = reduce(s, IdeEvent.Panel.SelectSideView(SideView.SEARCH))
+        assertEquals(SideView.SEARCH, search.layout.activeSideView)
+        val sc = reduce(search, IdeEvent.Panel.SelectSideView(SideView.SOURCE_CONTROL))
+        assertEquals(SideView.SOURCE_CONTROL, sc.layout.activeSideView)
+    }
+
+    @Test
+    fun `reselecting active side view collapses to null`() {
+        val s = AppState()
+        val collapsed = reduce(s, IdeEvent.Panel.SelectSideView(SideView.FILES))
+        assertNull(collapsed.layout.activeSideView)
+        val reopened = reduce(collapsed, IdeEvent.Panel.SelectSideView(SideView.FILES))
+        assertEquals(SideView.FILES, reopened.layout.activeSideView)
+    }
+
+    @Test
+    fun `select side view leaves other slices value-equal`() {
+        val s = AppState()
+        val next = reduce(s, IdeEvent.Panel.SelectSideView(SideView.SEARCH))
+        assertEquals(s.chrome, next.chrome)
+        assertEquals(s.tree, next.tree)
+        assertEquals(s.editorLayout, next.editorLayout)
+    }
+
+    @Test
     fun `no-op resize keeps slice value-equal`() {
         val s = AppState()
         val next = reduce(s, IdeEvent.Panel.ResizeSidebar(0.dp))

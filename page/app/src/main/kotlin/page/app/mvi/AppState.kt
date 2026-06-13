@@ -21,7 +21,12 @@ import java.nio.file.Path
 
 internal enum class ExpandedPanel { NONE, ATLAS }
 
+internal enum class SideView { FILES, SEARCH, SOURCE_CONTROL }
+
+internal enum class Pillar { PAIR, GLASS, ATLAS, ECHO }
+
 internal data class LayoutState(
+    val activeSideView: SideView? = SideView.FILES,
     val sidebarWidth: Dp = 260.dp,
     val problemsOpen: Boolean = false,
     val problemsHeight: Dp = 220.dp,
