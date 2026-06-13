@@ -3,9 +3,11 @@ package page.app.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -554,7 +556,11 @@ internal fun IdeMainLayout(
             }
             }
         }
-        if (ui.problemsOpen) {
+        AnimatedVisibility(
+            visible = ui.problemsOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             ProblemsPanel(
                 diagnostics = scopedDiagnostics,
                 onJump = onJumpToProblem,
@@ -567,7 +573,11 @@ internal fun IdeMainLayout(
                 onFileOrderChange = { onEvent(IdeEvent.Panel.ProblemsFileOrderChanged(it)) },
             )
         }
-        if (ui.todoOpen) {
+        AnimatedVisibility(
+            visible = ui.todoOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             TodoPanel(
                 items = todoItems,
                 onJump = onJumpToProblem,
@@ -590,7 +600,11 @@ internal fun IdeMainLayout(
                 linePreviewFor = linePreviewFor,
             )
         }
-        if (ui.terminalOpen) {
+        AnimatedVisibility(
+            visible = ui.terminalOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             TerminalPanel(
                 manager = terminalManager,
                 onPanelClose = { onEvent(IdeEvent.Panel.CloseTerminal) },
@@ -598,7 +612,11 @@ internal fun IdeMainLayout(
                 onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTerminal(it)) },
             )
         }
-        if (ui.outputOpen) {
+        AnimatedVisibility(
+            visible = ui.outputOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             OutputPanel(
                 state = outputState,
                 onClose = { onEvent(IdeEvent.Panel.CloseOutput) },
