@@ -230,6 +230,13 @@ internal fun IdeMainLayout(
                 }
             }
     }
+    val scopedDiagnostics = diagnosticsInScope(
+        all = lspRouter.allDiagnosticsByUri,
+        scope = LocalPageSettings.current.lsp.diagnosticsScope,
+        focusedPath = editor.focused().book.active?.path,
+        openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+    )
+    val scopedProblemsCount = scopedDiagnostics.values.sumOf { it.size }
     Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent { event ->
         if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && installManagerOpen != null) {
             installManagerOpen = null
@@ -256,34 +263,66 @@ internal fun IdeMainLayout(
             onToggleSettings = onToggleSettings,
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            FileTreePanel(
-                root = workspace.rootDir,
-                expanded = workspace.expanded,
-                selection = workspace.treeSelection,
-                onToggle = onToggle,
-                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
-                onOpenFile = onOpenFile,
-                onCreateFile = onCreateFileIn,
-                onCreateFolder = onCreateFolderIn,
-                onRename = onRenameEntry,
-                onDeleteOne = onDeleteEntry,
-                onDeleteMany = onDeleteEntries,
-                onReveal = onRevealInFiles,
-                onOpenInAtlas = onOpenInAtlas,
-                onCopyPath = onCopyPath,
-                onCopyRelativePath = onCopyRelativePath,
-                onPasteInto = onPasteInto,
-                onUndo = onUndoFileOp,
-                canUndo = canUndoFileOp,
-                onDropPlan = onDropPlan,
-                onExternalDrop = onExternalDrop,
-                onDropRejected = onDropRejected,
-                onPanelFocusChanged = onTreeFocusChanged,
-                pendingFocusTick = pendingTreeFocusTick,
-                revision = workspace.treeRevision,
-                modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+            ActivityRail(
+                activeSideView = ui.activeSideView,
+                onSelectSideView = { onEvent(IdeEvent.Panel.SelectSideView(it)) },
+                problemsOpen = ui.problemsOpen,
+                problemsCount = scopedProblemsCount,
+                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
+                terminalOpen = ui.terminalOpen,
+                onTerminalToggle = onTerminalToggle,
+                outputOpen = ui.outputOpen,
+                onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
+                settingsOpen = settingsPanelOpen,
+                onSettingsToggle = onToggleSettings,
             )
-            ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
+            when (ui.activeSideView) {
+                page.app.mvi.SideView.FILES -> {
+                    FileTreePanel(
+                        root = workspace.rootDir,
+                        expanded = workspace.expanded,
+                        selection = workspace.treeSelection,
+                        onToggle = onToggle,
+                        onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
+                        onOpenFile = onOpenFile,
+                        onCreateFile = onCreateFileIn,
+                        onCreateFolder = onCreateFolderIn,
+                        onRename = onRenameEntry,
+                        onDeleteOne = onDeleteEntry,
+                        onDeleteMany = onDeleteEntries,
+                        onReveal = onRevealInFiles,
+                        onOpenInAtlas = onOpenInAtlas,
+                        onCopyPath = onCopyPath,
+                        onCopyRelativePath = onCopyRelativePath,
+                        onPasteInto = onPasteInto,
+                        onUndo = onUndoFileOp,
+                        canUndo = canUndoFileOp,
+                        onDropPlan = onDropPlan,
+                        onExternalDrop = onExternalDrop,
+                        onDropRejected = onDropRejected,
+                        onPanelFocusChanged = onTreeFocusChanged,
+                        pendingFocusTick = pendingTreeFocusTick,
+                        revision = workspace.treeRevision,
+                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                    )
+                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
+                }
+                page.app.mvi.SideView.SEARCH -> {
+                    SideViewPlaceholder(
+                        title = "Search",
+                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                    )
+                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
+                }
+                page.app.mvi.SideView.SOURCE_CONTROL -> {
+                    SideViewPlaceholder(
+                        title = "Source Control",
+                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                    )
+                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
+                }
+                null -> Unit
+            }
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 if (installManagerOpen != null) {
                     InstallManagerPanel(
@@ -468,16 +507,8 @@ internal fun IdeMainLayout(
             }
         }
         if (ui.problemsOpen) {
-            val diagnosticsScope = LocalPageSettings.current.lsp.diagnosticsScope
-            val openTabPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs)
-                .map { it.path }.toSet()
             ProblemsPanel(
-                diagnostics = diagnosticsInScope(
-                    all = lspRouter.allDiagnosticsByUri,
-                    scope = diagnosticsScope,
-                    focusedPath = editor.focused().book.active?.path,
-                    openPaths = openTabPaths,
-                ),
+                diagnostics = scopedDiagnostics,
                 onJump = onJumpToProblem,
                 onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
                 height = ui.problemsHeight,
