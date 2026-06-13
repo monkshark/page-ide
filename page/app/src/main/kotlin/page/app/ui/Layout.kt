@@ -1,5 +1,11 @@
 package page.app.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -297,61 +303,53 @@ internal fun IdeMainLayout(
                     .fillMaxHeight()
                     .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
             ) {
-            when (ui.activeSideView) {
-                page.app.mvi.SideView.FILES -> {
+            val sidebarView = ui.activeSideView
+            var lastSidebarView by remember { mutableStateOf(page.app.mvi.SideView.FILES) }
+            if (sidebarView != null) lastSidebarView = sidebarView
+            AnimatedVisibility(
+                visible = sidebarView != null,
+                enter = expandHorizontally(tween(180), expandFrom = Alignment.Start) + fadeIn(tween(180)),
+                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.Start) + fadeOut(tween(180)),
+            ) {
+                Row(modifier = Modifier.fillMaxHeight()) {
                     GlassSurface(
                         level = GlassSurfaceLevel.Flat,
                         modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
                     ) {
-                    FileTreePanel(
-                        root = workspace.rootDir,
-                        expanded = workspace.expanded,
-                        selection = workspace.treeSelection,
-                        onToggle = onToggle,
-                        onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
-                        onOpenFile = onOpenFile,
-                        onCreateFile = onCreateFileIn,
-                        onCreateFolder = onCreateFolderIn,
-                        onRename = onRenameEntry,
-                        onDeleteOne = onDeleteEntry,
-                        onDeleteMany = onDeleteEntries,
-                        onReveal = onRevealInFiles,
-                        onOpenInAtlas = onOpenInAtlas,
-                        onCopyPath = onCopyPath,
-                        onCopyRelativePath = onCopyRelativePath,
-                        onPasteInto = onPasteInto,
-                        onUndo = onUndoFileOp,
-                        canUndo = canUndoFileOp,
-                        onDropPlan = onDropPlan,
-                        onExternalDrop = onExternalDrop,
-                        onDropRejected = onDropRejected,
-                        onPanelFocusChanged = onTreeFocusChanged,
-                        pendingFocusTick = pendingTreeFocusTick,
-                        revision = workspace.treeRevision,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                        when (lastSidebarView) {
+                            page.app.mvi.SideView.FILES -> FileTreePanel(
+                                root = workspace.rootDir,
+                                expanded = workspace.expanded,
+                                selection = workspace.treeSelection,
+                                onToggle = onToggle,
+                                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
+                                onOpenFile = onOpenFile,
+                                onCreateFile = onCreateFileIn,
+                                onCreateFolder = onCreateFolderIn,
+                                onRename = onRenameEntry,
+                                onDeleteOne = onDeleteEntry,
+                                onDeleteMany = onDeleteEntries,
+                                onReveal = onRevealInFiles,
+                                onOpenInAtlas = onOpenInAtlas,
+                                onCopyPath = onCopyPath,
+                                onCopyRelativePath = onCopyRelativePath,
+                                onPasteInto = onPasteInto,
+                                onUndo = onUndoFileOp,
+                                canUndo = canUndoFileOp,
+                                onDropPlan = onDropPlan,
+                                onExternalDrop = onExternalDrop,
+                                onDropRejected = onDropRejected,
+                                onPanelFocusChanged = onTreeFocusChanged,
+                                pendingFocusTick = pendingTreeFocusTick,
+                                revision = workspace.treeRevision,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            page.app.mvi.SideView.SEARCH -> SideViewPlaceholder(title = "Search", modifier = Modifier.fillMaxSize())
+                            page.app.mvi.SideView.SOURCE_CONTROL -> SideViewPlaceholder(title = "Source Control", modifier = Modifier.fillMaxSize())
+                        }
                     }
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
                 }
-                page.app.mvi.SideView.SEARCH -> {
-                    GlassSurface(
-                        level = GlassSurfaceLevel.Flat,
-                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
-                    ) {
-                        SideViewPlaceholder(title = "Search", modifier = Modifier.fillMaxSize())
-                    }
-                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
-                }
-                page.app.mvi.SideView.SOURCE_CONTROL -> {
-                    GlassSurface(
-                        level = GlassSurfaceLevel.Flat,
-                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
-                    ) {
-                        SideViewPlaceholder(title = "Source Control", modifier = Modifier.fillMaxSize())
-                    }
-                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
-                }
-                null -> Unit
             }
             GlassSurface(
                 level = GlassSurfaceLevel.Flat,
