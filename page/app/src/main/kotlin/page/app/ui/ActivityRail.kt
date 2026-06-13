@@ -44,12 +44,10 @@ internal fun ActivityRail(
     settingsOpen: Boolean,
     onSettingsToggle: () -> Unit,
 ) {
-    val colors = Glass.colors
     Column(
         modifier = Modifier
             .width(48.dp)
-            .fillMaxHeight()
-            .background(colors.surfaceL1),
+            .fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         RailItem(

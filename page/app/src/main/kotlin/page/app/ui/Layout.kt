@@ -1,11 +1,13 @@
 package page.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -19,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -47,7 +50,10 @@ import page.lsp.RenameWorkspaceEdit
 import page.runtime.LspInstallers
 import page.runtime.RunConfigsState
 import page.runtime.TerminalManager
+import page.ui.Glass
 import page.ui.GlassPalette
+import page.ui.GlassSurface
+import page.ui.GlassSurfaceLevel
 import page.ui.SplitPane
 import page.workspace.FileTreePanel
 import page.workspace.TreeDragController
@@ -248,6 +254,17 @@ internal fun IdeMainLayout(
             true
         } else false
     }) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(
+                Brush.verticalGradient(
+                    0f to Glass.colors.primary.copy(alpha = 0.12f),
+                    1f to androidx.compose.ui.graphics.Color.Transparent,
+                ),
+            ),
+    )
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
             path = editor.focused().book.active?.path,
@@ -274,8 +291,18 @@ internal fun IdeMainLayout(
                 settingsOpen = settingsPanelOpen,
                 onSettingsToggle = onToggleSettings,
             )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
+            ) {
             when (ui.activeSideView) {
                 page.app.mvi.SideView.FILES -> {
+                    GlassSurface(
+                        level = GlassSurfaceLevel.Flat,
+                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                    ) {
                     FileTreePanel(
                         root = workspace.rootDir,
                         expanded = workspace.expanded,
@@ -301,27 +328,36 @@ internal fun IdeMainLayout(
                         onPanelFocusChanged = onTreeFocusChanged,
                         pendingFocusTick = pendingTreeFocusTick,
                         revision = workspace.treeRevision,
-                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                        modifier = Modifier.fillMaxSize(),
                     )
+                    }
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
                 }
                 page.app.mvi.SideView.SEARCH -> {
-                    SideViewPlaceholder(
-                        title = "Search",
+                    GlassSurface(
+                        level = GlassSurfaceLevel.Flat,
                         modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
-                    )
+                    ) {
+                        SideViewPlaceholder(title = "Search", modifier = Modifier.fillMaxSize())
+                    }
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
                 }
                 page.app.mvi.SideView.SOURCE_CONTROL -> {
-                    SideViewPlaceholder(
-                        title = "Source Control",
+                    GlassSurface(
+                        level = GlassSurfaceLevel.Flat,
                         modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
-                    )
+                    ) {
+                        SideViewPlaceholder(title = "Source Control", modifier = Modifier.fillMaxSize())
+                    }
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
                 }
                 null -> Unit
             }
-            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            GlassSurface(
+                level = GlassSurfaceLevel.Flat,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 if (installManagerOpen != null) {
                     InstallManagerPanel(
                         initialSelection = installManagerOpen,
@@ -471,6 +507,7 @@ internal fun IdeMainLayout(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
                 )
             }
+            }
             if (ui.atlasOpen) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
                 AtlasPanel(
@@ -510,6 +547,7 @@ internal fun IdeMainLayout(
                     onDismiss = onCodeActionDismiss,
                     width = 420.dp,
                 )
+            }
             }
         }
         if (ui.problemsOpen) {
