@@ -55,7 +55,7 @@ private fun glassColors(
     syntax: SyntaxPalette,
     isLight: Boolean,
     surfaceL1: Color = surface,
-    surfaceL2: Color = surfaceRaised,
+    surfaceL2: Color = surface,
     surfaceL3: Color = surfaceRaised,
     surfaceOverlay: Color = surface.copy(alpha = 0.88f),
     highlightEdge: Color = if (isLight) Color(0xE6FFFFFF) else Color(0x12FFFFFF),
