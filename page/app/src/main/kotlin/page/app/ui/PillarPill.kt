@@ -1,5 +1,7 @@
 package page.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -137,16 +139,18 @@ private fun PillChip(
     val colors = Glass.colors
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    val bg = when {
+    val targetBg = when {
         active -> colors.primarySoft
         enabled && hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
         else -> Color.Transparent
     }
-    val tint = when {
+    val targetTint = when {
         !enabled -> colors.faint
         active -> colors.primary
         else -> colors.muted
     }
+    val bg by animateColorAsState(targetBg, tween(150))
+    val tint by animateColorAsState(targetTint, tween(150))
     GlassTooltip(text = tooltip) {
         Box(
             modifier = Modifier

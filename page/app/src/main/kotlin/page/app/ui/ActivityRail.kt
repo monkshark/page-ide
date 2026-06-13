@@ -1,5 +1,8 @@
 package page.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -127,12 +130,14 @@ private fun RailItem(
     val colors = Glass.colors
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
-    val bg = when {
+    val targetBg = when {
         selected -> colors.primarySoft
         hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
         else -> Color.Transparent
     }
-    val tint = if (selected) colors.primary else colors.muted
+    val bg by animateColorAsState(targetBg, tween(150))
+    val tint by animateColorAsState(if (selected) colors.primary else colors.muted, tween(150))
+    val barHeight by animateDpAsState(if (selected) 20.dp else 0.dp, tween(180))
     GlassTooltip(text = tooltip) {
         Box(
             modifier = Modifier
@@ -142,15 +147,13 @@ private fun RailItem(
                 .clickable { onClick() },
             contentAlignment = Alignment.Center,
         ) {
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .width(2.dp)
-                        .height(20.dp)
-                        .background(colors.accent),
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(2.dp)
+                    .height(barHeight)
+                    .background(colors.accent),
+            )
             Box(
                 modifier = Modifier
                     .size(32.dp)
