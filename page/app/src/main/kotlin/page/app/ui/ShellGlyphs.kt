@@ -1,11 +1,8 @@
 package page.app.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -16,8 +13,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -286,13 +281,21 @@ internal fun AiGlyph(tint: Color, size: Dp = 14.dp) {
 
 @Composable
 internal fun CommandGlyph(tint: Color, size: Dp = 14.dp) {
-    Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
-        Text(
-            text = "⌘",
-            color = tint,
-            fontSize = with(LocalDensity.current) { size.toSp() * 0.95f },
-            fontWeight = FontWeight.Medium,
-        )
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val c = 0.36f
+        val r = 0.135f
+        val lo = c - r
+        val hi = 1f - c + r
+        val style = strokeStyle(w * 0.085f)
+        drawCircle(color = tint, radius = w * r, center = Offset(w * lo, w * lo), style = style)
+        drawCircle(color = tint, radius = w * r, center = Offset(w * hi, w * lo), style = style)
+        drawCircle(color = tint, radius = w * r, center = Offset(w * lo, w * hi), style = style)
+        drawCircle(color = tint, radius = w * r, center = Offset(w * hi, w * hi), style = style)
+        drawLine(tint, Offset(w * lo, w * c), Offset(w * hi, w * c), strokeWidth = w * 0.085f, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * lo, w * (1f - c)), Offset(w * hi, w * (1f - c)), strokeWidth = w * 0.085f, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * c, w * lo), Offset(w * c, w * hi), strokeWidth = w * 0.085f, cap = StrokeCap.Round)
+        drawLine(tint, Offset(w * (1f - c), w * lo), Offset(w * (1f - c), w * hi), strokeWidth = w * 0.085f, cap = StrokeCap.Round)
     }
 }
 
