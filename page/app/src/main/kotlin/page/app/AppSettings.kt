@@ -51,7 +51,7 @@ data class AutoInputOptions(
 }
 
 data class UiOptions(
-    val palette: GlassPalette = GlassPalette.Graphite,
+    val palette: GlassPalette = GlassPalette.Signature,
     val sidebarWidth: Int = 240,
     val showTabCloseButton: Boolean = true,
 ) {
@@ -108,7 +108,7 @@ object AppSettings {
         return home.resolve(DIR_NAME).resolve(FILE_NAME)
     }
 
-    fun loadPalette(default: GlassPalette = GlassPalette.Graphite): GlassPalette {
+    fun loadPalette(default: GlassPalette = GlassPalette.Signature): GlassPalette {
         val raw = readProperty(KEY_PALETTE) ?: return default
         return GlassPalette.values().firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: default
     }
