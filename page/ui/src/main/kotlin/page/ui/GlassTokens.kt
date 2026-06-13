@@ -15,18 +15,78 @@ enum class GlassPalette { Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
 @Immutable
 data class GlassColors(
     val background: Color,
+    val surfaceL1: Color,
+    val surfaceL2: Color,
+    val surfaceL3: Color,
     val surface: Color,
     val surfaceRaised: Color,
+    val surfaceOverlay: Color,
+    val highlightEdge: Color,
+    val separator: Color,
     val outline: Color,
     val primary: Color,
+    val primarySoft: Color,
     val onPrimary: Color,
     val accent: Color,
     val text: Color,
     val muted: Color,
+    val faint: Color,
     val error: Color,
     val warn: Color,
+    val success: Color,
+    val danger: Color,
     val syntax: SyntaxPalette,
     val isLight: Boolean,
+)
+
+private fun glassColors(
+    background: Color,
+    surface: Color,
+    surfaceRaised: Color,
+    outline: Color,
+    primary: Color,
+    onPrimary: Color,
+    accent: Color,
+    text: Color,
+    muted: Color,
+    error: Color,
+    warn: Color,
+    success: Color,
+    syntax: SyntaxPalette,
+    isLight: Boolean,
+    surfaceL1: Color = surface,
+    surfaceL2: Color = surfaceRaised,
+    surfaceL3: Color = surfaceRaised,
+    surfaceOverlay: Color = surface.copy(alpha = 0.88f),
+    highlightEdge: Color = if (isLight) Color(0xE6FFFFFF) else Color(0x12FFFFFF),
+    separator: Color = if (isLight) Color(0x14101418) else Color(0x0DFFFFFF),
+    primarySoft: Color = primary.copy(alpha = 0.14f),
+    faint: Color = muted.copy(alpha = 0.5f),
+    danger: Color = error,
+): GlassColors = GlassColors(
+    background = background,
+    surfaceL1 = surfaceL1,
+    surfaceL2 = surfaceL2,
+    surfaceL3 = surfaceL3,
+    surface = surface,
+    surfaceRaised = surfaceRaised,
+    surfaceOverlay = surfaceOverlay,
+    highlightEdge = highlightEdge,
+    separator = separator,
+    outline = outline,
+    primary = primary,
+    primarySoft = primarySoft,
+    onPrimary = onPrimary,
+    accent = accent,
+    text = text,
+    muted = muted,
+    faint = faint,
+    error = error,
+    warn = warn,
+    success = success,
+    danger = danger,
+    syntax = syntax,
+    isLight = isLight,
 )
 
 @Immutable
@@ -139,7 +199,7 @@ private val GraphiteSyntax = SyntaxPalette(
     identifier = Color(0xFFA9B7C6),
 )
 
-private val GraphiteColors = GlassColors(
+private val GraphiteColors = glassColors(
     background = Color(0xFF1E1F22),
     surface = Color(0xFF26282B),
     surfaceRaised = Color(0xFF2B2D30),
@@ -151,11 +211,12 @@ private val GraphiteColors = GlassColors(
     muted = Color(0xFF787C84),
     error = Color(0xFFDB5C5C),
     warn = Color(0xFFC8A24A),
+    success = Color(0xFF5BA85B),
     syntax = GraphiteSyntax,
     isLight = false,
 )
 
-private val CoolColors = GlassColors(
+private val CoolColors = glassColors(
     background = Color(0xFF0E1418),
     surface = Color(0xFF161D24),
     surfaceRaised = Color(0xFF1C2630),
@@ -167,11 +228,12 @@ private val CoolColors = GlassColors(
     muted = Color(0xFF8FA0B5),
     error = Color(0xFFFF7B72),
     warn = Color(0xFFE3B341),
+    success = Color(0xFF5BD6A0),
     syntax = CoolSyntax,
     isLight = false,
 )
 
-private val WarmColors = GlassColors(
+private val WarmColors = glassColors(
     background = Color(0xFF1A1612),
     surface = Color(0xFF221C16),
     surfaceRaised = Color(0xFF2A231C),
@@ -183,11 +245,12 @@ private val WarmColors = GlassColors(
     muted = Color(0xFFA89C8A),
     error = Color(0xFFE07A5F),
     warn = Color(0xFFD4A574),
+    success = Color(0xFF94C973),
     syntax = WarmSyntax,
     isLight = false,
 )
 
-private val FrostColors = GlassColors(
+private val FrostColors = glassColors(
     background = Color(0xFFF2F4F8),
     surface = Color(0xFFFFFFFF),
     surfaceRaised = Color(0xFFFAFBFD),
@@ -199,6 +262,7 @@ private val FrostColors = GlassColors(
     muted = Color(0xFF5C6878),
     error = Color(0xFFD63B3B),
     warn = Color(0xFFC68A00),
+    success = Color(0xFF1F9D6B),
     syntax = FrostSyntax,
     isLight = true,
 )
@@ -215,7 +279,7 @@ private val ForestSyntax = SyntaxPalette(
     identifier = Color(0xFFD8E1C6),
 )
 
-private val ForestColors = GlassColors(
+private val ForestColors = glassColors(
     background = Color(0xFF101714),
     surface = Color(0xFF17211D),
     surfaceRaised = Color(0xFF1E2A24),
@@ -227,6 +291,7 @@ private val ForestColors = GlassColors(
     muted = Color(0xFF8FA396),
     error = Color(0xFFE5786E),
     warn = Color(0xFFD9C28E),
+    success = Color(0xFF8CC76E),
     syntax = ForestSyntax,
     isLight = false,
 )
@@ -243,7 +308,7 @@ private val MidnightSyntax = SyntaxPalette(
     identifier = Color(0xFFE6E8F0),
 )
 
-private val MidnightColors = GlassColors(
+private val MidnightColors = glassColors(
     background = Color(0xFF05070C),
     surface = Color(0xFF0B0F18),
     surfaceRaised = Color(0xFF121826),
@@ -255,6 +320,7 @@ private val MidnightColors = GlassColors(
     muted = Color(0xFF7B86A0),
     error = Color(0xFFFF6E83),
     warn = Color(0xFFFFC078),
+    success = Color(0xFF4FE3B0),
     syntax = MidnightSyntax,
     isLight = false,
 )
@@ -271,7 +337,7 @@ private val SandSyntax = SyntaxPalette(
     identifier = Color(0xFF3D352A),
 )
 
-private val SandColors = GlassColors(
+private val SandColors = glassColors(
     background = Color(0xFFF5EEDF),
     surface = Color(0xFFFAF4E6),
     surfaceRaised = Color(0xFFFFF9EC),
@@ -283,6 +349,7 @@ private val SandColors = GlassColors(
     muted = Color(0xFF7A6E58),
     error = Color(0xFFC23B2C),
     warn = Color(0xFFA8761A),
+    success = Color(0xFF1F9D6B),
     syntax = SandSyntax,
     isLight = true,
 )
