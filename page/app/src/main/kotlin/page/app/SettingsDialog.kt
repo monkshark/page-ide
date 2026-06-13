@@ -518,10 +518,15 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun NumberField(label: String, value: String, onChange: (String) -> Unit) {
+    var text by remember(value) { mutableStateOf(value) }
     FieldRow(label = label, fieldWidth = 96.dp) {
         BasicTextField(
-            value = value,
-            onValueChange = { v -> onChange(v.filter { it.isDigit() }.take(4)) },
+            value = text,
+            onValueChange = { raw ->
+                val digits = raw.filter { it.isDigit() }.take(4)
+                text = digits
+                onChange(digits)
+            },
             singleLine = true,
             cursorBrush = SolidColor(Glass.colors.primary),
             textStyle = LocalTextStyle.current.copy(
