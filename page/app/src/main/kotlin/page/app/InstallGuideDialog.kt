@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import page.lsp.LanguageDefinition
+import page.ui.Glass
 import page.ui.GlassTheme
 import java.awt.Desktop
 import java.net.URI
@@ -998,7 +999,7 @@ private fun VersionRow(
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = "×",
-                    color = Color(0xFFf85149).copy(alpha = 0.6f),
+                    color = Glass.colors.danger.copy(alpha = 0.6f),
                     fontSize = 12.sp,
                     modifier = Modifier
                         .clickable(onClick = onDelete)
