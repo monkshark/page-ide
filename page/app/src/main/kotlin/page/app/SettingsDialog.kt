@@ -1,5 +1,8 @@
 package page.app
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,6 +46,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -182,11 +186,18 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = Glass.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val bg = when {
-        selected -> colors.primarySoft
-        hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
-        else -> Color.Transparent
-    }
+    val bg by animateColorAsState(
+        targetValue = when {
+            selected -> colors.primarySoft
+            hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(120),
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (selected) colors.primary else colors.muted,
+        animationSpec = tween(120),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -199,7 +210,7 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            color = if (selected) colors.primary else colors.muted,
+            color = labelColor,
             fontSize = Glass.type.ui,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
@@ -462,17 +473,28 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = Glass.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val bg = when {
-        selected -> colors.primarySoft
-        hovered -> colors.surfaceL3
-        else -> colors.surfaceL2
-    }
+    val bg by animateColorAsState(
+        targetValue = when {
+            selected -> colors.primarySoft
+            hovered -> colors.surfaceL3
+            else -> colors.surfaceL2
+        },
+        animationSpec = tween(120),
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) colors.primary else colors.outline,
+        animationSpec = tween(120),
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) colors.primary else colors.text,
+        animationSpec = tween(120),
+    )
     Box(
         modifier = Modifier
             .height(28.dp)
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
-            .border(1.dp, if (selected) colors.primary else colors.outline, RoundedCornerShape(Glass.radius.sm))
+            .border(1.dp, borderColor, RoundedCornerShape(Glass.radius.sm))
             .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp),
@@ -480,7 +502,7 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            color = if (selected) colors.primary else colors.text,
+            color = textColor,
             fontSize = Glass.type.label,
         )
     }
@@ -548,53 +570,74 @@ private fun CheckRow(
     val colors = Glass.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val checkColor = colors.onPrimary
+    val rowBg by animateColorAsState(
+        targetValue = if (hovered) colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f) else Color.Transparent,
+        animationSpec = tween(120),
+    )
+    val boxBg by animateColorAsState(
+        targetValue = if (checked) colors.primary else colors.surfaceL2,
+        animationSpec = tween(140),
+    )
+    val boxBorder by animateColorAsState(
+        targetValue = if (checked) colors.primary else colors.outline,
+        animationSpec = tween(140),
+    )
+    val checkScale by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(160),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(Glass.radius.sm))
-            .background(if (hovered) colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f) else Color.Transparent)
+            .background(rowBg)
             .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onToggle)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.Top,
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val checkColor = colors.onPrimary
         Box(
             modifier = Modifier
-                .padding(top = 1.dp)
                 .size(18.dp)
                 .clip(RoundedCornerShape(Glass.radius.xs))
-                .background(if (checked) colors.primary else colors.surfaceL2)
-                .border(1.dp, if (checked) colors.primary else colors.outline, RoundedCornerShape(Glass.radius.xs)),
+                .background(boxBg)
+                .border(1.dp, boxBorder, RoundedCornerShape(Glass.radius.xs)),
             contentAlignment = Alignment.Center,
         ) {
-            if (checked) {
-                Canvas(modifier = Modifier.size(11.dp)) {
-                    val w = size.width
-                    val h = size.height
-                    val stroke = w * 0.16f
-                    drawLine(
-                        color = checkColor,
-                        start = Offset(w * 0.16f, h * 0.54f),
-                        end = Offset(w * 0.40f, h * 0.78f),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round,
-                    )
-                    drawLine(
-                        color = checkColor,
-                        start = Offset(w * 0.40f, h * 0.78f),
-                        end = Offset(w * 0.84f, h * 0.24f),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round,
-                    )
-                }
+            Canvas(
+                modifier = Modifier
+                    .size(11.dp)
+                    .graphicsLayer {
+                        scaleX = checkScale
+                        scaleY = checkScale
+                        alpha = checkScale
+                    },
+            ) {
+                val w = size.width
+                val h = size.height
+                val stroke = w * 0.16f
+                drawLine(
+                    color = checkColor,
+                    start = Offset(w * 0.16f, h * 0.54f),
+                    end = Offset(w * 0.40f, h * 0.78f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = checkColor,
+                    start = Offset(w * 0.40f, h * 0.78f),
+                    end = Offset(w * 0.84f, h * 0.24f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
             }
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(text = label, color = colors.text, fontSize = Glass.type.ui, lineHeight = Glass.type.ui)
+            Text(text = label, color = colors.text, fontSize = Glass.type.ui)
             Spacer(Modifier.height(3.dp))
-            Text(text = description, color = colors.muted, fontSize = Glass.type.label, lineHeight = Glass.type.label)
+            Text(text = description, color = colors.muted, fontSize = Glass.type.label)
         }
     }
 }
@@ -604,12 +647,15 @@ private fun GlassButton(label: String, primary: Boolean, onClick: () -> Unit) {
     val colors = Glass.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val bg = when {
-        primary && hovered -> colors.primary.copy(alpha = colors.primary.alpha * 0.85f)
-        primary -> colors.primary
-        hovered -> colors.surfaceL3
-        else -> colors.surfaceL2
-    }
+    val bg by animateColorAsState(
+        targetValue = when {
+            primary && hovered -> colors.primary.copy(alpha = colors.primary.alpha * 0.85f)
+            primary -> colors.primary
+            hovered -> colors.surfaceL3
+            else -> colors.surfaceL2
+        },
+        animationSpec = tween(120),
+    )
     Box(
         modifier = Modifier
             .height(30.dp)
