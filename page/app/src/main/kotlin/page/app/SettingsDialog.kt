@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -197,8 +198,8 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
     val bg by animateColorAsState(
         targetValue = when {
             selected -> colors.primarySoft
-            hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
-            else -> colors.primarySoft.copy(alpha = 0f)
+            hovered -> colors.surfaceL3
+            else -> colors.surfaceL3.copy(alpha = 0f)
         },
         animationSpec = tween(120),
     )
@@ -555,7 +556,22 @@ private fun PathField(label: String, value: String, onChange: (String) -> Unit) 
 @Composable
 private fun FieldRow(label: String, fieldWidth: androidx.compose.ui.unit.Dp?, field: @Composable () -> Unit) {
     val colors = Glass.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val hoverBg = colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f)
+    val rowBg by animateColorAsState(
+        targetValue = if (hovered) hoverBg else hoverBg.copy(alpha = 0f),
+        animationSpec = tween(120),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Glass.radius.sm))
+            .background(rowBg)
+            .hoverable(interaction)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             text = label,
             color = colors.muted,
