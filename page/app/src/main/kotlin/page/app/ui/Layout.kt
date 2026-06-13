@@ -68,6 +68,7 @@ import page.ui.GlassSurface
 import page.ui.GlassSurfaceLevel
 import page.ui.SplitPane
 import page.workspace.FileTreePanel
+import page.workspace.QuickOpenDialog
 import page.workspace.TreeDragController
 import java.nio.file.Path
 
@@ -670,6 +671,20 @@ internal fun IdeMainLayout(
                 )
             }
         }
+    }
+    AnimatedVisibility(
+        visible = ui.quickOpen,
+        enter = fadeIn(tween(160)),
+        exit = fadeOut(tween(160)),
+    ) {
+        QuickOpenDialog(
+            files = ui.quickOpenIndex,
+            onPick = { f ->
+                ui.quickOpen = false
+                onOpenFile(f.path)
+            },
+            onDismiss = { ui.quickOpen = false },
+        )
     }
     if (installGuideOpen && shellCtrl != null) {
         val activeDef = shellActivePath?.let { p ->

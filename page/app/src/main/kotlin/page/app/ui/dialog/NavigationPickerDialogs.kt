@@ -7,7 +7,6 @@ import page.app.DocumentSymbolDialog
 import page.app.WorkspaceSymbolDialog
 import page.app.state.LayoutUiState
 import page.lsp.WorkspaceSymbolLocated
-import page.workspace.QuickOpenDialog
 import java.nio.file.Path
 
 @Composable
@@ -19,23 +18,10 @@ internal fun NavigationPickerDialogs(
     requestFrameFocus: () -> Unit,
     onEditorFocusBump: () -> Unit,
 ) {
-    var quickOpen by ui::quickOpen
-    val quickOpenIndex by ui::quickOpenIndex
     var documentSymbolOpen by ui::documentSymbolOpen
     val documentSymbolList by ui::documentSymbolList
     val documentSymbolUri by ui::documentSymbolUri
     var workspaceSymbolOpen by ui::workspaceSymbolOpen
-
-    if (quickOpen) {
-        QuickOpenDialog(
-            files = quickOpenIndex,
-            onPick = { f ->
-                quickOpen = false
-                openInTab(f.path)
-            },
-            onDismiss = { quickOpen = false },
-        )
-    }
 
     if (documentSymbolOpen) {
         DocumentSymbolDialog(

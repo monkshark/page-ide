@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,16 +58,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.rememberDialogState
 import page.editor.IndexedFile
 import page.editor.QuickOpen
 import page.editor.QuickOpenResult
 import page.ui.Glass
 import page.ui.GlassSurface
 import page.ui.GlassSurfaceLevel
-import page.ui.GlassTheme
 
 @Composable
 fun QuickOpenDialog(
@@ -84,79 +79,81 @@ fun QuickOpenDialog(
         if (selected >= results.size) selected = if (results.isEmpty()) 0 else results.size - 1
     }
 
-    val state = rememberDialogState(
-        position = WindowPosition.Aligned(Alignment.Center),
-        width = 660.dp,
-        height = 440.dp,
-    )
     val queryFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
-
     LaunchedEffect(Unit) { queryFocus.requestFocus() }
     LaunchedEffect(selected) {
         if (selected in results.indices) listState.animateScrollToItem(selected)
     }
 
-    DialogWindow(
-        onCloseRequest = onDismiss,
-        state = state,
-        title = "Quick open",
-        resizable = false,
-        undecorated = true,
-        transparent = true,
-        alwaysOnTop = true,
-        onPreviewKeyEvent = { event ->
-            if (event.type != KeyEventType.KeyDown) false
-            else when (event.key) {
-                Key.Escape -> { onDismiss(); true }
-                Key.DirectionDown -> {
-                    if (results.isNotEmpty()) selected = (selected + 1).coerceAtMost(results.size - 1)
-                    true
-                }
-                Key.DirectionUp -> {
-                    if (results.isNotEmpty()) selected = (selected - 1).coerceAtLeast(0)
-                    true
-                }
-                Key.Enter -> {
-                    results.getOrNull(selected)?.let { onPick(it.file) }
-                    true
-                }
-                else -> false
-            }
-        },
-    ) {
-        GlassTheme {
-            Box(modifier = Modifier.fillMaxSize().padding(10.dp)) {
-                GlassSurface(
-                    level = GlassSurfaceLevel.Overlay,
-                    shape = RoundedCornerShape(Glass.radius.lg),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
-                        QueryInput(
-                            value = query,
-                            onChange = { q ->
-                                query = q
-                                selected = 0
-                            },
-                            focus = queryFocus,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            ResultList(
-                                results = results,
-                                selected = selected,
-                                listState = listState,
-                                onHover = { selected = it },
-                                onPick = { idx ->
-                                    results.getOrNull(idx)?.let { onPick(it.file) }
-                                },
-                            )
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        HintBar(count = results.size)
+    val colors = Glass.colors
+    val scrimInteraction = remember { MutableInteractionSource() }
+    val cardInteraction = remember { MutableInteractionSource() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) false
+                else when (event.key) {
+                    Key.Escape -> { onDismiss(); true }
+                    Key.DirectionDown -> {
+                        if (results.isNotEmpty()) selected = (selected + 1).coerceAtMost(results.size - 1)
+                        true
                     }
+                    Key.DirectionUp -> {
+                        if (results.isNotEmpty()) selected = (selected - 1).coerceAtLeast(0)
+                        true
+                    }
+                    Key.Enter -> {
+                        results.getOrNull(selected)?.let { onPick(it.file) }
+                        true
+                    }
+                    else -> false
                 }
+            }
+            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        GlassSurface(
+            level = GlassSurfaceLevel.Overlay,
+            shape = RoundedCornerShape(Glass.radius.lg),
+            modifier = Modifier
+                .padding(top = 96.dp)
+                .width(660.dp)
+                .height(440.dp)
+                .clickable(interactionSource = cardInteraction, indication = null) {},
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(Glass.radius.lg))
+                    .background(colors.surface)
+                    .padding(14.dp),
+            ) {
+                QueryInput(
+                    value = query,
+                    onChange = { q ->
+                        query = q
+                        selected = 0
+                    },
+                    focus = queryFocus,
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    ResultList(
+                        results = results,
+                        selected = selected,
+                        listState = listState,
+                        onHover = { selected = it },
+                        onPick = { idx ->
+                            results.getOrNull(idx)?.let { onPick(it.file) }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                HintBar(count = results.size)
             }
         }
     }
