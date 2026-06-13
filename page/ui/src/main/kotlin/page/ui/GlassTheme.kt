@@ -25,13 +25,21 @@ object Glass {
         @Composable @ReadOnlyComposable
         get() = LocalGlassTokens.current.motion
 
+    val radius: GlassRadius
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.radius
+
+    val elevation: GlassElevation
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.elevation
+
     val palette: GlassPalette
         @Composable @ReadOnlyComposable
         get() = LocalGlassTokens.current.palette
 }
 
 @Composable
-fun GlassTheme(palette: GlassPalette = GlassPalette.Graphite, content: @Composable () -> Unit) {
+fun GlassTheme(palette: GlassPalette = GlassPalette.Signature, content: @Composable () -> Unit) {
     val tokens = remember(palette) { glassTokensFor(palette) }
     val scheme = remember(tokens) {
         val c = tokens.color
@@ -41,24 +49,24 @@ fun GlassTheme(palette: GlassPalette = GlassPalette.Graphite, content: @Composab
             secondary = c.accent,
             background = c.background,
             onBackground = c.text,
-            surface = c.surface,
+            surface = c.surfaceL2,
             onSurface = c.text,
-            surfaceVariant = c.surfaceRaised,
+            surfaceVariant = c.surfaceL3,
             onSurfaceVariant = c.muted,
             outline = c.outline,
-            error = c.error,
+            error = c.danger,
         ) else darkColorScheme(
             primary = c.primary,
             onPrimary = c.onPrimary,
             secondary = c.accent,
             background = c.background,
             onBackground = c.text,
-            surface = c.surface,
+            surface = c.surfaceL2,
             onSurface = c.text,
-            surfaceVariant = c.surfaceRaised,
+            surfaceVariant = c.surfaceL3,
             onSurfaceVariant = c.muted,
             outline = c.outline,
-            error = c.error,
+            error = c.danger,
         )
     }
     CompositionLocalProvider(LocalGlassTokens provides tokens) {

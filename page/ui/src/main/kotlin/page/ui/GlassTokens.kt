@@ -10,23 +10,83 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class GlassPalette { Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
+enum class GlassPalette { Signature, SignatureLight, Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
 
 @Immutable
 data class GlassColors(
     val background: Color,
+    val surfaceL1: Color,
+    val surfaceL2: Color,
+    val surfaceL3: Color,
     val surface: Color,
     val surfaceRaised: Color,
+    val surfaceOverlay: Color,
+    val highlightEdge: Color,
+    val separator: Color,
     val outline: Color,
     val primary: Color,
+    val primarySoft: Color,
     val onPrimary: Color,
     val accent: Color,
     val text: Color,
     val muted: Color,
+    val faint: Color,
     val error: Color,
     val warn: Color,
+    val success: Color,
+    val danger: Color,
     val syntax: SyntaxPalette,
     val isLight: Boolean,
+)
+
+private fun glassColors(
+    background: Color,
+    surface: Color,
+    surfaceRaised: Color,
+    outline: Color,
+    primary: Color,
+    onPrimary: Color,
+    accent: Color,
+    text: Color,
+    muted: Color,
+    error: Color,
+    warn: Color,
+    success: Color,
+    syntax: SyntaxPalette,
+    isLight: Boolean,
+    surfaceL1: Color = surface,
+    surfaceL2: Color = surface,
+    surfaceL3: Color = surfaceRaised,
+    surfaceOverlay: Color = surface.copy(alpha = 0.88f),
+    highlightEdge: Color = if (isLight) Color(0xE6FFFFFF) else Color(0x12FFFFFF),
+    separator: Color = if (isLight) Color(0x14101418) else Color(0x0DFFFFFF),
+    primarySoft: Color = primary.copy(alpha = 0.14f),
+    faint: Color = muted.copy(alpha = 0.5f),
+    danger: Color = error,
+): GlassColors = GlassColors(
+    background = background,
+    surfaceL1 = surfaceL1,
+    surfaceL2 = surfaceL2,
+    surfaceL3 = surfaceL3,
+    surface = surface,
+    surfaceRaised = surfaceRaised,
+    surfaceOverlay = surfaceOverlay,
+    highlightEdge = highlightEdge,
+    separator = separator,
+    outline = outline,
+    primary = primary,
+    primarySoft = primarySoft,
+    onPrimary = onPrimary,
+    accent = accent,
+    text = text,
+    muted = muted,
+    faint = faint,
+    error = error,
+    warn = warn,
+    success = success,
+    danger = danger,
+    syntax = syntax,
+    isLight = isLight,
 )
 
 @Immutable
@@ -56,12 +116,36 @@ data class GlassMotion(
 )
 
 @Immutable
+data class GlassRadius(
+    val xs: Dp,
+    val sm: Dp,
+    val md: Dp,
+    val lg: Dp,
+)
+
+@Immutable
+data class GlassShadow(
+    val blur: Dp,
+    val offsetY: Dp,
+    val alpha: Float,
+)
+
+@Immutable
+data class GlassElevation(
+    val flat: GlassShadow,
+    val raised: GlassShadow,
+    val overlay: GlassShadow,
+)
+
+@Immutable
 data class GlassTokens(
     val palette: GlassPalette,
     val color: GlassColors,
     val type: GlassType,
     val space: GlassSpace,
     val motion: GlassMotion,
+    val radius: GlassRadius,
+    val elevation: GlassElevation,
 )
 
 internal val LocalGlassTokens = staticCompositionLocalOf<GlassTokens> {
@@ -89,6 +173,19 @@ private val DefaultMotion = GlassMotion(
     base = 200,
     slow = 320,
     easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f),
+)
+
+private val DefaultRadius = GlassRadius(
+    xs = 6.dp,
+    sm = 8.dp,
+    md = 12.dp,
+    lg = 16.dp,
+)
+
+private val DefaultElevation = GlassElevation(
+    flat = GlassShadow(blur = 0.dp, offsetY = 0.dp, alpha = 0f),
+    raised = GlassShadow(blur = 24.dp, offsetY = 8.dp, alpha = 0.35f),
+    overlay = GlassShadow(blur = 32.dp, offsetY = 12.dp, alpha = 0.45f),
 )
 
 private val CoolSyntax = SyntaxPalette(
@@ -139,7 +236,7 @@ private val GraphiteSyntax = SyntaxPalette(
     identifier = Color(0xFFA9B7C6),
 )
 
-private val GraphiteColors = GlassColors(
+private val GraphiteColors = glassColors(
     background = Color(0xFF1E1F22),
     surface = Color(0xFF26282B),
     surfaceRaised = Color(0xFF2B2D30),
@@ -151,11 +248,12 @@ private val GraphiteColors = GlassColors(
     muted = Color(0xFF787C84),
     error = Color(0xFFDB5C5C),
     warn = Color(0xFFC8A24A),
+    success = Color(0xFF5BA85B),
     syntax = GraphiteSyntax,
     isLight = false,
 )
 
-private val CoolColors = GlassColors(
+private val CoolColors = glassColors(
     background = Color(0xFF0E1418),
     surface = Color(0xFF161D24),
     surfaceRaised = Color(0xFF1C2630),
@@ -167,11 +265,12 @@ private val CoolColors = GlassColors(
     muted = Color(0xFF8FA0B5),
     error = Color(0xFFFF7B72),
     warn = Color(0xFFE3B341),
+    success = Color(0xFF5BD6A0),
     syntax = CoolSyntax,
     isLight = false,
 )
 
-private val WarmColors = GlassColors(
+private val WarmColors = glassColors(
     background = Color(0xFF1A1612),
     surface = Color(0xFF221C16),
     surfaceRaised = Color(0xFF2A231C),
@@ -183,11 +282,12 @@ private val WarmColors = GlassColors(
     muted = Color(0xFFA89C8A),
     error = Color(0xFFE07A5F),
     warn = Color(0xFFD4A574),
+    success = Color(0xFF94C973),
     syntax = WarmSyntax,
     isLight = false,
 )
 
-private val FrostColors = GlassColors(
+private val FrostColors = glassColors(
     background = Color(0xFFF2F4F8),
     surface = Color(0xFFFFFFFF),
     surfaceRaised = Color(0xFFFAFBFD),
@@ -199,6 +299,7 @@ private val FrostColors = GlassColors(
     muted = Color(0xFF5C6878),
     error = Color(0xFFD63B3B),
     warn = Color(0xFFC68A00),
+    success = Color(0xFF1F9D6B),
     syntax = FrostSyntax,
     isLight = true,
 )
@@ -215,7 +316,7 @@ private val ForestSyntax = SyntaxPalette(
     identifier = Color(0xFFD8E1C6),
 )
 
-private val ForestColors = GlassColors(
+private val ForestColors = glassColors(
     background = Color(0xFF101714),
     surface = Color(0xFF17211D),
     surfaceRaised = Color(0xFF1E2A24),
@@ -227,6 +328,7 @@ private val ForestColors = GlassColors(
     muted = Color(0xFF8FA396),
     error = Color(0xFFE5786E),
     warn = Color(0xFFD9C28E),
+    success = Color(0xFF8CC76E),
     syntax = ForestSyntax,
     isLight = false,
 )
@@ -243,7 +345,7 @@ private val MidnightSyntax = SyntaxPalette(
     identifier = Color(0xFFE6E8F0),
 )
 
-private val MidnightColors = GlassColors(
+private val MidnightColors = glassColors(
     background = Color(0xFF05070C),
     surface = Color(0xFF0B0F18),
     surfaceRaised = Color(0xFF121826),
@@ -255,6 +357,7 @@ private val MidnightColors = GlassColors(
     muted = Color(0xFF7B86A0),
     error = Color(0xFFFF6E83),
     warn = Color(0xFFFFC078),
+    success = Color(0xFF4FE3B0),
     syntax = MidnightSyntax,
     isLight = false,
 )
@@ -271,7 +374,7 @@ private val SandSyntax = SyntaxPalette(
     identifier = Color(0xFF3D352A),
 )
 
-private val SandColors = GlassColors(
+private val SandColors = glassColors(
     background = Color(0xFFF5EEDF),
     surface = Color(0xFFFAF4E6),
     surfaceRaised = Color(0xFFFFF9EC),
@@ -283,13 +386,78 @@ private val SandColors = GlassColors(
     muted = Color(0xFF7A6E58),
     error = Color(0xFFC23B2C),
     warn = Color(0xFFA8761A),
+    success = Color(0xFF1F9D6B),
     syntax = SandSyntax,
     isLight = true,
+)
+
+private val SignatureSyntax = SyntaxPalette(
+    keyword = Color(0xFF9DA8FF),
+    string = Color(0xFF4FD3C7),
+    number = Color(0xFFC9B6FF),
+    comment = Color(0xFF828DA8),
+    docComment = Color(0xFF6E8FA8),
+    todoTag = Color(0xFFF08FC8),
+    annotation = Color(0xFFB79CFF),
+    type = Color(0xFF7FD6E0),
+    identifier = Color(0xFFC8D0E6),
+)
+
+private val SignatureColors = glassColors(
+    background = Color(0xFF0A0D14),
+    surface = Color(0xFF131823),
+    surfaceRaised = Color(0xFF1F2735),
+    outline = Color(0xFF232B3A),
+    primary = Color(0xFF7D8EDB),
+    onPrimary = Color(0xFF0A0D14),
+    accent = Color(0xFF67B9BA),
+    text = Color(0xFFE7EAF3),
+    muted = Color(0xFF8A92A6),
+    error = Color(0xFFF2727F),
+    warn = Color(0xFFE7B45C),
+    success = Color(0xFF5BD6A0),
+    syntax = SignatureSyntax,
+    isLight = false,
+    surfaceL1 = Color(0xFF0E121A),
+    surfaceL2 = Color(0xFF131823),
+    surfaceL3 = Color(0xFF181E2A),
+    surfaceOverlay = Color(0xE0131823),
+    highlightEdge = Color(0x12FFFFFF),
+    separator = Color(0x0DFFFFFF),
+    primarySoft = Color(0x247D8EDB),
+    faint = Color(0xFF4A5366),
+    danger = Color(0xFFF2727F),
+)
+
+private val SignatureLightColors = glassColors(
+    background = Color(0xFFF4F6FB),
+    surface = Color(0xFFF0F3F9),
+    surfaceRaised = Color(0xFFFFFFFF),
+    outline = Color(0xFFD4DBE8),
+    primary = Color(0xFF5566C0),
+    onPrimary = Color(0xFFFFFFFF),
+    accent = Color(0xFF2F948A),
+    text = Color(0xFF1A2030),
+    muted = Color(0xFF5A6478),
+    error = Color(0xFFD6485A),
+    warn = Color(0xFFB5811F),
+    success = Color(0xFF1F9D6B),
+    syntax = FrostSyntax,
+    isLight = true,
+    surfaceL1 = Color(0xFFFFFFFF),
+    surfaceL2 = Color(0xFFF0F3F9),
+    surfaceL3 = Color(0xFFE7ECF5),
+    highlightEdge = Color(0xE6FFFFFF),
+    separator = Color(0x1410141E),
+    faint = Color(0xFFA8B0C0),
+    danger = Color(0xFFD6485A),
 )
 
 fun glassTokensFor(palette: GlassPalette): GlassTokens = GlassTokens(
     palette = palette,
     color = when (palette) {
+        GlassPalette.Signature -> SignatureColors
+        GlassPalette.SignatureLight -> SignatureLightColors
         GlassPalette.Graphite -> GraphiteColors
         GlassPalette.Cool -> CoolColors
         GlassPalette.Warm -> WarmColors
@@ -301,4 +469,6 @@ fun glassTokensFor(palette: GlassPalette): GlassTokens = GlassTokens(
     type = DefaultType,
     space = DefaultSpace,
     motion = DefaultMotion,
+    radius = DefaultRadius,
+    elevation = DefaultElevation,
 )

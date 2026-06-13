@@ -42,6 +42,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
+import page.ui.Glass
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -177,7 +178,7 @@ private fun ManagerSidebar(
                             modifier = Modifier.weight(1f),
                         )
                         if (installed) {
-                            Text(text = "●", color = Color(0xFF2EA043), fontSize = 8.sp)
+                            Text(text = "●", color = Glass.colors.success, fontSize = 8.sp)
                         }
                     }
                 }
@@ -265,7 +266,7 @@ private fun ManagerDetailPane(
                 for (v in installedVersions) {
                     val isCurrent = v == activeVersion
                     val isConfirming = confirmDeleteVersion == v
-                    val bg = if (isConfirming) Color(0xFFf85149).copy(alpha = 0.08f)
+                    val bg = if (isConfirming) Glass.colors.danger.copy(alpha = 0.08f)
                     else if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                     else Color.Transparent
                     Row(
@@ -277,10 +278,10 @@ private fun ManagerDetailPane(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (isConfirming) {
-                            Text(text = "Delete $v?", color = Color(0xFFf85149), style = centeredStyle)
+                            Text(text = "Delete $v?", color = Glass.colors.danger, style = centeredStyle)
                             Spacer(Modifier.weight(1f))
                             Text(
-                                text = "Yes", color = Color(0xFFf85149), style = centeredStyle,
+                                text = "Yes", color = Glass.colors.danger, style = centeredStyle,
                                 modifier = Modifier.clickable { confirmDeleteVersion = null; deleteVersion(v) }.padding(horizontal = 8.dp),
                             )
                             Text(
@@ -321,7 +322,7 @@ private fun ManagerDetailPane(
                             ) {
                                 Text(
                                     text = "×",
-                                    color = Color(0xFFf85149).copy(alpha = 0.6f),
+                                    color = Glass.colors.danger.copy(alpha = 0.6f),
                                     style = centeredStyle.copy(fontSize = 14.sp, lineHeight = 14.sp),
                                 )
                             }

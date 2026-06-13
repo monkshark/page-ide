@@ -36,6 +36,7 @@ import page.runtime.LanguageRunTemplate
 import page.runtime.RunConfigsState
 import page.ui.CompactDropdown
 import page.ui.CompactMenuItem
+import page.ui.Glass
 import page.ui.GlassTooltip
 import java.nio.file.Path
 
@@ -103,7 +104,7 @@ internal fun TitleBar(
                 onClick = onStartRun,
                 shortcut = "Shift+F10",
                 icon = { tint: Color -> PlayGlyph(tint = tint) },
-                enabledIconTint = Color(0xFF4CAF50),
+                enabledIconTint = Glass.colors.success,
             )
             TitleBarAction(
                 label = "Stop",
@@ -111,7 +112,7 @@ internal fun TitleBar(
                 onClick = onStopRun,
                 shortcut = "Ctrl+F2",
                 icon = { tint: Color -> StopGlyph(tint = tint) },
-                enabledIconTint = Color(0xFFE53935),
+                enabledIconTint = Glass.colors.danger,
             )
             Spacer(Modifier.width(8.dp))
             TitleBarToggle(

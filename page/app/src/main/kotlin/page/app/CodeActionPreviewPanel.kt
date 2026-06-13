@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import page.ui.Glass
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -400,15 +401,15 @@ private data class HunkStyle(
 @Composable
 private fun styleFor(kind: CodeActionPreview.LineKind): HunkStyle = when (kind) {
     CodeActionPreview.LineKind.ADDED -> HunkStyle(
-        background = Color(0xFF43A047).copy(alpha = 0.18f),
+        background = Glass.colors.success.copy(alpha = 0.18f),
         prefix = "+",
-        prefixColor = Color(0xFF66BB6A),
+        prefixColor = Glass.colors.success,
         textColor = MaterialTheme.colorScheme.onSurface,
     )
     CodeActionPreview.LineKind.REMOVED -> HunkStyle(
-        background = Color(0xFFE53935).copy(alpha = 0.16f),
+        background = Glass.colors.danger.copy(alpha = 0.16f),
         prefix = "-",
-        prefixColor = Color(0xFFEF5350),
+        prefixColor = Glass.colors.danger,
         textColor = MaterialTheme.colorScheme.onSurface,
     )
     CodeActionPreview.LineKind.OMITTED -> HunkStyle(
