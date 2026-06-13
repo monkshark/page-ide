@@ -506,7 +506,12 @@ internal fun IdeMainLayout(
                 )
             }
             }
-            if (ui.atlasOpen) {
+            AnimatedVisibility(
+                visible = ui.atlasOpen,
+                enter = expandHorizontally(tween(180), expandFrom = Alignment.End) + fadeIn(tween(180)),
+                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.End) + fadeOut(tween(180)),
+            ) {
+                Row(modifier = Modifier.fillMaxHeight()) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
                 AtlasPanel(
                     slice = atlasSlice,
@@ -533,6 +538,7 @@ internal fun IdeMainLayout(
                     onCallsExpand = onAtlasCallsExpand,
                     onCallsOpen = onAtlasCallsOpen,
                 )
+                }
             }
             if (codeActionPreviewVisible) {
                 CodeActionPreviewPanel(
