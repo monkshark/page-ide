@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -39,14 +38,9 @@ fun CompactMenuContainer(
     minWidth: Dp = 0.dp,
     content: @Composable () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        ),
+    GlassSurface(
+        level = GlassSurfaceLevel.Overlay,
+        shape = RoundedCornerShape(Glass.radius.sm),
     ) {
         Column(
             modifier = Modifier

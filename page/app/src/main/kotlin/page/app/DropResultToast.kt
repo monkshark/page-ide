@@ -3,7 +3,6 @@ package page.app
 import page.runtime.*
 import page.workspace.*
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import page.ui.Glass
+import page.ui.GlassSurface
+import page.ui.GlassSurfaceLevel
 
 enum class DropResultToastTone { Info, Warning }
 
@@ -69,12 +69,10 @@ fun DropResultToast(
         modifier = Modifier.fillMaxSize().padding(start = 20.dp, bottom = 60.dp, end = 20.dp, top = 20.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
-        Surface(
-            color = Glass.colors.surfaceRaised,
-            contentColor = Glass.colors.text,
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, border),
-            tonalElevation = 3.dp,
+        GlassSurface(
+            level = GlassSurfaceLevel.Raised,
+            shape = RoundedCornerShape(Glass.radius.sm),
+            borderColor = if (state.tone == DropResultToastTone.Warning) border else null,
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
