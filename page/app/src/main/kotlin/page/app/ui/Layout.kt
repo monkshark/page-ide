@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,6 +33,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -257,9 +261,12 @@ internal fun IdeMainLayout(
     )
     val scopedProblemsCount = scopedDiagnostics.values.sumOf { it.size }
     Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && installManagerOpen != null) {
-            installManagerOpen = null
-            true
+        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+            when {
+                installManagerOpen != null -> { installManagerOpen = null; true }
+                settingsPanelOpen -> { onSettingsPanelClose(); true }
+                else -> false
+            }
         } else false
     }) {
     Box(
@@ -380,13 +387,6 @@ internal fun IdeMainLayout(
                             lspRouter.shutdownLanguage(id)
                             kotlinx.coroutines.delay(500)
                         },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else if (settingsPanelOpen) {
-                    SettingsPanel(
-                        settings = LocalPageSettings.current,
-                        onApply = onSettingsApply,
-                        onClose = onSettingsPanelClose,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else if (editor.splitEnabled) {
@@ -639,6 +639,37 @@ internal fun IdeMainLayout(
             usedByCount = atlasUsedByCount,
             onUsedByClick = onAtlasFocusActive,
         )
+    }
+    AnimatedVisibility(
+        visible = settingsPanelOpen,
+        enter = fadeIn(tween(160)),
+        exit = fadeOut(tween(160)),
+    ) {
+        val scrimInteraction = remember { MutableInteractionSource() }
+        val cardInteraction = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(interactionSource = scrimInteraction, indication = null) { onSettingsPanelClose() },
+            contentAlignment = Alignment.Center,
+        ) {
+            GlassSurface(
+                level = GlassSurfaceLevel.Overlay,
+                shape = RoundedCornerShape(Glass.radius.lg),
+                modifier = Modifier
+                    .width(760.dp)
+                    .fillMaxHeight(0.82f)
+                    .clickable(interactionSource = cardInteraction, indication = null) {},
+            ) {
+                SettingsPanel(
+                    settings = LocalPageSettings.current,
+                    onApply = onSettingsApply,
+                    onClose = onSettingsPanelClose,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
     }
     if (installGuideOpen && shellCtrl != null) {
         val activeDef = shellActivePath?.let { p ->
