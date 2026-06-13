@@ -1,6 +1,5 @@
 package page.app.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,11 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import page.core.PageIdentity
 import page.runtime.CURRENT_FILE_ID
@@ -327,154 +321,5 @@ private fun TitleBarToggle(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun PlayGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val p = androidx.compose.ui.graphics.Path().apply {
-            moveTo(w * 0.22f, h * 0.14f)
-            lineTo(w * 0.88f, h * 0.5f)
-            lineTo(w * 0.22f, h * 0.86f)
-            close()
-        }
-        drawPath(p, color = tint)
-    }
-}
-
-@Composable
-private fun StopGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val pad = this.size.width * 0.2f
-        drawRoundRect(
-            color = tint,
-            topLeft = Offset(pad, pad),
-            size = Size(this.size.width - pad * 2, this.size.height - pad * 2),
-            cornerRadius = CornerRadius(this.size.width * 0.08f),
-        )
-    }
-}
-
-@Composable
-private fun TerminalGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.14f
-        val cx = w * 0.32f
-        val cy = h * 0.5f
-        val cs = w * 0.22f
-        val p = androidx.compose.ui.graphics.Path().apply {
-            moveTo(cx - cs, cy - cs * 0.95f)
-            lineTo(cx + cs * 0.35f, cy)
-            lineTo(cx - cs, cy + cs * 0.95f)
-        }
-        drawPath(
-            p,
-            color = tint,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = strokeW,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                join = androidx.compose.ui.graphics.StrokeJoin.Round,
-            ),
-        )
-        drawRoundRect(
-            color = tint,
-            topLeft = Offset(w * 0.55f, h * 0.64f),
-            size = Size(w * 0.34f, strokeW),
-            cornerRadius = CornerRadius(strokeW / 2),
-        )
-    }
-}
-
-@Composable
-private fun AtlasGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.1f
-        val center = Offset(w * 0.5f, h * 0.5f)
-        val nodes = listOf(
-            Offset(w * 0.5f, h * 0.14f),
-            Offset(w * 0.16f, h * 0.78f),
-            Offset(w * 0.84f, h * 0.78f),
-        )
-        nodes.forEach { node ->
-            drawLine(
-                color = tint,
-                start = center,
-                end = node,
-                strokeWidth = strokeW,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round,
-            )
-        }
-        drawCircle(color = tint, radius = w * 0.16f, center = center)
-        nodes.forEach { node ->
-            drawCircle(color = tint, radius = w * 0.12f, center = node)
-        }
-    }
-}
-
-@Composable
-private fun OutputGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val lineH = h * 0.11f
-        val gap = h * 0.16f
-        val widths = listOf(0.82f, 0.58f, 0.82f)
-        var y = h * 0.22f
-        widths.forEach { wf ->
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(w * 0.09f, y),
-                size = Size(w * wf, lineH),
-                cornerRadius = CornerRadius(lineH / 2),
-            )
-            y += lineH + gap
-        }
-    }
-}
-
-@Composable
-private fun SettingsGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val cx = w * 0.5f
-        val cy = h * 0.5f
-        val ring = w * 0.26f
-        val strokeW = w * 0.13f
-        val toothInner = ring
-        val toothOuter = w * 0.45f
-        val teeth = 8
-        for (i in 0 until teeth) {
-            val a = (Math.PI * 2.0 / teeth) * i
-            val sx = cx + (toothInner * kotlin.math.cos(a)).toFloat()
-            val sy = cy + (toothInner * kotlin.math.sin(a)).toFloat()
-            val ex = cx + (toothOuter * kotlin.math.cos(a)).toFloat()
-            val ey = cy + (toothOuter * kotlin.math.sin(a)).toFloat()
-            drawLine(
-                color = tint,
-                start = Offset(sx, sy),
-                end = Offset(ex, ey),
-                strokeWidth = strokeW,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round,
-            )
-        }
-        drawCircle(
-            color = tint,
-            radius = ring,
-            center = Offset(cx, cy),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeW),
-        )
-        drawCircle(
-            color = tint,
-            radius = w * 0.1f,
-            center = Offset(cx, cy),
-        )
     }
 }
