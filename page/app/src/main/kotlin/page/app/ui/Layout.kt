@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -45,6 +47,7 @@ import page.lsp.RenameWorkspaceEdit
 import page.runtime.LspInstallers
 import page.runtime.RunConfigsState
 import page.runtime.TerminalManager
+import page.ui.GlassPalette
 import page.ui.SplitPane
 import page.workspace.FileTreePanel
 import page.workspace.TreeDragController
@@ -154,6 +157,8 @@ internal fun IdeMainLayout(
     onAtlasCallsExpand: (String) -> Unit = {},
     onAtlasCallsOpen: (String) -> Unit = {},
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
+    palette: GlassPalette = GlassPalette.Signature,
+    onSelectPalette: (GlassPalette) -> Unit = {},
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -464,6 +469,14 @@ internal fun IdeMainLayout(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                PillarPill(
+                    atlasActive = ui.atlasOpen,
+                    onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
+                    currentPalette = palette,
+                    onSelectPalette = onSelectPalette,
+                    onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                )
             }
             if (ui.atlasOpen) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
