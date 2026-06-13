@@ -198,8 +198,8 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
     val bg by animateColorAsState(
         targetValue = when {
             selected -> colors.primarySoft
-            hovered -> colors.surfaceL3
-            else -> colors.surfaceL3.copy(alpha = 0f)
+            hovered -> colors.surfaceRaised
+            else -> colors.surfaceRaised.copy(alpha = 0f)
         },
         animationSpec = tween(120),
     )
@@ -558,7 +558,7 @@ private fun FieldRow(label: String, fieldWidth: androidx.compose.ui.unit.Dp?, fi
     val colors = Glass.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val hoverBg = colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f)
+    val hoverBg = colors.surfaceRaised
     val rowBg by animateColorAsState(
         targetValue = if (hovered) hoverBg else hoverBg.copy(alpha = 0f),
         animationSpec = tween(120),
@@ -605,7 +605,7 @@ private fun CheckRow(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val checkColor = colors.onPrimary
-    val hoverBg = colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f)
+    val hoverBg = colors.surfaceRaised
     val rowBg by animateColorAsState(
         targetValue = if (hovered) hoverBg else hoverBg.copy(alpha = 0f),
         animationSpec = tween(120),
