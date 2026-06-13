@@ -164,7 +164,7 @@ private fun SettingsSidebar(
     onSelect: (SettingsCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.padding(8.dp)) {
+    Column(modifier = modifier.background(Glass.colors.surfaceL1).padding(8.dp)) {
         for (cat in SettingsCategory.values()) {
             SidebarRow(label = cat.label, selected = cat == selected, onClick = { onSelect(cat) })
             Spacer(Modifier.height(2.dp))

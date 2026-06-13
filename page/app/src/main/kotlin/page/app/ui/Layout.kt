@@ -658,8 +658,8 @@ internal fun IdeMainLayout(
                 level = GlassSurfaceLevel.Overlay,
                 shape = RoundedCornerShape(Glass.radius.lg),
                 modifier = Modifier
-                    .width(760.dp)
-                    .fillMaxHeight(0.82f)
+                    .width(880.dp)
+                    .fillMaxHeight(0.88f)
                     .clickable(interactionSource = cardInteraction, indication = null) {},
             ) {
                 SettingsPanel(
