@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -109,7 +110,7 @@ internal fun SettingsPanel(
                 if (event.type != KeyEventType.KeyDown) false
                 else when (event.key) {
                     Key.Escape -> { onClose(); true }
-                    Key.Enter, Key.NumPadEnter -> { onApply(draft); true }
+                    Key.Enter, Key.NumPadEnter -> { onApply(draft); onClose(); true }
                     else -> false
                 }
             }
@@ -150,7 +151,9 @@ internal fun SettingsPanel(
         ) {
             GlassButton(label = "Cancel", primary = false, onClick = onClose)
             Spacer(Modifier.width(8.dp))
-            GlassButton(label = "Apply", primary = true, onClick = { onApply(draft) })
+            GlassButton(label = "Apply", primary = false, onClick = { onApply(draft) })
+            Spacer(Modifier.width(8.dp))
+            GlassButton(label = "Apply & Close", primary = true, onClick = { onApply(draft); onClose() })
         }
     }
 }
@@ -195,7 +198,7 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
         targetValue = when {
             selected -> colors.primarySoft
             hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
-            else -> Color.Transparent
+            else -> colors.primarySoft.copy(alpha = 0f)
         },
         animationSpec = tween(120),
     )
@@ -586,8 +589,9 @@ private fun CheckRow(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val checkColor = colors.onPrimary
+    val hoverBg = colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f)
     val rowBg by animateColorAsState(
-        targetValue = if (hovered) colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f) else Color.Transparent,
+        targetValue = if (hovered) hoverBg else hoverBg.copy(alpha = 0f),
         animationSpec = tween(120),
     )
     val boxBg by animateColorAsState(
@@ -683,11 +687,12 @@ private fun GlassButton(label: String, primary: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .height(30.dp)
-            .width(if (primary) 96.dp else 84.dp)
+            .defaultMinSize(minWidth = 84.dp)
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
             .border(1.dp, if (primary) Color.Transparent else colors.outline, RoundedCornerShape(Glass.radius.sm))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
