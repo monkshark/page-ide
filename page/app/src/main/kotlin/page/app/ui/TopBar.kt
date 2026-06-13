@@ -2,15 +2,16 @@ package page.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import page.core.PageIdentity
 import page.runtime.CURRENT_FILE_ID
@@ -35,10 +37,9 @@ import page.ui.GlassTooltip
 import java.nio.file.Path
 
 @Composable
-internal fun TitleBar(
+internal fun TopBar(
     path: Path?,
-    terminalOpen: Boolean,
-    onTerminalToggle: () -> Unit,
+    workspaceRoot: Path?,
     runState: RunConfigsState,
     activeFilePath: Path?,
     onSelectRunConfig: (String) -> Unit,
@@ -46,38 +47,25 @@ internal fun TitleBar(
     onStartRun: () -> Unit,
     onStopRun: () -> Unit,
     onOpenRunDialog: () -> Unit,
-    outputOpen: Boolean,
-    onOutputToggle: () -> Unit,
-    atlasOpen: Boolean,
-    onAtlasToggle: () -> Unit,
-    settingsOpen: Boolean,
-    onToggleSettings: () -> Unit,
 ) {
+    val colors = Glass.colors
     Surface(
-        modifier = Modifier.fillMaxWidth().height(36.dp),
-        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().height(34.dp),
+        color = Color.Transparent,
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            AppMarkGlyph(tint = colors.primary, size = 14.dp)
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = PageIdentity.NAME,
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = colors.text,
             )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = "v${PageIdentity.VERSION}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(20.dp))
-            Text(
-                text = path?.toString() ?: "untitled",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.width(16.dp))
+            Breadcrumb(path = path, workspaceRoot = workspaceRoot)
             Spacer(Modifier.weight(1f))
             val currentFileTemplate = activeFilePath?.let { LanguageRunDefaults.forFile(it) }
             RunDropdown(
@@ -92,51 +80,72 @@ internal fun TitleBar(
                 runState.isCurrentFileActive -> currentFileTemplate != null
                 else -> runState.active != null
             }
-            TitleBarAction(
+            TopBarAction(
                 label = "Run",
                 enabled = canStart,
                 onClick = onStartRun,
                 shortcut = "Shift+F10",
-                icon = { tint: Color -> PlayGlyph(tint = tint) },
-                enabledIconTint = Glass.colors.success,
+                icon = { tint -> PlayGlyph(tint = tint) },
+                enabledIconTint = colors.success,
             )
-            TitleBarAction(
+            TopBarAction(
                 label = "Stop",
                 enabled = runIsRunning,
                 onClick = onStopRun,
                 shortcut = "Ctrl+F2",
-                icon = { tint: Color -> StopGlyph(tint = tint) },
-                enabledIconTint = Glass.colors.danger,
-            )
-            Spacer(Modifier.width(8.dp))
-            TitleBarToggle(
-                label = "Atlas",
-                selected = atlasOpen,
-                onClick = onAtlasToggle,
-                icon = { tint: Color -> AtlasGlyph(tint = tint) },
-            )
-            TitleBarToggle(
-                label = "Output",
-                selected = outputOpen,
-                onClick = onOutputToggle,
-                icon = { tint: Color -> OutputGlyph(tint = tint) },
-            )
-            TitleBarToggle(
-                label = "Terminal",
-                selected = terminalOpen,
-                onClick = onTerminalToggle,
-                shortcut = "Ctrl+`",
-                icon = { tint: Color -> TerminalGlyph(tint = tint) },
-            )
-            Spacer(Modifier.width(8.dp))
-            TitleBarToggle(
-                label = "Settings",
-                selected = settingsOpen,
-                onClick = onToggleSettings,
-                shortcut = "Ctrl+Alt+S",
-                icon = { tint: Color -> SettingsGlyph(tint = tint) },
+                icon = { tint -> StopGlyph(tint = tint) },
+                enabledIconTint = colors.danger,
             )
         }
+    }
+}
+
+@Composable
+private fun Breadcrumb(path: Path?, workspaceRoot: Path?) {
+    val colors = Glass.colors
+    val segments = breadcrumbSegments(path, workspaceRoot)
+    if (segments.isEmpty()) {
+        Text(
+            text = "untitled",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.muted,
+        )
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        segments.forEachIndexed { index, segment ->
+            if (index > 0) {
+                Text(
+                    text = "›",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.faint,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+            }
+            Text(
+                text = segment,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (index == segments.lastIndex) colors.text else colors.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun breadcrumbSegments(path: Path?, workspaceRoot: Path?): List<String> {
+    if (path == null) return emptyList()
+    val rootName = workspaceRoot?.fileName?.toString()
+    val relative = if (workspaceRoot != null && path.startsWith(workspaceRoot)) {
+        runCatching { workspaceRoot.relativize(path) }.getOrNull()
+    } else null
+    return if (relative != null) {
+        buildList {
+            if (rootName != null) add(rootName)
+            relative.forEach { add(it.toString()) }
+        }
+    } else {
+        listOf(path.fileName?.toString() ?: path.toString())
     }
 }
 
@@ -148,6 +157,7 @@ private fun RunDropdown(
     onSelect: (String) -> Unit,
     onEdit: () -> Unit,
 ) {
+    val colors = Glass.colors
     var expanded by remember { mutableStateOf(false) }
     val active = state.active
     val activeFileName = activeFilePath?.fileName?.toString()
@@ -159,7 +169,7 @@ private fun RunDropdown(
     Box {
         Surface(
             color = Color.Transparent,
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(Glass.radius.xs),
             modifier = Modifier
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 2.dp),
@@ -171,14 +181,10 @@ private fun RunDropdown(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = colors.muted,
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "▾",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
+                ChevronGlyph(tint = colors.faint)
             }
         }
         CompactDropdown(
@@ -203,7 +209,7 @@ private fun RunDropdown(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(1.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant),
+                            .background(colors.separator),
                     )
                 }
                 for (cfg in state.configs) {
@@ -221,7 +227,7 @@ private fun RunDropdown(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant),
+                        .background(colors.separator),
                 )
             }
             CompactMenuItem(
@@ -233,92 +239,30 @@ private fun RunDropdown(
 }
 
 @Composable
-private fun TitleBarAction(
+private fun TopBarAction(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
     shortcut: String? = null,
-    icon: (@Composable (tint: Color) -> Unit)? = null,
-    enabledIconTint: Color? = null,
+    icon: @Composable (tint: Color) -> Unit,
+    enabledIconTint: Color,
 ) {
-    val disabledTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-    val fg = if (enabled) MaterialTheme.colorScheme.onSurface else disabledTint
-    val iconTint = when {
-        !enabled -> disabledTint
-        enabledIconTint != null -> enabledIconTint
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val tooltipText = when {
-        icon != null && !shortcut.isNullOrBlank() -> "$label · $shortcut"
-        icon != null -> label
-        shortcut.isNullOrBlank() -> ""
-        else -> "$label · $shortcut"
-    }
+    val colors = Glass.colors
+    val iconTint = if (enabled) enabledIconTint else colors.faint
+    val tooltipText = if (!shortcut.isNullOrBlank()) "$label · $shortcut" else label
     GlassTooltip(text = tooltipText) {
         Surface(
             color = Color.Transparent,
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(Glass.radius.xs),
             modifier = Modifier
                 .padding(horizontal = 2.dp)
                 .let { if (enabled) it.clickable { onClick() } else it },
         ) {
-            if (icon != null) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    icon(iconTint)
-                }
-            } else {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = fg,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TitleBarToggle(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    shortcut: String? = null,
-    icon: (@Composable (tint: Color) -> Unit)? = null,
-) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
-    val fg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val tooltipText = when {
-        icon != null && !shortcut.isNullOrBlank() -> "$label · $shortcut"
-        icon != null -> label
-        shortcut.isNullOrBlank() -> ""
-        else -> "$label · $shortcut"
-    }
-    GlassTooltip(text = tooltipText) {
-        Surface(
-            color = bg,
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier
-                .clickable { onClick() }
-                .padding(horizontal = 2.dp),
-        ) {
-            if (icon != null) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    icon(fg)
-                }
-            } else {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = fg,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+            Box(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                icon(iconTint)
             }
         }
     }

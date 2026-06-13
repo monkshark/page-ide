@@ -249,10 +249,9 @@ internal fun IdeMainLayout(
         } else false
     }) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TitleBar(
+        TopBar(
             path = editor.focused().book.active?.path,
-            terminalOpen = ui.terminalOpen,
-            onTerminalToggle = onTerminalToggle,
+            workspaceRoot = workspace.rootDir,
             runState = runState,
             activeFilePath = editor.focused().book.active?.path,
             onSelectRunConfig = onSelectRunConfig,
@@ -260,12 +259,6 @@ internal fun IdeMainLayout(
             onStartRun = onStartRun,
             onStopRun = onStopRun,
             onOpenRunDialog = onOpenRunDialog,
-            outputOpen = ui.outputOpen,
-            onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
-            atlasOpen = ui.atlasOpen,
-            onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
-            settingsOpen = settingsPanelOpen,
-            onToggleSettings = onToggleSettings,
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             ActivityRail(
