@@ -144,7 +144,7 @@ private fun RailItem(
                 .fillMaxWidth()
                 .height(48.dp)
                 .hoverable(interactionSource)
-                .clickable { onClick() },
+                .clickable(interactionSource = interactionSource, indication = null) { onClick() },
             contentAlignment = Alignment.Center,
         ) {
             Box(

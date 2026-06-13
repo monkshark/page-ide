@@ -159,7 +159,7 @@ private fun PillChip(
                 .clip(RoundedCornerShape(20.dp))
                 .background(bg)
                 .hoverable(interactionSource)
-                .let { if (enabled) it.clickable { onClick() } else it },
+                .let { if (enabled) it.clickable(interactionSource = interactionSource, indication = null) { onClick() } else it },
             contentAlignment = Alignment.Center,
         ) {
             icon(tint)
