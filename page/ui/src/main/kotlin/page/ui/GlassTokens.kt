@@ -116,12 +116,36 @@ data class GlassMotion(
 )
 
 @Immutable
+data class GlassRadius(
+    val xs: Dp,
+    val sm: Dp,
+    val md: Dp,
+    val lg: Dp,
+)
+
+@Immutable
+data class GlassShadow(
+    val blur: Dp,
+    val offsetY: Dp,
+    val alpha: Float,
+)
+
+@Immutable
+data class GlassElevation(
+    val flat: GlassShadow,
+    val raised: GlassShadow,
+    val overlay: GlassShadow,
+)
+
+@Immutable
 data class GlassTokens(
     val palette: GlassPalette,
     val color: GlassColors,
     val type: GlassType,
     val space: GlassSpace,
     val motion: GlassMotion,
+    val radius: GlassRadius,
+    val elevation: GlassElevation,
 )
 
 internal val LocalGlassTokens = staticCompositionLocalOf<GlassTokens> {
@@ -149,6 +173,19 @@ private val DefaultMotion = GlassMotion(
     base = 200,
     slow = 320,
     easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f),
+)
+
+private val DefaultRadius = GlassRadius(
+    xs = 6.dp,
+    sm = 8.dp,
+    md = 12.dp,
+    lg = 16.dp,
+)
+
+private val DefaultElevation = GlassElevation(
+    flat = GlassShadow(blur = 0.dp, offsetY = 0.dp, alpha = 0f),
+    raised = GlassShadow(blur = 24.dp, offsetY = 8.dp, alpha = 0.35f),
+    overlay = GlassShadow(blur = 32.dp, offsetY = 12.dp, alpha = 0.45f),
 )
 
 private val CoolSyntax = SyntaxPalette(
@@ -432,4 +469,6 @@ fun glassTokensFor(palette: GlassPalette): GlassTokens = GlassTokens(
     type = DefaultType,
     space = DefaultSpace,
     motion = DefaultMotion,
+    radius = DefaultRadius,
+    elevation = DefaultElevation,
 )

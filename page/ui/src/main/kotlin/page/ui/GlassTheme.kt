@@ -25,6 +25,14 @@ object Glass {
         @Composable @ReadOnlyComposable
         get() = LocalGlassTokens.current.motion
 
+    val radius: GlassRadius
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.radius
+
+    val elevation: GlassElevation
+        @Composable @ReadOnlyComposable
+        get() = LocalGlassTokens.current.elevation
+
     val palette: GlassPalette
         @Composable @ReadOnlyComposable
         get() = LocalGlassTokens.current.palette
