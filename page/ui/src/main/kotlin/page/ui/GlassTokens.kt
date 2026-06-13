@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-enum class GlassPalette { Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
+enum class GlassPalette { Signature, SignatureLight, Graphite, Cool, Warm, Frost, Forest, Midnight, Sand }
 
 @Immutable
 data class GlassColors(
@@ -366,9 +366,61 @@ private val SignatureSyntax = SyntaxPalette(
     identifier = Color(0xFFC8D0E6),
 )
 
+private val SignatureColors = glassColors(
+    background = Color(0xFF0A0D14),
+    surface = Color(0xFF131823),
+    surfaceRaised = Color(0xFF1F2735),
+    outline = Color(0xFF232B3A),
+    primary = Color(0xFF6E8BFF),
+    onPrimary = Color(0xFF0A0D14),
+    accent = Color(0xFF4FD3C7),
+    text = Color(0xFFE7EAF3),
+    muted = Color(0xFF8A92A6),
+    error = Color(0xFFF2727F),
+    warn = Color(0xFFE7B45C),
+    success = Color(0xFF5BD6A0),
+    syntax = SignatureSyntax,
+    isLight = false,
+    surfaceL1 = Color(0xFF0E121A),
+    surfaceL2 = Color(0xFF131823),
+    surfaceL3 = Color(0xFF181E2A),
+    surfaceOverlay = Color(0xE0131823),
+    highlightEdge = Color(0x12FFFFFF),
+    separator = Color(0x0DFFFFFF),
+    primarySoft = Color(0x246E8BFF),
+    faint = Color(0xFF4A5366),
+    danger = Color(0xFFF2727F),
+)
+
+private val SignatureLightColors = glassColors(
+    background = Color(0xFFF4F6FB),
+    surface = Color(0xFFF0F3F9),
+    surfaceRaised = Color(0xFFFFFFFF),
+    outline = Color(0xFFD4DBE8),
+    primary = Color(0xFF4360E0),
+    onPrimary = Color(0xFFFFFFFF),
+    accent = Color(0xFF1FA99B),
+    text = Color(0xFF1A2030),
+    muted = Color(0xFF5A6478),
+    error = Color(0xFFD6485A),
+    warn = Color(0xFFB5811F),
+    success = Color(0xFF1F9D6B),
+    syntax = FrostSyntax,
+    isLight = true,
+    surfaceL1 = Color(0xFFFFFFFF),
+    surfaceL2 = Color(0xFFF0F3F9),
+    surfaceL3 = Color(0xFFE7ECF5),
+    highlightEdge = Color(0xE6FFFFFF),
+    separator = Color(0x1410141E),
+    faint = Color(0xFFA8B0C0),
+    danger = Color(0xFFD6485A),
+)
+
 fun glassTokensFor(palette: GlassPalette): GlassTokens = GlassTokens(
     palette = palette,
     color = when (palette) {
+        GlassPalette.Signature -> SignatureColors
+        GlassPalette.SignatureLight -> SignatureLightColors
         GlassPalette.Graphite -> GraphiteColors
         GlassPalette.Cool -> CoolColors
         GlassPalette.Warm -> WarmColors
