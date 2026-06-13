@@ -700,6 +700,7 @@ private fun GlassButton(label: String, primary: Boolean, onClick: () -> Unit) {
             color = if (primary) colors.onPrimary else colors.text,
             fontSize = Glass.type.ui,
             fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
+            style = TextStyle(lineHeight = Glass.type.ui, lineHeightStyle = CenteredLineHeight),
         )
     }
 }
