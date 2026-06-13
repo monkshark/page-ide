@@ -1,5 +1,6 @@
 package page.app
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,8 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -88,6 +91,8 @@ internal fun SettingsPanel(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .clip(RoundedCornerShape(Glass.radius.lg))
+            .background(colors.surface)
             .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { event ->
@@ -553,8 +558,10 @@ private fun CheckRow(
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        val checkColor = colors.onPrimary
         Box(
             modifier = Modifier
+                .padding(top = 1.dp)
                 .size(18.dp)
                 .clip(RoundedCornerShape(Glass.radius.xs))
                 .background(if (checked) colors.primary else colors.surfaceL2)
@@ -562,14 +569,32 @@ private fun CheckRow(
             contentAlignment = Alignment.Center,
         ) {
             if (checked) {
-                Text(text = "✓", color = colors.onPrimary, fontSize = Glass.type.label)
+                Canvas(modifier = Modifier.size(11.dp)) {
+                    val w = size.width
+                    val h = size.height
+                    val stroke = w * 0.16f
+                    drawLine(
+                        color = checkColor,
+                        start = Offset(w * 0.16f, h * 0.54f),
+                        end = Offset(w * 0.40f, h * 0.78f),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round,
+                    )
+                    drawLine(
+                        color = checkColor,
+                        start = Offset(w * 0.40f, h * 0.78f),
+                        end = Offset(w * 0.84f, h * 0.24f),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round,
+                    )
+                }
             }
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(text = label, color = colors.text, fontSize = Glass.type.ui)
-            Spacer(Modifier.height(2.dp))
-            Text(text = description, color = colors.muted, fontSize = Glass.type.label)
+            Text(text = label, color = colors.text, fontSize = Glass.type.ui, lineHeight = Glass.type.ui)
+            Spacer(Modifier.height(3.dp))
+            Text(text = description, color = colors.muted, fontSize = Glass.type.label, lineHeight = Glass.type.label)
         }
     }
 }
