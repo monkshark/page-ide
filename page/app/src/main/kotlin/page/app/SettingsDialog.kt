@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +51,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import page.lsp.LspBackends
 import page.ui.Glass
@@ -69,6 +70,11 @@ data class PageSettings(
 )
 
 val LocalPageSettings = staticCompositionLocalOf { PageSettings() }
+
+private val CenteredLineHeight = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.Both,
+)
 
 private enum class SettingsCategory(val label: String) {
     AUTO_SAVE("AutoSave"),
@@ -159,7 +165,6 @@ private fun CloseButton(onClose: () -> Unit) {
             .size(28.dp)
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(if (hovered) colors.surfaceL2 else Color.Transparent)
-            .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClose),
         contentAlignment = Alignment.Center,
     ) {
@@ -203,7 +208,6 @@ private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
-            .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -495,7 +499,6 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
             .border(1.dp, borderColor, RoundedCornerShape(Glass.radius.sm))
-            .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
@@ -504,6 +507,7 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
             text = label,
             color = textColor,
             fontSize = Glass.type.label,
+            style = TextStyle(lineHeight = Glass.type.label, lineHeightStyle = CenteredLineHeight),
         )
     }
 }
@@ -516,7 +520,12 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
             onValueChange = { v -> onChange(v.filter { it.isDigit() }.take(4)) },
             singleLine = true,
             cursorBrush = SolidColor(Glass.colors.primary),
-            textStyle = LocalTextStyle.current.copy(fontSize = Glass.type.ui, color = Glass.colors.text),
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = Glass.type.ui,
+                color = Glass.colors.text,
+                lineHeight = Glass.type.ui,
+                lineHeightStyle = CenteredLineHeight,
+            ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
     }
@@ -530,7 +539,12 @@ private fun PathField(label: String, value: String, onChange: (String) -> Unit) 
             onValueChange = onChange,
             singleLine = true,
             cursorBrush = SolidColor(Glass.colors.primary),
-            textStyle = LocalTextStyle.current.copy(fontSize = Glass.type.ui, color = Glass.colors.text),
+            textStyle = LocalTextStyle.current.copy(
+                fontSize = Glass.type.ui,
+                color = Glass.colors.text,
+                lineHeight = Glass.type.ui,
+                lineHeightStyle = CenteredLineHeight,
+            ),
         )
     }
 }
@@ -543,6 +557,7 @@ private fun FieldRow(label: String, fieldWidth: androidx.compose.ui.unit.Dp?, fi
             text = label,
             color = colors.muted,
             fontSize = Glass.type.label,
+            style = TextStyle(lineHeight = Glass.type.label, lineHeightStyle = CenteredLineHeight),
             modifier = Modifier.width(150.dp),
         )
         Box(
@@ -592,7 +607,6 @@ private fun CheckRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(rowBg)
-            .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onToggle)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -635,9 +649,19 @@ private fun CheckRow(
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(text = label, color = colors.text, fontSize = Glass.type.ui)
-            Spacer(Modifier.height(3.dp))
-            Text(text = description, color = colors.muted, fontSize = Glass.type.label)
+            Text(
+                text = label,
+                color = colors.text,
+                fontSize = Glass.type.ui,
+                style = TextStyle(lineHeight = Glass.type.ui, lineHeightStyle = CenteredLineHeight),
+            )
+            Spacer(Modifier.height(1.dp))
+            Text(
+                text = description,
+                color = colors.muted,
+                fontSize = Glass.type.label,
+                style = TextStyle(lineHeight = Glass.type.label, lineHeightStyle = CenteredLineHeight),
+            )
         }
     }
 }
@@ -663,7 +687,6 @@ private fun GlassButton(label: String, primary: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
             .border(1.dp, if (primary) Color.Transparent else colors.outline, RoundedCornerShape(Glass.radius.sm))
-            .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
