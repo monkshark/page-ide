@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,13 +17,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -42,11 +47,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import page.lsp.LspBackends
+import page.ui.Glass
 import page.ui.GlassPalette
 
 data class PageSettings(
@@ -80,11 +83,11 @@ internal fun SettingsPanel(
     var selected by remember { mutableStateOf(SettingsCategory.AUTO_SAVE) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    val colors = Glass.colors
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
             .focusRequester(focusRequester)
             .focusable()
             .onPreviewKeyEvent { event ->
@@ -96,24 +99,62 @@ internal fun SettingsPanel(
                 }
             }
     ) {
-        SettingsSidebar(
-            selected = selected,
-            onSelect = { selected = it },
-            onClose = onClose,
-            modifier = Modifier.width(180.dp).fillMaxHeight(),
-        )
-        Box(
-            modifier = Modifier.width(1.dp).fillMaxHeight()
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-        )
-        SettingsDetailPane(
-            category = selected,
-            draft = draft,
-            onChange = { draft = it },
-            onApply = { onApply(draft) },
-            onCancel = onClose,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Settings",
+                color = colors.text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = Glass.type.title,
+            )
+            Spacer(Modifier.weight(1f))
+            CloseButton(onClose)
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            SettingsSidebar(
+                selected = selected,
+                onSelect = { selected = it },
+                modifier = Modifier.width(168.dp).fillMaxHeight(),
+            )
+            Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(colors.separator))
+            SettingsDetailPane(
+                category = selected,
+                draft = draft,
+                onChange = { draft = it },
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GlassButton(label = "Cancel", primary = false, onClick = onClose)
+            Spacer(Modifier.width(8.dp))
+            GlassButton(label = "Apply", primary = true, onClick = { onApply(draft) })
+        }
+    }
+}
+
+@Composable
+private fun CloseButton(onClose: () -> Unit) {
+    val colors = Glass.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(Glass.radius.sm))
+            .background(if (hovered) colors.surfaceL2 else Color.Transparent)
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClose),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = "✕", color = if (hovered) colors.text else colors.muted, fontSize = Glass.type.body)
     }
 }
 
@@ -121,71 +162,41 @@ internal fun SettingsPanel(
 private fun SettingsSidebar(
     selected: SettingsCategory,
     onSelect: (SettingsCategory) -> Unit,
-    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Settings",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-                style = LocalTextStyle.current.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 13.sp,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "×",
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                style = LocalTextStyle.current.copy(
-                    fontSize = 16.sp,
-                    lineHeight = 16.sp,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-                modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 6.dp),
-            )
-        }
+    Column(modifier = modifier.padding(8.dp)) {
         for (cat in SettingsCategory.values()) {
             SidebarRow(label = cat.label, selected = cat == selected, onClick = { onSelect(cat) })
+            Spacer(Modifier.height(2.dp))
         }
     }
 }
 
 @Composable
 private fun SidebarRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
-    val fg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    val colors = Glass.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val bg = when {
+        selected -> colors.primarySoft
+        hovered -> colors.primarySoft.copy(alpha = colors.primarySoft.alpha * 0.6f)
+        else -> Color.Transparent
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
-            color = fg,
-            style = LocalTextStyle.current.copy(
-                fontSize = 12.sp,
-                lineHeight = 12.sp,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
+            color = if (selected) colors.primary else colors.muted,
+            fontSize = Glass.type.ui,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
     }
 }
@@ -195,26 +206,17 @@ private fun SettingsDetailPane(
     category: SettingsCategory,
     draft: PageSettings,
     onChange: (PageSettings) -> Unit,
-    onApply: () -> Unit,
-    onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
     Column(modifier = modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
         Text(
             text = category.label,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Glass.colors.text,
             fontWeight = FontWeight.SemiBold,
-            style = LocalTextStyle.current.copy(
-                fontSize = 14.sp,
-                lineHeight = 14.sp,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
+            fontSize = Glass.type.title,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll)) {
             when (category) {
                 SettingsCategory.AUTO_SAVE -> AutoSaveSection(draft.autoSave) { onChange(draft.copy(autoSave = it)) }
@@ -224,16 +226,6 @@ private fun SettingsDetailPane(
                 SettingsCategory.UI -> UiSection(draft.ui) { onChange(draft.copy(ui = it)) }
                 SettingsCategory.RUN -> RunSection(draft.run) { onChange(draft.copy(run = it)) }
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            DialogButton(label = "Cancel", primary = false, onClick = onCancel)
-            Spacer(Modifier.width(8.dp))
-            DialogButton(label = "Apply", primary = true, onClick = onApply)
         }
     }
 }
@@ -246,27 +238,27 @@ private fun AutoSaveSection(o: AutoSaveOptions, onChange: (AutoSaveOptions) -> U
         checked = o.onFocusLost,
         onToggle = { onChange(o.copy(onFocusLost = !o.onFocusLost)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Save while idle",
         description = "Save after N seconds of no input. 0 = disabled.",
         checked = o.idleSeconds > 0,
         onToggle = { onChange(o.copy(idleSeconds = if (o.idleSeconds > 0) 0 else 15)) },
     )
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Seconds",
         value = o.idleSeconds.toString(),
         onChange = { v -> onChange(o.copy(idleSeconds = v.toIntOrNull()?.coerceIn(0, 3600) ?: o.idleSeconds)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Save before Run",
         description = "Always flush to disk before running.",
         checked = o.beforeRun,
         onToggle = { onChange(o.copy(beforeRun = !o.beforeRun)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Save on tab close",
         description = "Save a dirty tab silently when closing instead of prompting.",
@@ -282,34 +274,34 @@ private fun EditorSection(o: EditorOptions, onChange: (EditorOptions) -> Unit) {
         value = o.fontSize.toString(),
         onChange = { v -> onChange(o.copy(fontSize = v.toIntOrNull()?.coerceIn(8, 48) ?: o.fontSize)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Tab size",
         value = o.tabSize.toString(),
         onChange = { v -> onChange(o.copy(tabSize = v.toIntOrNull()?.coerceIn(1, 16) ?: o.tabSize)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Insert spaces for Tab",
         description = "Use space characters when Tab is pressed (off = literal \\t).",
         checked = o.useSpacesForTab,
         onToggle = { onChange(o.copy(useSpacesForTab = !o.useSpacesForTab)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Show line numbers",
         description = "Display line numbers in the left gutter.",
         checked = o.showLineNumbers,
         onToggle = { onChange(o.copy(showLineNumbers = !o.showLineNumbers)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Minimap",
         description = "Show minimap on the right (applies after restart).",
         checked = o.showMinimap,
         onToggle = { onChange(o.copy(showMinimap = !o.showMinimap)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Highlight current line",
         description = "Tint the row containing the caret.",
@@ -326,92 +318,48 @@ private fun LspSection(o: LspOptions, onChange: (LspOptions) -> Unit) {
         checked = o.showInlayHints,
         onToggle = { onChange(o.copy(showInlayHints = !o.showInlayHints)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Trigger completion mid-word",
         description = "Show completion menu when typing inside an existing word.",
         checked = o.triggerCompletionMidWord,
         onToggle = { onChange(o.copy(triggerCompletionMidWord = !o.triggerCompletionMidWord)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Hover delay (ms)",
         value = o.hoverDelayMs.toString(),
         onChange = { v -> onChange(o.copy(hoverDelayMs = v.toIntOrNull()?.coerceIn(0, 5000) ?: o.hoverDelayMs)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Inline diagnostics",
         description = "Draw errors/warnings directly in the editor (Problems panel stays available).",
         checked = o.showInlineDiagnostics,
         onToggle = { onChange(o.copy(showInlineDiagnostics = !o.showInlineDiagnostics)) },
     )
-    Spacer(Modifier.height(16.dp))
-    Text(
-        text = "Problems panel scope",
-        color = MaterialTheme.colorScheme.onSurface,
-        style = LocalTextStyle.current.copy(
-            fontSize = 12.sp,
-            lineHeight = 14.sp,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
-            ),
-        ),
-    )
-    Spacer(Modifier.height(2.dp))
-    Text(
-        text = "Which files' errors/warnings the Problems panel lists. Inline squiggles always follow the focused file.",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = LocalTextStyle.current.copy(
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
-            ),
-        ),
-    )
+    Spacer(Modifier.height(18.dp))
+    SectionLabel("Problems panel scope")
+    Spacer(Modifier.height(3.dp))
+    Hint("Which files' errors/warnings the Problems panel lists. Inline squiggles always follow the focused file.")
     Spacer(Modifier.height(8.dp))
     Row {
-        ScopeChip(
+        ChoiceChip(
             label = "Current file",
             selected = o.diagnosticsScope == DiagnosticsScope.CURRENT_FILE,
             onClick = { onChange(o.copy(diagnosticsScope = DiagnosticsScope.CURRENT_FILE)) },
         )
         Spacer(Modifier.width(6.dp))
-        ScopeChip(
+        ChoiceChip(
             label = "Open tabs",
             selected = o.diagnosticsScope == DiagnosticsScope.OPEN_TABS,
             onClick = { onChange(o.copy(diagnosticsScope = DiagnosticsScope.OPEN_TABS)) },
         )
     }
-    Spacer(Modifier.height(16.dp))
-    Text(
-        text = "Server executable overrides",
-        color = MaterialTheme.colorScheme.onSurface,
-        style = LocalTextStyle.current.copy(
-            fontSize = 12.sp,
-            lineHeight = 14.sp,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
-            ),
-        ),
-    )
-    Spacer(Modifier.height(2.dp))
-    Text(
-        text = "Point PAGE at a specific LSP binary. Empty = auto-detect (PAGE installer → PATH).",
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = LocalTextStyle.current.copy(
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
-            ),
-        ),
-    )
+    Spacer(Modifier.height(18.dp))
+    SectionLabel("Server executable overrides")
+    Spacer(Modifier.height(3.dp))
+    Hint("Point PAGE at a specific LSP binary. Empty = auto-detect (PAGE installer → PATH).")
     Spacer(Modifier.height(8.dp))
     val backends = remember { LspBackends.all().sortedBy { it.displayName } }
     for (backend in backends) {
@@ -436,14 +384,14 @@ private fun AutoInputSection(o: AutoInputOptions, onChange: (AutoInputOptions) -
         checked = o.pairs,
         onToggle = { onChange(o.copy(pairs = !o.pairs)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Auto-close HTML tags",
         description = "In .html/.htm, typing <div> inserts </div>.",
         checked = o.htmlTags,
         onToggle = { onChange(o.copy(htmlTags = !o.htmlTags)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Backspace deletes empty pair",
         description = "Backspace inside (|) removes both characters.",
@@ -454,32 +402,21 @@ private fun AutoInputSection(o: AutoInputOptions, onChange: (AutoInputOptions) -
 
 @Composable
 private fun UiSection(o: UiOptions, onChange: (UiOptions) -> Unit) {
-    Text(
-        text = "Glass palette",
-        color = MaterialTheme.colorScheme.onSurface,
-        style = LocalTextStyle.current.copy(
-            fontSize = 12.sp,
-            lineHeight = 14.sp,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
-            ),
-        ),
-    )
-    Spacer(Modifier.height(6.dp))
+    SectionLabel("Glass palette")
+    Spacer(Modifier.height(8.dp))
     Row {
         for (p in GlassPalette.values()) {
-            PaletteChip(p = p, selected = p == o.palette, onClick = { onChange(o.copy(palette = p)) })
+            ChoiceChip(label = p.name, selected = p == o.palette, onClick = { onChange(o.copy(palette = p)) })
             Spacer(Modifier.width(6.dp))
         }
     }
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
     NumberField(
         label = "Sidebar width (dp)",
         value = o.sidebarWidth.toString(),
         onChange = { v -> onChange(o.copy(sidebarWidth = v.toIntOrNull()?.coerceIn(120, 800) ?: o.sidebarWidth)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Show tab close button",
         description = "Display the × button on tabs.",
@@ -496,7 +433,7 @@ private fun RunSection(o: RunOptions, onChange: (RunOptions) -> Unit) {
         checked = o.clearOutputOnRun,
         onToggle = { onChange(o.copy(clearOutputOnRun = !o.clearOutputOnRun)) },
     )
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(8.dp))
     CheckRow(
         label = "Open Terminal on Run",
         description = "Reveal the terminal panel when Run starts.",
@@ -506,148 +443,92 @@ private fun RunSection(o: RunOptions, onChange: (RunOptions) -> Unit) {
 }
 
 @Composable
-private fun PaletteChip(p: GlassPalette, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-    else MaterialTheme.colorScheme.surface
-    Box(
-        modifier = Modifier
-            .height(24.dp)
-            .background(bg)
-            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = p.name,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            style = LocalTextStyle.current.copy(
-                fontSize = 11.sp,
-                lineHeight = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
-        )
-    }
+private fun SectionLabel(text: String) {
+    Text(text = text, color = Glass.colors.text, fontSize = Glass.type.ui, fontWeight = FontWeight.Medium)
 }
 
 @Composable
-private fun ScopeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-    else MaterialTheme.colorScheme.surface
+private fun Hint(text: String) {
+    Text(text = text, color = Glass.colors.muted, fontSize = Glass.type.label)
+}
+
+@Composable
+private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = Glass.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val bg = when {
+        selected -> colors.primarySoft
+        hovered -> colors.surfaceL3
+        else -> colors.surfaceL2
+    }
     Box(
         modifier = Modifier
-            .height(24.dp)
+            .height(28.dp)
+            .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
-            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .border(1.dp, if (selected) colors.primary else colors.outline, RoundedCornerShape(Glass.radius.sm))
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            style = LocalTextStyle.current.copy(
-                fontSize = 11.sp,
-                lineHeight = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
+            color = if (selected) colors.primary else colors.text,
+            fontSize = Glass.type.label,
         )
     }
 }
 
 @Composable
 private fun NumberField(label: String, value: String, onChange: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = LocalTextStyle.current.copy(
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
-            modifier = Modifier.width(140.dp),
+    FieldRow(label = label, fieldWidth = 96.dp) {
+        BasicTextField(
+            value = value,
+            onValueChange = { v -> onChange(v.filter { it.isDigit() }.take(4)) },
+            singleLine = true,
+            cursorBrush = SolidColor(Glass.colors.primary),
+            textStyle = LocalTextStyle.current.copy(fontSize = Glass.type.ui, color = Glass.colors.text),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
-        Box(
-            modifier = Modifier
-                .width(90.dp)
-                .height(26.dp)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            BasicTextField(
-                value = value,
-                onValueChange = { v -> onChange(v.filter { it.isDigit() }.take(4)) },
-                singleLine = true,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-        }
     }
 }
 
 @Composable
 private fun PathField(label: String, value: String, onChange: (String) -> Unit) {
+    FieldRow(label = label, fieldWidth = null) {
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = true,
+            cursorBrush = SolidColor(Glass.colors.primary),
+            textStyle = LocalTextStyle.current.copy(fontSize = Glass.type.ui, color = Glass.colors.text),
+        )
+    }
+}
+
+@Composable
+private fun FieldRow(label: String, fieldWidth: androidx.compose.ui.unit.Dp?, field: @Composable () -> Unit) {
+    val colors = Glass.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = LocalTextStyle.current.copy(
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
-            modifier = Modifier.width(140.dp),
+            color = colors.muted,
+            fontSize = Glass.type.label,
+            modifier = Modifier.width(150.dp),
         )
         Box(
             modifier = Modifier
-                .weight(1f)
-                .height(26.dp)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp),
+                .let { if (fieldWidth != null) it.width(fieldWidth) else it.weight(1f) }
+                .height(30.dp)
+                .clip(RoundedCornerShape(Glass.radius.xs))
+                .background(colors.surfaceL2)
+                .border(1.dp, colors.outline, RoundedCornerShape(Glass.radius.xs))
+                .padding(horizontal = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                singleLine = true,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-            )
+            field()
         }
     }
 }
@@ -659,93 +540,67 @@ private fun CheckRow(
     checked: Boolean,
     onToggle: () -> Unit,
 ) {
+    val colors = Glass.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clip(RoundedCornerShape(Glass.radius.sm))
+            .background(if (hovered) colors.surfaceL2.copy(alpha = colors.surfaceL2.alpha * 0.6f) else Color.Transparent)
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onToggle)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.Top,
     ) {
         Box(
             modifier = Modifier
-                .width(16.dp)
-                .height(16.dp)
-                .background(if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                .size(18.dp)
+                .clip(RoundedCornerShape(Glass.radius.xs))
+                .background(if (checked) colors.primary else colors.surfaceL2)
+                .border(1.dp, if (checked) colors.primary else colors.outline, RoundedCornerShape(Glass.radius.xs)),
             contentAlignment = Alignment.Center,
         ) {
             if (checked) {
-                Text(
-                    text = "✓",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = LocalTextStyle.current.copy(
-                        fontSize = 11.sp,
-                        lineHeight = 11.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both,
-                        ),
-                    ),
-                )
+                Text(text = "✓", color = colors.onPrimary, fontSize = Glass.type.label)
             }
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(
-                text = label,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = LocalTextStyle.current.copy(
-                    fontSize = 12.sp,
-                    lineHeight = 14.sp,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-            )
+            Text(text = label, color = colors.text, fontSize = Glass.type.ui)
             Spacer(Modifier.height(2.dp))
-            Text(
-                text = description,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = LocalTextStyle.current.copy(
-                    fontSize = 10.sp,
-                    lineHeight = 12.sp,
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.Both,
-                    ),
-                ),
-            )
+            Text(text = description, color = colors.muted, fontSize = Glass.type.label)
         }
     }
 }
 
 @Composable
-private fun DialogButton(label: String, primary: Boolean, onClick: () -> Unit) {
-    val bg = if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-    val fg = if (primary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+private fun GlassButton(label: String, primary: Boolean, onClick: () -> Unit) {
+    val colors = Glass.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val bg = when {
+        primary && hovered -> colors.primary.copy(alpha = colors.primary.alpha * 0.85f)
+        primary -> colors.primary
+        hovered -> colors.surfaceL3
+        else -> colors.surfaceL2
+    }
     Box(
         modifier = Modifier
-            .height(28.dp)
-            .width(if (primary) 100.dp else 80.dp)
+            .height(30.dp)
+            .width(if (primary) 96.dp else 84.dp)
+            .clip(RoundedCornerShape(Glass.radius.sm))
             .background(bg)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            .clickable(onClick = onClick),
+            .border(1.dp, if (primary) Color.Transparent else colors.outline, RoundedCornerShape(Glass.radius.sm))
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = fg,
-            style = LocalTextStyle.current.copy(
-                fontSize = 11.sp,
-                lineHeight = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeightStyle = LineHeightStyle(
-                    alignment = LineHeightStyle.Alignment.Center,
-                    trim = LineHeightStyle.Trim.Both,
-                ),
-            ),
+            color = if (primary) colors.onPrimary else colors.text,
+            fontSize = Glass.type.ui,
+            fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
         )
     }
 }
