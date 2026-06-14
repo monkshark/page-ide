@@ -77,7 +77,7 @@ internal fun ActivityRail(
             selected = problemsOpen,
             onClick = onProblemsToggle,
             badge = problemsCount,
-            icon = { tint -> OutputGlyph(tint = tint, size = 16.dp) },
+            icon = { tint -> ProblemsGlyph(tint = tint, size = 16.dp) },
         )
         RailItem(
             tooltip = "Terminal",
