@@ -393,20 +393,25 @@ private fun shelfPack(
     fun priority(id: String): Int =
         rank.entries.filter { belongsTo(it.key, id) }.minOfOrNull { it.value }
             ?: if (id in offsets) Int.MAX_VALUE - 1 else Int.MAX_VALUE
-    val order = items.indices.sortedBy { priority(items[it].id) }
-    val placed = ArrayList<FloatArray>(items.size)
-    val pushers = ArrayList<Boolean>(items.size)
-    val anchors = arrayOfNulls<Pair<Float, Float>>(items.size)
-    for (index in order) {
+    val homeRect = Array(items.size) { i ->
+        val off = offsets[items[i].id]
+        floatArrayOf(homes[i].first + (off?.x ?: 0f), homes[i].second + (off?.y ?: 0f), items[i].w, items[i].h)
+    }
+    val grown = BooleanArray(items.size) { i ->
+        items[i].w > items[i].stableW + 0.5f || items[i].h > items[i].stableH + 0.5f
+    }
+    val finalRect = Array(items.size) { homeRect[it].copyOf() }
+    fun overlapRect(a: FloatArray, b: FloatArray): Boolean =
+        a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
+    fun relocate(index: Int, against: List<Int>) {
         val item = items[index]
-        val off = offsets[item.id]
-        var px = homes[index].first + (off?.x ?: 0f)
-        var py = homes[index].second + (off?.y ?: 0f)
-        fun firstHit(hx: Float, hy: Float): FloatArray? {
-            for (i in placed.indices) {
-                if (off != null && !pushers[i]) continue
-                val r = placed[i]
-                if (hx < r[0] + r[2] && r[0] < hx + item.w && hy < r[1] + r[3] && r[1] < hy + item.h) return r
+        var px = homeRect[index][0]
+        var py = homeRect[index][1]
+        fun hit(hx: Float, hy: Float): FloatArray? {
+            val probe = floatArrayOf(hx, hy, item.w, item.h)
+            for (j in against) {
+                if (j == index) continue
+                if (overlapRect(probe, finalRect[j])) return finalRect[j]
             }
             return null
         }
@@ -416,7 +421,7 @@ private fun shelfPack(
             var dist = 0f
             var guard = 0
             while (guard++ < 256) {
-                val r = firstHit(sx, sy) ?: break
+                val r = hit(sx, sy) ?: break
                 val step = when {
                     dx > 0 -> r[0] + r[2] + MAP_PUSH_GAP - sx
                     dx < 0 -> sx + item.w + MAP_PUSH_GAP - r[0]
@@ -429,7 +434,7 @@ private fun shelfPack(
             }
             return dist
         }
-        if (firstHit(px, py) != null) {
+        if (hit(px, py) != null) {
             val right = clearDist(1, 0)
             val left = clearDist(-1, 0)
             val down = clearDist(0, 1)
@@ -441,8 +446,26 @@ private fun shelfPack(
                 else -> py -= up
             }
         }
-        placed += floatArrayOf(px, py, item.w, item.h)
-        pushers += justExpanded != null && belongsTo(justExpanded, item.id)
+        finalRect[index] = floatArrayOf(px, py, item.w, item.h)
+    }
+    val grownOrder = items.indices.filter { grown[it] }
+        .sortedWith(compareBy({ priority(items[it].id) }, { it }))
+    val placedGrown = ArrayList<Int>()
+    for (index in grownOrder) {
+        relocate(index, placedGrown)
+        placedGrown += index
+    }
+    val everyone = items.indices.toList()
+    val movers = items.indices.filter { i ->
+        !grown[i] && grownOrder.any { g -> overlapRect(homeRect[i], finalRect[g]) }
+    }.sortedWith(compareBy({ priority(items[it].id) }, { it }))
+    for (index in movers) relocate(index, everyone)
+    val anchors = arrayOfNulls<Pair<Float, Float>>(items.size)
+    for (index in items.indices) {
+        val item = items[index]
+        val off = offsets[item.id]
+        val px = finalRect[index][0]
+        val py = finalRect[index][1]
         if (off == null) {
             anchors[index] = px to py
         } else {
