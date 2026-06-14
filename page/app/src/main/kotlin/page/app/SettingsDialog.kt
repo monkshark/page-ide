@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -55,6 +57,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
@@ -272,8 +275,10 @@ private fun AutoSaveSection(o: AutoSaveOptions, onChange: (AutoSaveOptions) -> U
     Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Seconds",
-        value = o.idleSeconds.toString(),
-        onChange = { v -> onChange(o.copy(idleSeconds = v.toIntOrNull()?.coerceIn(0, 3600) ?: o.idleSeconds)) },
+        value = o.idleSeconds,
+        min = 0,
+        max = 3600,
+        onChange = { v -> onChange(o.copy(idleSeconds = v)) },
     )
     Spacer(Modifier.height(8.dp))
     CheckRow(
@@ -295,14 +300,18 @@ private fun AutoSaveSection(o: AutoSaveOptions, onChange: (AutoSaveOptions) -> U
 private fun EditorSection(o: EditorOptions, onChange: (EditorOptions) -> Unit) {
     NumberField(
         label = "Font size (sp)",
-        value = o.fontSize.toString(),
-        onChange = { v -> onChange(o.copy(fontSize = v.toIntOrNull()?.coerceIn(8, 48) ?: o.fontSize)) },
+        value = o.fontSize,
+        min = 8,
+        max = 48,
+        onChange = { v -> onChange(o.copy(fontSize = v)) },
     )
     Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Tab size",
-        value = o.tabSize.toString(),
-        onChange = { v -> onChange(o.copy(tabSize = v.toIntOrNull()?.coerceIn(1, 16) ?: o.tabSize)) },
+        value = o.tabSize,
+        min = 1,
+        max = 16,
+        onChange = { v -> onChange(o.copy(tabSize = v)) },
     )
     Spacer(Modifier.height(8.dp))
     CheckRow(
@@ -352,8 +361,10 @@ private fun LspSection(o: LspOptions, onChange: (LspOptions) -> Unit) {
     Spacer(Modifier.height(8.dp))
     NumberField(
         label = "Hover delay (ms)",
-        value = o.hoverDelayMs.toString(),
-        onChange = { v -> onChange(o.copy(hoverDelayMs = v.toIntOrNull()?.coerceIn(0, 5000) ?: o.hoverDelayMs)) },
+        value = o.hoverDelayMs,
+        min = 0,
+        max = 5000,
+        onChange = { v -> onChange(o.copy(hoverDelayMs = v)) },
     )
     Spacer(Modifier.height(8.dp))
     CheckRow(
@@ -437,8 +448,10 @@ private fun UiSection(o: UiOptions, onChange: (UiOptions) -> Unit) {
     Spacer(Modifier.height(16.dp))
     NumberField(
         label = "Sidebar width (dp)",
-        value = o.sidebarWidth.toString(),
-        onChange = { v -> onChange(o.copy(sidebarWidth = v.toIntOrNull()?.coerceIn(120, 800) ?: o.sidebarWidth)) },
+        value = o.sidebarWidth,
+        min = 120,
+        max = 800,
+        onChange = { v -> onChange(o.copy(sidebarWidth = v)) },
     )
     Spacer(Modifier.height(8.dp))
     CheckRow(
@@ -517,16 +530,18 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun NumberField(label: String, value: String, onChange: (String) -> Unit) {
-    var text by remember(value) { mutableStateOf(value) }
+private fun NumberField(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    fun commit() {
+        val parsed = text.toIntOrNull()
+        val clamped = (parsed ?: value).coerceIn(min, max)
+        text = clamped.toString()
+        if (clamped != value) onChange(clamped)
+    }
     FieldRow(label = label, fieldWidth = 96.dp) {
         BasicTextField(
             value = text,
-            onValueChange = { raw ->
-                val digits = raw.filter { it.isDigit() }.take(4)
-                text = digits
-                onChange(digits)
-            },
+            onValueChange = { raw -> text = raw.filter { it.isDigit() }.take(4) },
             singleLine = true,
             cursorBrush = SolidColor(Glass.colors.primary),
             textStyle = LocalTextStyle.current.copy(
@@ -535,7 +550,12 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
                 lineHeight = Glass.type.ui,
                 lineHeightStyle = CenteredLineHeight,
             ),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { commit() }),
+            modifier = Modifier.onFocusChanged { if (!it.isFocused) commit() },
         )
     }
 }
