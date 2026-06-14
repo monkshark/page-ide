@@ -133,6 +133,8 @@ private fun reduceChrome(s: ChromeState, e: IdeEvent.Chrome): ChromeState = when
 }
 
 private fun reduceLayout(s: LayoutState, e: IdeEvent.Panel): LayoutState = when (e) {
+    is IdeEvent.Panel.SelectSideView ->
+        s.copy(activeSideView = if (s.activeSideView == e.view) null else e.view)
     IdeEvent.Panel.ToggleProblems -> s.copy(problemsOpen = !s.problemsOpen)
     IdeEvent.Panel.CloseProblems -> s.copy(problemsOpen = false)
     IdeEvent.Panel.ToggleTodo -> s.copy(todoOpen = !s.todoOpen)

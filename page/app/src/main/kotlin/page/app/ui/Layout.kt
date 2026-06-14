@@ -1,12 +1,26 @@
 package page.app.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,7 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -45,8 +62,13 @@ import page.lsp.RenameWorkspaceEdit
 import page.runtime.LspInstallers
 import page.runtime.RunConfigsState
 import page.runtime.TerminalManager
+import page.ui.Glass
+import page.ui.GlassPalette
+import page.ui.GlassSurface
+import page.ui.GlassSurfaceLevel
 import page.ui.SplitPane
 import page.workspace.FileTreePanel
+import page.workspace.QuickOpenDialog
 import page.workspace.TreeDragController
 import java.nio.file.Path
 
@@ -154,6 +176,8 @@ internal fun IdeMainLayout(
     onAtlasCallsExpand: (String) -> Unit = {},
     onAtlasCallsOpen: (String) -> Unit = {},
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
+    palette: GlassPalette = GlassPalette.Signature,
+    onSelectPalette: (GlassPalette) -> Unit = {},
 ) {
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
@@ -230,17 +254,37 @@ internal fun IdeMainLayout(
                 }
             }
     }
+    val scopedDiagnostics = diagnosticsInScope(
+        all = lspRouter.allDiagnosticsByUri,
+        scope = LocalPageSettings.current.lsp.diagnosticsScope,
+        focusedPath = editor.focused().book.active?.path,
+        openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+    )
+    val scopedProblemsCount = scopedDiagnostics.values.sumOf { it.size }
     Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent { event ->
-        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && installManagerOpen != null) {
-            installManagerOpen = null
-            true
+        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+            when {
+                installManagerOpen != null -> { installManagerOpen = null; true }
+                settingsPanelOpen -> { onSettingsPanelClose(); true }
+                else -> false
+            }
         } else false
     }) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+            .background(
+                Brush.verticalGradient(
+                    0f to Glass.colors.primary.copy(alpha = 0.12f),
+                    1f to androidx.compose.ui.graphics.Color.Transparent,
+                ),
+            ),
+    )
     Column(modifier = Modifier.fillMaxSize()) {
-        TitleBar(
+        TopBar(
             path = editor.focused().book.active?.path,
-            terminalOpen = ui.terminalOpen,
-            onTerminalToggle = onTerminalToggle,
+            workspaceRoot = workspace.rootDir,
             runState = runState,
             activeFilePath = editor.focused().book.active?.path,
             onSelectRunConfig = onSelectRunConfig,
@@ -248,43 +292,80 @@ internal fun IdeMainLayout(
             onStartRun = onStartRun,
             onStopRun = onStopRun,
             onOpenRunDialog = onOpenRunDialog,
-            outputOpen = ui.outputOpen,
-            onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
-            atlasOpen = ui.atlasOpen,
-            onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
-            settingsOpen = settingsPanelOpen,
-            onToggleSettings = onToggleSettings,
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            FileTreePanel(
-                root = workspace.rootDir,
-                expanded = workspace.expanded,
-                selection = workspace.treeSelection,
-                onToggle = onToggle,
-                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
-                onOpenFile = onOpenFile,
-                onCreateFile = onCreateFileIn,
-                onCreateFolder = onCreateFolderIn,
-                onRename = onRenameEntry,
-                onDeleteOne = onDeleteEntry,
-                onDeleteMany = onDeleteEntries,
-                onReveal = onRevealInFiles,
-                onOpenInAtlas = onOpenInAtlas,
-                onCopyPath = onCopyPath,
-                onCopyRelativePath = onCopyRelativePath,
-                onPasteInto = onPasteInto,
-                onUndo = onUndoFileOp,
-                canUndo = canUndoFileOp,
-                onDropPlan = onDropPlan,
-                onExternalDrop = onExternalDrop,
-                onDropRejected = onDropRejected,
-                onPanelFocusChanged = onTreeFocusChanged,
-                pendingFocusTick = pendingTreeFocusTick,
-                revision = workspace.treeRevision,
-                modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+            ActivityRail(
+                activeSideView = ui.activeSideView,
+                onSelectSideView = { onEvent(IdeEvent.Panel.SelectSideView(it)) },
+                problemsOpen = ui.problemsOpen,
+                problemsCount = scopedProblemsCount,
+                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
+                terminalOpen = ui.terminalOpen,
+                onTerminalToggle = onTerminalToggle,
+                outputOpen = ui.outputOpen,
+                onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
+                settingsOpen = settingsPanelOpen,
+                onSettingsToggle = onToggleSettings,
             )
-            ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
-            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
+            ) {
+            val sidebarView = ui.activeSideView
+            var lastSidebarView by remember { mutableStateOf(page.app.mvi.SideView.FILES) }
+            if (sidebarView != null) lastSidebarView = sidebarView
+            AnimatedVisibility(
+                visible = sidebarView != null,
+                enter = expandHorizontally(tween(180), expandFrom = Alignment.Start) + fadeIn(tween(180)),
+                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.Start) + fadeOut(tween(180)),
+            ) {
+                Row(modifier = Modifier.fillMaxHeight()) {
+                    GlassSurface(
+                        level = GlassSurfaceLevel.Flat,
+                        modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
+                    ) {
+                        when (lastSidebarView) {
+                            page.app.mvi.SideView.FILES -> FileTreePanel(
+                                root = workspace.rootDir,
+                                expanded = workspace.expanded,
+                                selection = workspace.treeSelection,
+                                onToggle = onToggle,
+                                onSelectionChange = { onEvent(IdeEvent.Tree.SelectionChanged(it)) },
+                                onOpenFile = onOpenFile,
+                                onCreateFile = onCreateFileIn,
+                                onCreateFolder = onCreateFolderIn,
+                                onRename = onRenameEntry,
+                                onDeleteOne = onDeleteEntry,
+                                onDeleteMany = onDeleteEntries,
+                                onReveal = onRevealInFiles,
+                                onOpenInAtlas = onOpenInAtlas,
+                                onCopyPath = onCopyPath,
+                                onCopyRelativePath = onCopyRelativePath,
+                                onPasteInto = onPasteInto,
+                                onUndo = onUndoFileOp,
+                                canUndo = canUndoFileOp,
+                                onDropPlan = onDropPlan,
+                                onExternalDrop = onExternalDrop,
+                                onDropRejected = onDropRejected,
+                                onPanelFocusChanged = onTreeFocusChanged,
+                                pendingFocusTick = pendingTreeFocusTick,
+                                revision = workspace.treeRevision,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            page.app.mvi.SideView.SEARCH -> SideViewPlaceholder(title = "Search", modifier = Modifier.fillMaxSize())
+                            page.app.mvi.SideView.SOURCE_CONTROL -> SideViewPlaceholder(title = "Source Control", modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                    ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
+                }
+            }
+            GlassSurface(
+                level = GlassSurfaceLevel.Flat,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 if (installManagerOpen != null) {
                     InstallManagerPanel(
                         initialSelection = installManagerOpen,
@@ -307,13 +388,6 @@ internal fun IdeMainLayout(
                             lspRouter.shutdownLanguage(id)
                             kotlinx.coroutines.delay(500)
                         },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else if (settingsPanelOpen) {
-                    SettingsPanel(
-                        settings = LocalPageSettings.current,
-                        onApply = onSettingsApply,
-                        onClose = onSettingsPanelClose,
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else if (editor.splitEnabled) {
@@ -425,8 +499,22 @@ internal fun IdeMainLayout(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                PillarPill(
+                    atlasActive = ui.atlasOpen,
+                    onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
+                    currentPalette = palette,
+                    onSelectPalette = onSelectPalette,
+                    onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                )
             }
-            if (ui.atlasOpen) {
+            }
+            AnimatedVisibility(
+                visible = ui.atlasOpen,
+                enter = expandHorizontally(tween(180), expandFrom = Alignment.End) + fadeIn(tween(180)),
+                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.End) + fadeOut(tween(180)),
+            ) {
+                Row(modifier = Modifier.fillMaxHeight()) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
                 AtlasPanel(
                     slice = atlasSlice,
@@ -453,6 +541,7 @@ internal fun IdeMainLayout(
                     onCallsExpand = onAtlasCallsExpand,
                     onCallsOpen = onAtlasCallsOpen,
                 )
+                }
             }
             if (codeActionPreviewVisible) {
                 CodeActionPreviewPanel(
@@ -466,18 +555,15 @@ internal fun IdeMainLayout(
                     width = 420.dp,
                 )
             }
+            }
         }
-        if (ui.problemsOpen) {
-            val diagnosticsScope = LocalPageSettings.current.lsp.diagnosticsScope
-            val openTabPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs)
-                .map { it.path }.toSet()
+        AnimatedVisibility(
+            visible = ui.problemsOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             ProblemsPanel(
-                diagnostics = diagnosticsInScope(
-                    all = lspRouter.allDiagnosticsByUri,
-                    scope = diagnosticsScope,
-                    focusedPath = editor.focused().book.active?.path,
-                    openPaths = openTabPaths,
-                ),
+                diagnostics = scopedDiagnostics,
                 onJump = onJumpToProblem,
                 onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
                 height = ui.problemsHeight,
@@ -488,7 +574,11 @@ internal fun IdeMainLayout(
                 onFileOrderChange = { onEvent(IdeEvent.Panel.ProblemsFileOrderChanged(it)) },
             )
         }
-        if (ui.todoOpen) {
+        AnimatedVisibility(
+            visible = ui.todoOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             TodoPanel(
                 items = todoItems,
                 onJump = onJumpToProblem,
@@ -511,7 +601,11 @@ internal fun IdeMainLayout(
                 linePreviewFor = linePreviewFor,
             )
         }
-        if (ui.terminalOpen) {
+        AnimatedVisibility(
+            visible = ui.terminalOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             TerminalPanel(
                 manager = terminalManager,
                 onPanelClose = { onEvent(IdeEvent.Panel.CloseTerminal) },
@@ -519,7 +613,11 @@ internal fun IdeMainLayout(
                 onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTerminal(it)) },
             )
         }
-        if (ui.outputOpen) {
+        AnimatedVisibility(
+            visible = ui.outputOpen,
+            enter = expandVertically(tween(180)) + fadeIn(tween(180)),
+            exit = shrinkVertically(tween(180)) + fadeOut(tween(180)),
+        ) {
             OutputPanel(
                 state = outputState,
                 onClose = { onEvent(IdeEvent.Panel.CloseOutput) },
@@ -541,6 +639,51 @@ internal fun IdeMainLayout(
             onRuntimeClick = { id -> runtimeDialogOpen = id },
             usedByCount = atlasUsedByCount,
             onUsedByClick = onAtlasFocusActive,
+        )
+    }
+    AnimatedVisibility(
+        visible = settingsPanelOpen,
+        enter = fadeIn(tween(160)),
+        exit = fadeOut(tween(160)),
+    ) {
+        val scrimInteraction = remember { MutableInteractionSource() }
+        val cardInteraction = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(interactionSource = scrimInteraction, indication = null) { onSettingsPanelClose() },
+            contentAlignment = Alignment.Center,
+        ) {
+            GlassSurface(
+                level = GlassSurfaceLevel.Overlay,
+                shape = RoundedCornerShape(Glass.radius.lg),
+                modifier = Modifier
+                    .width(880.dp)
+                    .fillMaxHeight(0.88f)
+                    .clickable(interactionSource = cardInteraction, indication = null) {},
+            ) {
+                SettingsPanel(
+                    settings = LocalPageSettings.current,
+                    onApply = onSettingsApply,
+                    onClose = onSettingsPanelClose,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+    AnimatedVisibility(
+        visible = ui.quickOpen,
+        enter = fadeIn(tween(160)),
+        exit = fadeOut(tween(160)),
+    ) {
+        QuickOpenDialog(
+            files = ui.quickOpenIndex,
+            onPick = { f ->
+                ui.quickOpen = false
+                onOpenFile(f.path)
+            },
+            onDismiss = { ui.quickOpen = false },
         )
     }
     if (installGuideOpen && shellCtrl != null) {

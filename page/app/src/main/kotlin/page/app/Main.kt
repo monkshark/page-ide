@@ -742,6 +742,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onAtlasCallsExpand = onAtlasCallsExpand,
                     onAtlasCallsOpen = onAtlasCallsOpen,
                     onShowCallGraph = showCallGraph,
+                    palette = palette,
+                    onSelectPalette = { palette = it },
                   )
                 }
                 if (findInFiles) {
