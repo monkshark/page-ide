@@ -267,7 +267,7 @@ internal fun MapCanvas(
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
                                 if (scale <= 0f) scale = curScale
-                                panTarget = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
+                                panTarget = minimalPanInto(curPan, nextBox, curScale, canvasSize)
                             }
                             view.expandedDirs = next
                         } else {
@@ -635,6 +635,20 @@ internal fun traceEdgeKeys(boxes: List<MapBox>, path: List<String>): Set<Pair<St
 
 internal fun mapEdgeBaseAlpha(edgeCount: Int): Float =
     0.8f - 0.5f * ((edgeCount - 12f) / 48f).coerceIn(0f, 1f)
+
+internal fun minimalPanInto(pan: Offset, box: MapBox, scale: Float, canvas: IntSize): Offset? {
+    if (canvas.width <= 0 || canvas.height <= 0 || scale <= 0f) return null
+    val margin = 24f
+    fun axis(start: Float, size: Float, view: Float): Float = when {
+        size >= view - margin * 2f -> margin - start
+        start < margin -> margin - start
+        start + size > view - margin -> (view - margin) - (start + size)
+        else -> 0f
+    }
+    val dx = axis(pan.x + box.x * scale, box.w * scale, canvas.width.toFloat())
+    val dy = axis(pan.y + box.y * scale, box.h * scale, canvas.height.toFloat())
+    return if (dx == 0f && dy == 0f) null else pan + Offset(dx, dy)
+}
 
 private data class MapMenuTarget(val box: MapBox?, val pos: Offset)
 
