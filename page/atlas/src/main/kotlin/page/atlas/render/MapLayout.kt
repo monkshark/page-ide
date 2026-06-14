@@ -402,20 +402,44 @@ private fun shelfPack(
         val off = offsets[item.id]
         var px = homes[index].first + (off?.x ?: 0f)
         var py = homes[index].second + (off?.y ?: 0f)
-        while (true) {
-            var hit: FloatArray? = null
+        fun firstHit(hx: Float, hy: Float): FloatArray? {
             for (i in placed.indices) {
                 if (off != null && !pushers[i]) continue
                 val r = placed[i]
-                if (px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h) {
-                    hit = r
-                    break
-                }
+                if (hx < r[0] + r[2] && r[0] < hx + item.w && hy < r[1] + r[3] && r[1] < hy + item.h) return r
             }
-            if (hit == null) break
-            val dx = hit[0] + hit[2] + MAP_PUSH_GAP - px
-            val dy = hit[1] + hit[3] + MAP_PUSH_GAP - py
-            if (dx <= dy) px += dx else py += dy
+            return null
+        }
+        fun clearDist(dx: Int, dy: Int): Float {
+            var sx = px
+            var sy = py
+            var dist = 0f
+            var guard = 0
+            while (guard++ < 256) {
+                val r = firstHit(sx, sy) ?: break
+                val step = when {
+                    dx > 0 -> r[0] + r[2] + MAP_PUSH_GAP - sx
+                    dx < 0 -> sx + item.w + MAP_PUSH_GAP - r[0]
+                    dy > 0 -> r[1] + r[3] + MAP_PUSH_GAP - sy
+                    else -> sy + item.h + MAP_PUSH_GAP - r[1]
+                }
+                sx += dx * step
+                sy += dy * step
+                dist += step
+            }
+            return dist
+        }
+        if (firstHit(px, py) != null) {
+            val right = clearDist(1, 0)
+            val left = clearDist(-1, 0)
+            val down = clearDist(0, 1)
+            val up = clearDist(0, -1)
+            when (minOf(right, left, down, up)) {
+                right -> px += right
+                left -> px -= left
+                down -> py += down
+                else -> py -= up
+            }
         }
         placed += floatArrayOf(px, py, item.w, item.h)
         pushers += justExpanded != null && belongsTo(justExpanded, item.id)
