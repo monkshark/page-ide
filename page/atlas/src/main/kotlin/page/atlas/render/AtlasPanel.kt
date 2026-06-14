@@ -38,14 +38,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -56,9 +48,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -484,8 +474,7 @@ private fun LegendRow(
 
 @Composable
 private fun LegendItem(label: String, kind: EdgeKind) {
-    val importColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
+    val atlas = rememberAtlasTheme()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -494,21 +483,7 @@ private fun LegendItem(label: String, kind: EdgeKind) {
             val y = size.height / 2f
             val from = Offset(0f, y)
             val to = Offset(size.width, y)
-            when (kind) {
-                EdgeKind.IMPORT -> drawLine(importColor, from, to, strokeWidth = 1f)
-                EdgeKind.EXTENDS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 2f)
-                    drawArrowHead(from, to, 0f, relationColor, filled = true)
-                }
-                EdgeKind.IMPLEMENTS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 1.5f, pathEffect = dashEffect())
-                    drawArrowHead(from, to, 0f, relationColor, filled = false)
-                }
-                EdgeKind.CALLS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 1f)
-                    drawArrowHead(from, to, 0f, relationColor, filled = true)
-                }
-            }
+            drawAtlasEdge(atlas, kind, from, to, targetRadius = 0f, alpha = 1f)
         }
         Text(
             text = label,
@@ -572,13 +547,8 @@ private fun AtlasCanvas(
         }
         map
     }
-    val activeColor = MaterialTheme.colorScheme.primary
-    val workspaceColor = MaterialTheme.colorScheme.secondary
-    val externalColor = MaterialTheme.colorScheme.outline
-    val edgeColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
+    val atlas = rememberAtlasTheme()
+    val labelStyle = TextStyle(fontSize = 10.sp, color = atlas.label)
     val textMeasurer = rememberTextMeasurer()
 
     fun nodeRadius(id: String): Float {
@@ -676,12 +646,7 @@ private fun AtlasCanvas(
             val c = projectPoint(0f, ring.y, 0f, yaw, pitch, zoom, size.width, size.height)
             val rx = ring.radius * c.scale
             val ry = rx * abs(sin(pitch))
-            drawOval(
-                color = edgeColor.copy(alpha = 0.1f),
-                topLeft = Offset(c.x - rx, c.y - ry),
-                size = Size(rx * 2f, ry * 2f),
-                style = Stroke(width = 1f),
-            )
+            drawAtlasRing(atlas, Offset(c.x, c.y), rx, ry)
         }
 
         for (edge in slice.edges) {
@@ -692,77 +657,26 @@ private fun AtlasCanvas(
             val start = Offset(from.x, from.y)
             val end = Offset(to.x, to.y)
             val targetRadius = nodeRadius(edge.to) * to.scale
-            when (edge.kind) {
-                EdgeKind.IMPORT -> drawLine(
-                    color = edgeColor.copy(alpha = alpha),
-                    start = start,
-                    end = end,
-                    strokeWidth = 1f,
-                )
-                EdgeKind.EXTENDS -> {
-                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 2f)
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
-                }
-                EdgeKind.IMPLEMENTS -> {
-                    drawLine(
-                        color = relationColor.copy(alpha = alpha),
-                        start = start,
-                        end = end,
-                        strokeWidth = 1.5f,
-                        pathEffect = dashEffect(),
-                    )
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = false)
-                }
-                EdgeKind.CALLS -> {
-                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 1f)
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
-                }
-            }
+            drawAtlasEdge(atlas, edge.kind, start, end, targetRadius, alpha)
         }
         for (p in projectedNodes) {
             val kind = kindById[p.id] ?: continue
-            val base = when (kind) {
-                NodeKind.ACTIVE -> activeColor
-                NodeKind.WORKSPACE_FILE -> workspaceColor
-                NodeKind.EXTERNAL -> externalColor
-                NodeKind.SYMBOL -> relationColor
-            }
             val pos = Offset(p.x, p.y)
             val r = (nodeRadius(p.id) * p.scale).coerceAtLeast(2f)
             var alpha = depthAlpha(p.depth)
             if (p.id in freshIds) alpha *= morphT
             if (highlighted != null && p.id !in highlighted) alpha *= 0.18f
             alpha = alpha.coerceIn(0f, 1f)
-            if (kind == NodeKind.ACTIVE) {
-                drawCircle(base.copy(alpha = alpha * 0.18f), radius = r * 2.4f, center = pos)
-                drawCircle(base.copy(alpha = alpha * 0.25f), radius = r * 1.6f, center = pos)
-            }
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        lerp(base, Color.White, 0.55f).copy(alpha = alpha),
-                        base.copy(alpha = alpha),
-                        lerp(base, Color.Black, 0.35f).copy(alpha = alpha),
-                    ),
-                    center = pos + Offset(-r * 0.35f, -r * 0.35f),
-                    radius = (r * 1.7f).coerceAtLeast(1f),
-                ),
-                radius = r,
-                center = pos,
-            )
+            drawAtlasNode(atlas, kind, pos, r, alpha)
             val mark = vcsMarks[p.id]
             if (mark != null) {
-                drawCircle(vcsColor(mark).copy(alpha = alpha * 0.9f), radius = r + 2.5f, center = pos, style = Stroke(width = 1.5f))
+                drawAtlasVcsMark(mark, pos, r, alpha)
             } else {
                 val impactDepth = vcsImpacted[p.id]
-                if (impactDepth != null) {
-                    val impactA = alpha * if (impactDepth <= 1) 0.85f else 0.4f
-                    drawCircle(vcsImpactColor.copy(alpha = impactA), radius = r + 2.5f, center = pos, style = Stroke(width = 1f))
-                }
+                if (impactDepth != null) drawAtlasVcsImpact(impactDepth, pos, r, alpha)
             }
             if (p.id == selectedId) {
-                val ringR = r + if (mark != null) 5f else 3f
-                drawCircle(labelColor.copy(alpha = alpha * 0.8f), radius = ringR, center = pos, style = Stroke(width = 1.5f))
+                drawAtlasSelectionRing(atlas, pos, r, hasMark = mark != null, alpha = alpha)
             }
             val showLabel = p.id == hoverId ||
                 p.id == selectedId ||
@@ -772,12 +686,7 @@ private fun AtlasCanvas(
             if (showLabel) {
                 val raw = labelById[p.id] ?: continue
                 val label = if (raw.length > 28) raw.take(27) + "…" else raw
-                val measured = textMeasurer.measure(AnnotatedString(label), labelStyle)
-                drawText(
-                    textLayoutResult = measured,
-                    color = labelColor.copy(alpha = alpha),
-                    topLeft = Offset(pos.x - measured.size.width / 2f, pos.y + r + 3f),
-                )
+                drawAtlasLabel(atlas, textMeasurer, labelStyle, label, pos, r, alpha)
             }
         }
     }
@@ -795,27 +704,3 @@ private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel 
     )
 }
 
-private fun dashEffect(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
-
-private fun DrawScope.drawArrowHead(
-    from: Offset,
-    to: Offset,
-    targetRadius: Float,
-    color: Color,
-    filled: Boolean,
-) {
-    val direction = to - from
-    val length = hypot(direction.x, direction.y)
-    if (length < 1f) return
-    val unit = Offset(direction.x / length, direction.y / length)
-    val tip = to - unit * (targetRadius + 2f)
-    val base = tip - unit * 9f
-    val normal = Offset(-unit.y, unit.x) * 4.5f
-    val head = Path().apply {
-        moveTo(tip.x, tip.y)
-        lineTo(base.x + normal.x, base.y + normal.y)
-        lineTo(base.x - normal.x, base.y - normal.y)
-        close()
-    }
-    if (filled) drawPath(head, color) else drawPath(head, color, style = Stroke(width = 1.5f))
-}
