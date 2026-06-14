@@ -9,7 +9,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,7 +63,8 @@ internal fun MapCanvas(
     onTracePath: ((String) -> Unit)? = null,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val atlas = atlasColors()
+    val labelColor = atlas.label
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val weightStyle = TextStyle(fontSize = 9.sp, color = labelColor)
     val filter = view.filter
@@ -189,19 +189,19 @@ internal fun MapCanvas(
         return if (onHandle) hit else null
     }
 
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val tertiary = MaterialTheme.colorScheme.tertiary
-    val errorColor = MaterialTheme.colorScheme.error
+    val primary = atlas.focus
+    val secondary = atlas.module
+    val tertiary = atlas.relation
+    val errorColor = atlas.cycle
     val cycleKeys = remember(toMap) { mapCycleEdges(toMap.edges) }
     val traceKeys = remember(toMap, tracePath) { traceEdgeKeys(toMap.boxes, tracePath) }
     val vcsCounts = remember(map, vcsMarks) {
         vcsFolderCounts(vcsMarks, map.boxes.filter { it.folder }.map { it.id })
     }
     val vcsBadgeStyle = TextStyle(fontSize = 9.sp)
-    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
-    val folderFill = MaterialTheme.colorScheme.surfaceVariant
-    val badgeFill = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    val outlineVariant = atlas.outline
+    val folderFill = atlas.surfaceVariant
+    val badgeFill = atlas.surface.copy(alpha = 0.85f)
     val edgeColor = labelColor
 
     Canvas(

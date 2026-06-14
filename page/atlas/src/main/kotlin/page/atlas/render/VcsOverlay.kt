@@ -1,18 +1,9 @@
 package page.atlas.render
 
-import androidx.compose.ui.graphics.Color
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 
 enum class VcsMark { MODIFIED, ADDED, DELETED }
-
-val vcsImpactColor = Color(0xFFCC7832)
-
-fun vcsColor(mark: VcsMark): Color = when (mark) {
-    VcsMark.MODIFIED -> Color(0xFF6897BB)
-    VcsMark.ADDED -> Color(0xFF629755)
-    VcsMark.DELETED -> Color(0xFF808080)
-}
 
 fun vcsFolderCounts(marks: Map<String, VcsMark>, folderIds: Collection<String>): Map<String, Int> {
     if (marks.isEmpty() || folderIds.isEmpty()) return emptyMap()

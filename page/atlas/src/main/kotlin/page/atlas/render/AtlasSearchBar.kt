@@ -39,6 +39,7 @@ internal fun AtlasSearchBar(
     onClose: () -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
+    val atlas = atlasColors()
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     Row(
         modifier = Modifier
@@ -52,15 +53,15 @@ internal fun AtlasSearchBar(
             if (query.isEmpty()) {
                 Text(
                     text = "Search files…",
-                    style = TextStyle(fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    style = TextStyle(fontSize = 11.sp, color = atlas.label),
                 )
             }
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                textStyle = TextStyle(fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                textStyle = TextStyle(fontSize = 11.sp, color = atlas.text),
+                cursorBrush = SolidColor(atlas.focus),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -86,12 +87,12 @@ internal fun AtlasSearchBar(
                 matchCount == 0 -> "No matches"
                 else -> "$matchIndex/$matchCount"
             },
-            style = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+            style = TextStyle(fontSize = 10.sp, color = atlas.label),
         )
         Text(
             text = "Close",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = atlas.label,
             modifier = Modifier.clickable { onClose() }.padding(2.dp),
         )
     }
