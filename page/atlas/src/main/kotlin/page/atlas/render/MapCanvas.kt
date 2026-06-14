@@ -159,7 +159,7 @@ internal fun MapCanvas(
         val endPan = panTarget ?: startPan
         panTarget = null
         anim.snapTo(0f)
-        anim.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) {
+        anim.animateTo(1f, tween(320, easing = FastOutSlowInEasing)) {
             pan = lerp(startPan, endPan, value)
         }
     }
@@ -267,7 +267,7 @@ internal fun MapCanvas(
                             if (nextBox != null) {
                                 val (curPan, curScale) = viewTransform()
                                 if (scale <= 0f) scale = curScale
-                                panTarget = curPan + Offset(hit.x - nextBox.x, hit.y - nextBox.y) * curScale
+                                panTarget = minimalPanInto(curPan, nextBox, curScale, canvasSize)
                             }
                             view.expandedDirs = next
                         } else {
@@ -284,24 +284,37 @@ internal fun MapCanvas(
         val toIds = HashSet<String>(toMap.boxes.size)
         val interp = ArrayList<MapBox>(toMap.boxes.size)
         val alphas = ArrayList<Float>(toMap.boxes.size)
+        var sizeDelta = 0f
+        for (box in toMap.boxes) {
+            val prev = fromById[box.id] ?: continue
+            sizeDelta += box.w * box.h - prev.w * prev.h
+        }
+        val expanding = sizeDelta >= 0f
+        val early = (t / 0.5f).coerceIn(0f, 1f)
+        val late = ((t - 0.5f) / 0.5f).coerceIn(0f, 1f)
+        val folderProg = if (expanding) late else early
+        val neighborProg = if (expanding) early else late
         for (box in toMap.boxes) {
             toIds += box.id
             val prev = fromById[box.id]
             when {
                 prev == null -> {
                     interp += box
-                    alphas += t
+                    alphas += folderProg
                 }
                 t >= 1f -> {
                     interp += box
                     alphas += 1f
                 }
                 else -> {
+                    val resized = kotlin.math.abs(box.w - prev.w) > 0.5f ||
+                        kotlin.math.abs(box.h - prev.h) > 0.5f
+                    val p = if (resized) folderProg else neighborProg
                     interp += box.copy(
-                        x = prev.x + (box.x - prev.x) * t,
-                        y = prev.y + (box.y - prev.y) * t,
-                        w = prev.w + (box.w - prev.w) * t,
-                        h = prev.h + (box.h - prev.h) * t,
+                        x = prev.x + (box.x - prev.x) * p,
+                        y = prev.y + (box.y - prev.y) * p,
+                        w = prev.w + (box.w - prev.w) * p,
+                        h = prev.h + (box.h - prev.h) * p,
                     )
                     alphas += 1f
                 }
@@ -311,7 +324,7 @@ internal fun MapCanvas(
             for (prev in fromMap.boxes) {
                 if (prev.id !in toIds) {
                     interp += prev
-                    alphas += 1f - t
+                    alphas += 1f - folderProg
                 }
             }
         }
@@ -635,6 +648,20 @@ internal fun traceEdgeKeys(boxes: List<MapBox>, path: List<String>): Set<Pair<St
 
 internal fun mapEdgeBaseAlpha(edgeCount: Int): Float =
     0.8f - 0.5f * ((edgeCount - 12f) / 48f).coerceIn(0f, 1f)
+
+internal fun minimalPanInto(pan: Offset, box: MapBox, scale: Float, canvas: IntSize): Offset? {
+    if (canvas.width <= 0 || canvas.height <= 0 || scale <= 0f) return null
+    val margin = 24f
+    fun axis(start: Float, size: Float, view: Float): Float = when {
+        size >= view - margin * 2f -> margin - start
+        start < margin -> margin - start
+        start + size > view - margin -> (view - margin) - (start + size)
+        else -> 0f
+    }
+    val dx = axis(pan.x + box.x * scale, box.w * scale, canvas.width.toFloat())
+    val dy = axis(pan.y + box.y * scale, box.h * scale, canvas.height.toFloat())
+    return if (dx == 0f && dy == 0f) null else pan + Offset(dx, dy)
+}
 
 private data class MapMenuTarget(val box: MapBox?, val pos: Offset)
 
