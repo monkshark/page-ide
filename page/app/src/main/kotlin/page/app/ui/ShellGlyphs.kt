@@ -147,21 +147,21 @@ internal fun ProblemsGlyph(tint: Color, size: Dp = 14.dp) {
         val strokeW = w * 0.1f
         val triangle = roundedTriangle(
             listOf(
-                Offset(w * 0.5f, h * 0.14f),
-                Offset(w * 0.92f, h * 0.84f),
-                Offset(w * 0.08f, h * 0.84f),
+                Offset(w * 0.5f, h * 0.01f),
+                Offset(w * 0.99f, h * 0.83f),
+                Offset(w * 0.01f, h * 0.83f),
             ),
-            radius = w * 0.16f,
+            radius = w * 0.17f,
         )
         drawPath(triangle, color = tint, style = strokeStyle(strokeW))
         drawLine(
             color = tint,
-            start = Offset(w * 0.5f, h * 0.42f),
-            end = Offset(w * 0.5f, h * 0.61f),
+            start = Offset(w * 0.5f, h * 0.35f),
+            end = Offset(w * 0.5f, h * 0.57f),
             strokeWidth = strokeW,
             cap = StrokeCap.Round,
         )
-        drawCircle(color = tint, radius = strokeW * 0.62f, center = Offset(w * 0.5f, h * 0.73f))
+        drawCircle(color = tint, radius = strokeW * 0.62f, center = Offset(w * 0.5f, h * 0.70f))
     }
 }
 
