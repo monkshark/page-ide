@@ -106,7 +106,7 @@ fun AtlasPanel(
 ) {
     Surface(
         modifier = modifier.width(width).fillMaxHeight(),
-        color = MaterialTheme.colorScheme.surface,
+        color = atlasColors().surface,
     ) {
         AtlasContent(
             slice = slice,
@@ -160,6 +160,7 @@ fun AtlasContent(
     onCallsExpand: (String) -> Unit = {},
     onCallsOpen: (String) -> Unit = {},
 ) {
+    val atlas = atlasColors()
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     LaunchedEffect(callsSlice, callsView.pendingFocusId) { callsView.onSliceChanged(callsSlice) }
     val selectedId = atlasView.selectedId
@@ -242,21 +243,21 @@ fun AtlasContent(
                 text = "ATLAS",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = atlas.text,
             )
             Box(modifier = Modifier.weight(1f))
             if (showExpand) {
                 Text(
                     text = "Expand",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = atlas.label,
                     modifier = Modifier.clickable { onExpand() }.padding(4.dp),
                 )
             }
             Text(
                 text = "Close",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = atlas.label,
                 modifier = Modifier.clickable { onClose() }.padding(4.dp),
             )
         }
@@ -313,7 +314,7 @@ fun AtlasContent(
                     Text(
                         text = "Right-click a symbol and choose Show Call Graph in Atlas",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = atlas.label,
                     )
                 }
             } else {
@@ -344,7 +345,7 @@ fun AtlasContent(
                         else -> "No imports"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = atlas.label,
                 )
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
@@ -395,12 +396,12 @@ fun AtlasContent(
                     Text(
                         text = msg,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = atlas.text,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(12.dp)
                             .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
+                                atlas.surfaceVariant,
                                 RoundedCornerShape(10.dp),
                             )
                             .padding(horizontal = 10.dp, vertical = 4.dp),
@@ -416,7 +417,7 @@ fun AtlasContent(
                     Text(
                         text = "Only the first 300 workspace files are analyzed",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = atlas.label,
                     )
                 }
             }
@@ -441,11 +442,12 @@ fun AtlasContent(
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val atlas = atlasColors()
     Text(
         text = label,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (selected) atlas.focus else atlas.label,
         modifier = Modifier.clickable { onClick() }.padding(horizontal = 2.dp, vertical = 4.dp),
     )
 }
@@ -456,7 +458,7 @@ private fun Divider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant),
+            .background(atlasColors().outline),
     )
 }
 
@@ -484,8 +486,9 @@ private fun LegendRow(
 
 @Composable
 private fun LegendItem(label: String, kind: EdgeKind) {
-    val importColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
+    val atlas = atlasColors()
+    val importColor = atlas.outline
+    val relationColor = atlas.relation
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -512,7 +515,7 @@ private fun LegendItem(label: String, kind: EdgeKind) {
         }
         Text(
             text = label,
-            style = TextStyle(fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
+            style = TextStyle(fontSize = 9.sp, color = atlas.label),
         )
     }
 }
@@ -572,12 +575,13 @@ private fun AtlasCanvas(
         }
         map
     }
-    val activeColor = MaterialTheme.colorScheme.primary
-    val workspaceColor = MaterialTheme.colorScheme.secondary
-    val externalColor = MaterialTheme.colorScheme.outline
-    val edgeColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val atlas = atlasColors()
+    val activeColor = atlas.focus
+    val workspaceColor = atlas.module
+    val externalColor = atlas.outline
+    val edgeColor = atlas.outline
+    val relationColor = atlas.relation
+    val labelColor = atlas.label
     val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val textMeasurer = rememberTextMeasurer()
 

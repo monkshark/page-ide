@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -29,17 +28,18 @@ internal fun MapDrilldownPanel(
     modifier: Modifier = Modifier,
     impacted: List<DrillEntry> = emptyList(),
 ) {
+    val atlas = atlasColors()
     Column(
         modifier = modifier
             .width(190.dp)
             .heightIn(max = 320.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .background(atlas.surface.copy(alpha = 0.92f))
             .verticalScroll(rememberScrollState())
             .padding(vertical = 6.dp),
     ) {
-        DrillSection("Used by", drill.usedBy, MaterialTheme.colorScheme.tertiary, showCounterparts, onOpen)
-        DrillSection("Uses", drill.uses, MaterialTheme.colorScheme.primary, showCounterparts, onOpen)
+        DrillSection("Used by", drill.usedBy, atlas.relation, showCounterparts, onOpen)
+        DrillSection("Uses", drill.uses, atlas.focus, showCounterparts, onOpen)
         DrillSection("May be affected", impacted, vcsImpactColor, false, onOpen)
     }
 }
@@ -53,6 +53,7 @@ private fun DrillSection(
     onOpen: (FilePath) -> Unit,
 ) {
     if (entries.isEmpty()) return
+    val atlas = atlasColors()
     Text(
         text = "$title (${entries.size})",
         fontSize = 9.sp,
@@ -68,12 +69,12 @@ private fun DrillSection(
                 .then(if (path != null) Modifier.clickable { onOpen(path) } else Modifier)
                 .padding(horizontal = 10.dp, vertical = 2.dp),
         ) {
-            Text(entry.label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(entry.label, fontSize = 10.sp, color = atlas.text)
             if (showCounterparts && entry.counterparts.isNotEmpty()) {
                 Text(
                     text = entry.counterparts.joinToString(", "),
                     fontSize = 9.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = atlas.label,
                 )
             }
         }
