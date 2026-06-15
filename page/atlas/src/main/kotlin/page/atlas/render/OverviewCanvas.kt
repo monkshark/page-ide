@@ -278,7 +278,14 @@ internal fun OverviewCanvas(
                 graph.nodes.size <= labelBudget
             if (showLabel) {
                 val short = node.label.substringAfterLast('/')
-                val text = if (s >= 1.1f) "$short · ${node.fileCount}" else short
+                val text = when {
+                    node.id == focusId -> {
+                        val lang = if (node.language.isEmpty()) "" else " · ${node.language}"
+                        "${node.label} · ${node.fileCount} files$lang"
+                    }
+                    s >= 1.1f -> "$short · ${node.fileCount}"
+                    else -> short
+                }
                 val measured = textMeasurer.measure(AnnotatedString(text), labelStyle)
                 drawText(
                     textLayoutResult = measured,
@@ -287,6 +294,11 @@ internal fun OverviewCanvas(
                 )
             }
         }
+
+        val legend = "circle = folder · size = files × dependents\ncolor = language · arrow = depends on · red = cycle"
+        val legendStyle = labelStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
+        val legendLayout = textMeasurer.measure(AnnotatedString(legend), legendStyle)
+        drawText(legendLayout, topLeft = Offset(14f, 12f))
     }
 }
 
