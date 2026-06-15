@@ -38,6 +38,23 @@ class ModuleGraphTest {
     }
 
     @Test
+    fun `dominant subtree splits into balanced submodules instead of one blob`() {
+        val nodes = ArrayList<GraphNode>()
+        nodes += node("ws/build.gradle.kts")
+        repeat(40) { nodes += node("ws/page/app/A$it.kt") }
+        repeat(30) { nodes += node("ws/page/atlas/B$it.kt") }
+        repeat(20) { nodes += node("ws/page/editor/C$it.kt") }
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()))
+
+        val labels = graph.nodes.mapTo(HashSet()) { it.label }
+        assertTrue("page/app" in labels, "dominant page subtree drilled into gradle modules: $labels")
+        assertTrue("page/atlas" in labels, "dominant page subtree drilled into gradle modules: $labels")
+        assertTrue("page/editor" in labels, "dominant page subtree drilled into gradle modules: $labels")
+        assertEquals(40, graph.nodes.first { it.label == "page/app" }.fileCount)
+        assertEquals(91, graph.nodes.sumOf { it.fileCount }, "every file owned by exactly one module")
+    }
+
+    @Test
     fun `cross module edges aggregate into weighted module edges`() {
         val slice = GraphSlice(
             listOf(
