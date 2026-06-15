@@ -116,12 +116,24 @@ internal fun OverviewCanvas(
         if (!followActive || canvasSize.width <= 0) return@LaunchedEffect
         val id = activeModuleId ?: return@LaunchedEffect
         val world = layout.positions[id] ?: return@LaunchedEffect
-        val s = if (scale > 0f) scale else fitTransform().second
+        val hood = (adjacency[id].orEmpty() + id).mapNotNull { layout.positions[it] }
+        var minX = world.x
+        var maxX = world.x
+        var minY = world.y
+        var maxY = world.y
+        for (p in hood) {
+            minX = minOf(minX, p.x)
+            maxX = maxOf(maxX, p.x)
+            minY = minOf(minY, p.y)
+            maxY = maxOf(maxY, p.y)
+        }
+        val cw = canvasSize.width.toFloat()
+        val ch = canvasSize.height.toFloat()
+        val w = (maxX - minX).toFloat() + 360f
+        val h = (maxY - minY).toFloat() + 360f
+        val s = min(cw / w, ch / h).coerceIn(0.45f, 1.8f)
         scale = s
-        pan = Offset(
-            canvasSize.width / 2f - world.x.toFloat() * s,
-            canvasSize.height / 2f - world.y.toFloat() * s,
-        )
+        pan = Offset(cw / 2f - world.x.toFloat() * s, ch / 2f - world.y.toFloat() * s)
         fitted = true
     }
 
@@ -197,7 +209,7 @@ internal fun OverviewCanvas(
         if (graph.nodes.isEmpty()) return@Canvas
         val (base, s) = viewTransform()
         if (s <= 0f) return@Canvas
-        val focusId = selectedId ?: hoverId
+        val focusId = selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
         val highlighted = focusId?.let { adjacency[it].orEmpty() + it }
         val labelBudget = if (s >= 0.9f) 40 else 12
 
