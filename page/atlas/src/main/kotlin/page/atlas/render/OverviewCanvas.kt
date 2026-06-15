@@ -102,7 +102,7 @@ internal fun OverviewCanvas(
 
     fun moduleRadius(node: ModuleNode): Float {
         val rel = sqrt(node.fileCount.toFloat() / maxFiles)
-        val base = 11f + 27f * rel
+        val base = 16f + 34f * rel
         return base * (hubW[node.id] ?: 1f)
     }
 
@@ -283,7 +283,7 @@ internal fun OverviewCanvas(
 
         for (node in graph.nodes) {
             val center = screenOf(node.id, base, s) ?: continue
-            val r = (moduleRadius(node) * s).coerceAtLeast(3f)
+            val r = (moduleRadius(node) * s).coerceAtLeast(6f)
             val dimmed = highlighted != null && node.id !in highlighted
             val active = node.kind == NodeKind.ACTIVE
             val tint = moduleTint(node)
