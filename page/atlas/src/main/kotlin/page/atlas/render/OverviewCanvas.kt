@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
@@ -38,10 +39,12 @@ import kotlin.math.sqrt
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
+import page.atlas.graph.modulePath
 import page.atlas.interaction.OverviewSelection
 
 private val OutEdgeColor = Color(0xFF6E8BFF)
 private val InEdgeColor = Color(0xFF4FD3C7)
+private val PathEdgeColor = Color(0xFFE7B45C)
 
 @Composable
 internal fun OverviewCanvas(
@@ -82,7 +85,17 @@ internal fun OverviewCanvas(
 
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverId by remember(graph) { mutableStateOf<String?>(null) }
+    var shiftPressed by remember { mutableStateOf(false) }
     val selectedId = selection.moduleId?.takeIf { selection.kind == OverviewSelection.Kind.MODULE }
+    val pathIds = remember(graph, selection.kind, selection.moduleId, selection.pathTarget) {
+        if (selection.kind == OverviewSelection.Kind.PATH && selection.moduleId != null && selection.pathTarget != null) {
+            modulePath(graph, selection.moduleId, selection.pathTarget)
+        } else {
+            null
+        }
+    }
+    val pathNodeSet = pathIds?.toSet()
+    val pathEdgeKeys = pathIds?.zipWithNext()?.toSet()
     var pan by view::pan
     var scale by view::scale
     var fitted by view::fitted
@@ -181,6 +194,7 @@ internal fun OverviewCanvas(
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
+                        shiftPressed = event.keyboardModifiers.isShiftPressed
                         when (event.type) {
                             PointerEventType.Scroll -> {
                                 val change = event.changes.firstOrNull()
@@ -204,7 +218,19 @@ internal fun OverviewCanvas(
                 detectTapGestures(
                     onTap = { tap ->
                         val id = nodeAt(tap)
-                        onSelectionChange(if (id == null) selection.clear() else selection.selectModule(id))
+                        val source = selection.moduleId
+                        onSelectionChange(
+                            when {
+                                id == null -> selection.clear()
+                                shiftPressed && source != null && id != source ->
+                                    if (selection.kind == OverviewSelection.Kind.PATH && id == selection.pathTarget) {
+                                        selection.selectModule(id).tracePath(source)
+                                    } else {
+                                        selection.tracePath(id)
+                                    }
+                                else -> selection.selectModule(id)
+                            },
+                        )
                     },
                     onDoubleTap = { tap ->
                         val id = nodeAt(tap) ?: return@detectTapGestures
@@ -221,18 +247,21 @@ internal fun OverviewCanvas(
         if (graph.nodes.isEmpty()) return@Canvas
         val (base, s) = viewTransform()
         if (s <= 0f) return@Canvas
-        val focusId = selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
-        val highlighted = focusId?.let { adjacency[it].orEmpty() + it }
+        val onPath = pathNodeSet != null
+        val focusId = if (onPath) null else selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
+        val highlighted = if (onPath) pathNodeSet else focusId?.let { adjacency[it].orEmpty() + it }
         val labelBudget = if (s >= 0.9f) 40 else 12
 
         for (edge in graph.edges) {
             val from = screenOf(edge.from, base, s) ?: continue
             val to = screenOf(edge.to, base, s) ?: continue
+            val onPathEdge = pathEdgeKeys != null && (edge.from to edge.to) in pathEdgeKeys
             val out = selectedId != null && edge.from == selectedId
             val incoming = selectedId != null && edge.to == selectedId
             val touchesFocus = focusId != null && (edge.from == focusId || edge.to == focusId)
             val inCycle = (edge.from to edge.to) in cycleKeys
             val color = when {
+                pathEdgeKeys != null -> if (onPathEdge) PathEdgeColor.copy(alpha = 0.95f) else edgeColor.copy(alpha = 0.03f)
                 out -> OutEdgeColor.copy(alpha = 0.9f)
                 incoming -> InEdgeColor.copy(alpha = 0.9f)
                 touchesFocus -> primary.copy(alpha = 0.85f)
@@ -240,9 +269,13 @@ internal fun OverviewCanvas(
                 inCycle -> errorColor.copy(alpha = 0.55f)
                 else -> edgeColor.copy(alpha = 0.08f)
             }
-            val drawHead = out || incoming || touchesFocus || (inCycle && focusId == null)
+            val drawHead = onPathEdge || out || incoming || touchesFocus || (inCycle && focusId == null && !onPath)
             val weightStroke = (0.8f + ln(edge.weight.toFloat()) * 0.6f).coerceAtMost(4f)
-            val stroke = if (touchesFocus) weightStroke + 0.8f else weightStroke
+            val stroke = when {
+                onPathEdge -> weightStroke + 1.2f
+                touchesFocus -> weightStroke + 0.8f
+                else -> weightStroke
+            }
             val toNode = nodeById[edge.to]
             val targetRadius = if (toNode != null) moduleRadius(toNode) * s else 0f
             drawOverviewEdge(from, to, color, stroke, targetRadius, drawHead)
@@ -274,7 +307,15 @@ internal fun OverviewCanvas(
                 radius = r,
                 center = center,
             )
-            if (active) {
+            val pathEnd = pathIds != null && (node.id == pathIds.first() || node.id == pathIds.last())
+            if (pathEnd) {
+                drawCircle(
+                    color = PathEdgeColor.copy(alpha = 0.95f),
+                    radius = r + 3f,
+                    center = center,
+                    style = Stroke(width = 2f),
+                )
+            } else if (active) {
                 drawCircle(
                     color = primary.copy(alpha = 0.9f),
                     radius = r + 3f,
@@ -311,7 +352,10 @@ internal fun OverviewCanvas(
             }
         }
 
-        val legend = if (selectedId != null) {
+        val legend = if (onPath) {
+            val hops = (pathIds?.size ?: 1) - 1
+            "amber = dependency path · $hops hop${if (hops == 1) "" else "s"}"
+        } else if (selectedId != null) {
             "blue = depends on · teal = used by · red = cycle"
         } else {
             "circle = folder · size = files × dependents\ncolor = language · arrow = depends on · red = cycle"
