@@ -67,6 +67,7 @@ import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
+import page.atlas.interaction.OverviewSelection
 
 @Composable
 fun AtlasPanel(
@@ -158,6 +159,7 @@ fun AtlasContent(
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
     }
     val overviewView = remember { MapViewState() }
+    var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
     val moduleGraph = remember(slice) { aggregateModules(slice) }
     val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
     val activeModuleId = remember(moduleGraph) {
@@ -354,7 +356,21 @@ fun AtlasContent(
                     activeModuleId = activeModuleId,
                     followActive = followActive,
                     view = overviewView,
+                    selection = overviewSelection,
+                    onSelectionChange = { overviewSelection = it },
                 )
+                val selectedModule = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
+                    ?.let { id -> moduleGraph.nodes.firstOrNull { it.id == id } }
+                if (selectedModule != null) {
+                    OverviewInspector(
+                        graph = moduleGraph,
+                        module = selectedModule,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        onOpenFile = onNodeClick,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
                 if (moduleGraph.droppedModules > 0) {
                     Text(
                         text = "Showing largest ${moduleGraph.nodes.size} modules · ${moduleGraph.droppedModules} smaller hidden",

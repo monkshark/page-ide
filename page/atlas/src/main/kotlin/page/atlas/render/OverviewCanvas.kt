@@ -38,6 +38,10 @@ import kotlin.math.sqrt
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
+import page.atlas.interaction.OverviewSelection
+
+private val OutEdgeColor = Color(0xFF6E8BFF)
+private val InEdgeColor = Color(0xFF4FD3C7)
 
 @Composable
 internal fun OverviewCanvas(
@@ -46,6 +50,8 @@ internal fun OverviewCanvas(
     activeModuleId: String?,
     followActive: Boolean,
     view: MapViewState,
+    selection: OverviewSelection,
+    onSelectionChange: (OverviewSelection) -> Unit,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -75,7 +81,7 @@ internal fun OverviewCanvas(
 
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverId by remember(graph) { mutableStateOf<String?>(null) }
-    var selectedId by remember(graph) { mutableStateOf<String?>(null) }
+    val selectedId = selection.moduleId?.takeIf { selection.kind == OverviewSelection.Kind.MODULE }
     var pan by view::pan
     var scale by view::scale
     var fitted by view::fitted
@@ -195,7 +201,10 @@ internal fun OverviewCanvas(
             }
             .pointerInput(graph) {
                 detectTapGestures(
-                    onTap = { tap -> selectedId = nodeAt(tap) },
+                    onTap = { tap ->
+                        val id = nodeAt(tap)
+                        onSelectionChange(if (id == null) selection.clear() else selection.selectModule(id))
+                    },
                     onDoubleTap = { tap ->
                         val id = nodeAt(tap) ?: return@detectTapGestures
                         val world = layout.positions[id] ?: return@detectTapGestures
@@ -216,15 +225,19 @@ internal fun OverviewCanvas(
         for (edge in graph.edges) {
             val from = screenOf(edge.from, base, s) ?: continue
             val to = screenOf(edge.to, base, s) ?: continue
+            val out = selectedId != null && edge.from == selectedId
+            val incoming = selectedId != null && edge.to == selectedId
             val touchesFocus = focusId != null && (edge.from == focusId || edge.to == focusId)
             val inCycle = (edge.from to edge.to) in cycleKeys
             val color = when {
+                out -> OutEdgeColor.copy(alpha = 0.9f)
+                incoming -> InEdgeColor.copy(alpha = 0.9f)
                 touchesFocus -> primary.copy(alpha = 0.85f)
                 focusId != null -> edgeColor.copy(alpha = 0.03f)
                 inCycle -> errorColor.copy(alpha = 0.55f)
                 else -> edgeColor.copy(alpha = 0.08f)
             }
-            val drawHead = touchesFocus || (inCycle && focusId == null)
+            val drawHead = out || incoming || touchesFocus || (inCycle && focusId == null)
             val weightStroke = (0.8f + ln(edge.weight.toFloat()) * 0.6f).coerceAtMost(4f)
             val stroke = if (touchesFocus) weightStroke + 0.8f else weightStroke
             val toNode = nodeById[edge.to]
@@ -295,7 +308,11 @@ internal fun OverviewCanvas(
             }
         }
 
-        val legend = "circle = folder · size = files × dependents\ncolor = language · arrow = depends on · red = cycle"
+        val legend = if (selectedId != null) {
+            "blue = depends on · teal = used by · red = cycle"
+        } else {
+            "circle = folder · size = files × dependents\ncolor = language · arrow = depends on · red = cycle"
+        }
         val legendStyle = labelStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
         val legendLayout = textMeasurer.measure(AnnotatedString(legend), legendStyle)
         drawText(legendLayout, topLeft = Offset(14f, 12f))
