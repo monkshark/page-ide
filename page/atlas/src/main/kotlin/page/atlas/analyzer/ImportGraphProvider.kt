@@ -3,7 +3,9 @@ package page.atlas.analyzer
 import java.nio.file.Files
 import java.nio.file.Path
 import page.atlas.graph.CodeGraphProvider
+import page.atlas.graph.DependencyDigest
 import page.atlas.graph.EdgeKind
+import page.atlas.graph.FileRole
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
@@ -13,6 +15,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
     private val index = WorkspaceIndex(root)
     private val cache = HashMap<String, CachedAnalysis>()
+    private var digestRevision = Long.MIN_VALUE
+    private var cachedDigest: DependencyDigest = DependencyDigest.EMPTY
 
     private data class CachedAnalysis(val mtime: Long, val analysis: FileAnalysis)
 
@@ -88,23 +92,24 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
 
-    fun dependentCountOf(path: Path): Int? {
-        if (!ImportExtractor.supports(path)) return null
-        val targetId = nodeId(path)
+    fun dependencyDigest(): DependencyDigest {
         index.refreshIfStale()
-        val files = index.files().filter { ImportExtractor.supports(it) }.take(PROJECT_MAX_NODES)
-        var count = 0
-        for (file in files) {
-            val fileId = nodeId(file)
-            if (fileId == targetId) continue
-            val analysis = cachedAnalysis(file) ?: continue
-            val depends = mergeByTarget(analysis.imports).any { raw ->
-                ImportResolver.resolve(raw, file, index)?.let(::nodeId) == targetId
-            }
-            if (depends) count++
-        }
-        return count
+        val revision = index.revision()
+        if (revision == digestRevision) return cachedDigest
+        val supported = index.files().count { ImportExtractor.supports(it) }
+        val slice = nodesForProject(null, null) { _, _ -> }
+        val digest = page.atlas.graph.dependencyDigest(slice, truncated = supported > PROJECT_MAX_NODES)
+        digestRevision = revision
+        cachedDigest = digest
+        return digest
     }
+
+    fun fileRole(path: Path): FileRole? {
+        if (!ImportExtractor.supports(path)) return null
+        return dependencyDigest().roleOf(nodeId(path))
+    }
+
+    fun dependentCountOf(path: Path): Int? = fileRole(path)?.dependents
 
     private fun addNode(
         nodes: LinkedHashMap<String, GraphNode>,

@@ -21,6 +21,8 @@ class WorkspaceIndex(private val root: Path) {
 
     fun files(): List<Path> = files
 
+    fun revision(): Long = lastScan
+
     private fun scan(): List<Path> {
         if (!Files.isDirectory(root)) return emptyList()
         val collected = ArrayList<Path>()
