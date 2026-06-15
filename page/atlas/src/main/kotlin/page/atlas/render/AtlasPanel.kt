@@ -392,6 +392,19 @@ fun AtlasContent(
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     )
                 }
+                val pathFrom = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                val pathTo = overviewSelection.pathTarget
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                if (pathFrom != null && pathTo != null) {
+                    OverviewPathPanel(
+                        graph = moduleGraph,
+                        from = pathFrom,
+                        to = pathTo,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
                 if (moduleGraph.droppedModules > 0) {
                     Text(
                         text = "Showing largest ${moduleGraph.nodes.size} modules · ${moduleGraph.droppedModules} smaller hidden",

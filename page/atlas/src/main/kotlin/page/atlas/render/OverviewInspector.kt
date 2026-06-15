@@ -31,10 +31,12 @@ import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleLink
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.moduleDependsOn
+import page.atlas.graph.modulePath
 import page.atlas.graph.moduleUsedBy
 
 private val OutColor = Color(0xFF6E8BFF)
 private val InColor = Color(0xFF4FD3C7)
+private val PathColor = Color(0xFFE7B45C)
 private const val FILE_LIMIT = 12
 private const val MODULE_LIMIT = 8
 
@@ -111,6 +113,79 @@ internal fun OverviewInspector(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun OverviewPathPanel(
+    graph: ModuleGraph,
+    from: String,
+    to: String,
+    onSelectModule: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val path = remember(graph, from, to) { modulePath(graph, from, to) }
+    val byId = remember(graph) { graph.nodes.associateBy { it.id } }
+
+    Column(
+        modifier = modifier
+            .width(210.dp)
+            .heightIn(max = 360.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.93f))
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(PathColor))
+            Text(
+                text = "  PATH",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PathColor,
+            )
+        }
+        if (path == null) {
+            Text(
+                text = "No dependency path",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+            )
+            val fromLabel = byId[from]?.label ?: from
+            val toLabel = byId[to]?.label ?: to
+            Text(
+                text = "$fromLabel ⇢ $toLabel",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            return@Column
+        }
+        val hops = path.size - 1
+        Text(
+            text = "$hops hop${if (hops == 1) "" else "s"}",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 1.dp),
+        )
+        SectionDivider()
+        for ((index, id) in path.withIndex()) {
+            val label = byId[id]?.label ?: id
+            Text(
+                text = "${index + 1}. $label",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectModule(id) }
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+            )
         }
     }
 }
