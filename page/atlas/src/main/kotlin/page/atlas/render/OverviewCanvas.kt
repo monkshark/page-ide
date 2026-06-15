@@ -1,8 +1,10 @@
 package page.atlas.render
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -19,6 +21,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,6 +39,7 @@ import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.min
 import kotlin.math.sqrt
+import kotlinx.coroutines.withTimeoutOrNull
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
@@ -85,7 +89,6 @@ internal fun OverviewCanvas(
 
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverId by remember(graph) { mutableStateOf<String?>(null) }
-    var shiftPressed by remember { mutableStateOf(false) }
     val selectedId = selection.moduleId?.takeIf { selection.kind == OverviewSelection.Kind.MODULE }
     val pathIds = remember(graph, selection.kind, selection.moduleId, selection.pathTarget) {
         if (selection.kind == OverviewSelection.Kind.PATH && selection.moduleId != null && selection.pathTarget != null) {
@@ -194,7 +197,6 @@ internal fun OverviewCanvas(
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
-                        shiftPressed = event.keyboardModifiers.isShiftPressed
                         when (event.type) {
                             PointerEventType.Scroll -> {
                                 val change = event.changes.firstOrNull()
@@ -215,14 +217,20 @@ internal fun OverviewCanvas(
                 }
             }
             .pointerInput(graph) {
-                detectTapGestures(
-                    onTap = { tap ->
-                        val id = nodeAt(tap)
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val shift = down.let { currentEvent.keyboardModifiers.isShiftPressed }
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                        awaitFirstDown(requireUnconsumed = false)
+                    }
+                    if (second == null) {
+                        val id = nodeAt(up.position)
                         val source = selection.moduleId
                         onSelectionChange(
                             when {
                                 id == null -> selection.clear()
-                                shiftPressed && source != null && id != source ->
+                                shift && source != null && id != source ->
                                     if (selection.kind == OverviewSelection.Kind.PATH && id == selection.pathTarget) {
                                         selection.selectModule(id).tracePath(source)
                                     } else {
@@ -231,17 +239,20 @@ internal fun OverviewCanvas(
                                 else -> selection.selectModule(id)
                             },
                         )
-                    },
-                    onDoubleTap = { tap ->
-                        val id = nodeAt(tap) ?: return@detectTapGestures
-                        val node = nodeById[id] ?: return@detectTapGestures
+                    } else {
+                        val up2 = waitForUpOrCancellation()
+                        val pos = up2?.position ?: second.position
+                        val id = nodeAt(pos) ?: return@awaitEachGesture
+                        val node = nodeById[id] ?: return@awaitEachGesture
                         if (node.splittable) {
                             onSelectionChange(selection.drillInto(id))
+                        } else if (node.files.size == 1) {
+                            onOpenFile(node.files.first().path)
                         } else {
-                            node.files.firstOrNull()?.let { onOpenFile(it.path) }
+                            onSelectionChange(selection.selectModule(id))
                         }
-                    },
-                )
+                    }
+                }
             },
     ) {
         if (graph.nodes.isEmpty()) return@Canvas
@@ -285,6 +296,35 @@ internal fun OverviewCanvas(
             val center = screenOf(node.id, base, s) ?: continue
             val r = (moduleRadius(node) * s).coerceAtLeast(3f)
             val dimmed = highlighted != null && node.id !in highlighted
+            if (node.external) {
+                val ghostAlpha = when {
+                    dimmed -> 0.18f
+                    node.id == selectedId -> 0.85f
+                    else -> 0.5f
+                }
+                drawCircle(
+                    color = labelColor.copy(alpha = ghostAlpha),
+                    radius = r,
+                    center = center,
+                    style = Stroke(
+                        width = 1.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
+                    ),
+                )
+                val showGhostLabel = node.id == focusId ||
+                    highlighted?.contains(node.id) == true ||
+                    graph.nodes.size <= labelBudget
+                if (showGhostLabel) {
+                    val short = node.label.substringAfterLast('/')
+                    val measured = textMeasurer.measure(AnnotatedString(short), labelStyle)
+                    drawText(
+                        textLayoutResult = measured,
+                        color = labelColor.copy(alpha = if (dimmed) 0.25f else 0.55f),
+                        topLeft = Offset(center.x - measured.size.width / 2f, center.y + r + 3f),
+                    )
+                }
+                continue
+            }
             val active = node.kind == NodeKind.ACTIVE
             val tint = moduleTint(node)
             val territoryAlpha = if (dimmed) 0.05f else 0.16f
