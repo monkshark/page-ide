@@ -55,6 +55,19 @@ class ModuleGraphTest {
     }
 
     @Test
+    fun `module retains its owned files sorted by name`() {
+        val slice = GraphSlice(
+            listOf(node("ws/a/zeta.kt"), node("ws/a/alpha.kt"), node("ws/b/only.kt")),
+            emptyList(),
+        )
+        val graph = aggregateModules(slice)
+        val a = graph.nodes.first { it.id == id("ws/a") }
+        assertEquals(listOf("alpha.kt", "zeta.kt"), a.files.map { it.name })
+        assertEquals(a.fileCount, a.files.size)
+        assertEquals(Path.of("ws/a/alpha.kt"), a.files.first().path)
+    }
+
+    @Test
     fun `cross module edges aggregate into weighted module edges`() {
         val slice = GraphSlice(
             listOf(

@@ -9,7 +9,10 @@ data class ModuleNode(
     val fileCount: Int,
     val kind: NodeKind,
     val language: String,
+    val files: List<ModuleFile> = emptyList(),
 )
+
+data class ModuleFile(val id: String, val name: String, val path: Path)
 
 data class ModuleEdge(val from: String, val to: String, val weight: Int)
 
@@ -77,7 +80,8 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null): ModuleGraph {
         for (node in owned) {
             fileModule[node.id] = moduleId
             acc.fileCount++
-            val ext = extensionOf(node.path!!)
+            acc.files.add(ModuleFile(node.id, node.label, node.path!!))
+            val ext = extensionOf(node.path)
             if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
             if (node.kind == NodeKind.ACTIVE ||
                 (activeNorm != null && node.path.toAbsolutePath().normalize() == activeNorm)
@@ -103,6 +107,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null): ModuleGraph {
             fileCount = acc.fileCount,
             kind = if (acc.active) NodeKind.ACTIVE else NodeKind.WORKSPACE_FILE,
             language = dominantLanguage(acc.languages),
+            files = acc.files.sortedWith(compareBy({ it.name }, { it.id })),
         )
     }
     var edges = weights.map { (key, weight) -> ModuleEdge(key.first, key.second, weight) }
@@ -149,6 +154,7 @@ private class ModuleAcc(val dir: Path, val label: String) {
     var fileCount = 0
     var active = false
     val languages = HashMap<String, Int>()
+    val files = ArrayList<ModuleFile>()
 }
 
 private fun compress(dir: DirNode) {
