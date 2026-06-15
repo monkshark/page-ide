@@ -11,6 +11,7 @@ data class ModuleNode(
     val language: String,
     val files: List<ModuleFile> = emptyList(),
     val splittable: Boolean = false,
+    val external: Boolean = false,
 )
 
 data class ModuleFile(val id: String, val name: String, val path: Path)
@@ -29,7 +30,7 @@ data class ModuleGraph(
 }
 
 const val MODULE_MAX = 120
-const val TARGET_MODULES = 18
+const val TARGET_MODULES = 10
 const val ROOT_MODULE_LABEL = "<root>"
 
 fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Path? = null): ModuleGraph {
@@ -38,6 +39,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
     else all.filter { (it.path!!.parent ?: it.path!!).startsWith(scopeRoot) }
     if (files.isEmpty()) return ModuleGraph.EMPTY
     val root = scopeRoot ?: commonRoot(files.map { it.path!!.parent ?: it.path!! })
+    val workspaceRoot = commonRoot(all.map { it.path!!.parent ?: it.path!! })
     val activeNorm = activePath?.toAbsolutePath()?.normalize()
 
     val tree = DirNode(root)
@@ -60,18 +62,27 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
     countSubtree(tree)
 
     val total = tree.subtreeCount
-    val target = maxOf(1, total / TARGET_MODULES)
-    val frontier = mutableListOf(Cut(tree, loose = false))
-    while (frontier.size < MODULE_MAX) {
-        val candidate = frontier
-            .filter { !it.loose && it.node.dirs.isNotEmpty() && it.count() > target }
-            .sortedWith(compareByDescending<Cut> { it.count() }.thenBy { it.node.dir.toString() })
-            .firstOrNull() ?: break
-        frontier.remove(candidate)
-        for (child in candidate.node.dirs.values.sortedBy { it.dir.toString() }) {
-            frontier.add(Cut(child, loose = false))
+    val frontier: List<Cut>
+    val fileNodes: List<GraphNode>
+    if (scopeRoot != null) {
+        frontier = tree.dirs.values.sortedBy { it.dir.toString() }.map { Cut(it, loose = false) }
+        fileNodes = tree.files
+    } else {
+        val target = maxOf(1, total / TARGET_MODULES)
+        val f = mutableListOf(Cut(tree, loose = false))
+        while (f.size < MODULE_MAX) {
+            val candidate = f
+                .filter { !it.loose && it.node.dirs.isNotEmpty() && it.count() > target }
+                .sortedWith(compareByDescending<Cut> { it.count() }.thenBy { it.node.dir.toString() })
+                .firstOrNull() ?: break
+            f.remove(candidate)
+            for (child in candidate.node.dirs.values.sortedBy { it.dir.toString() }) {
+                f.add(Cut(child, loose = false))
+            }
+            if (candidate.node.files.isNotEmpty()) f.add(Cut(candidate.node, loose = true))
         }
-        if (candidate.node.files.isNotEmpty()) frontier.add(Cut(candidate.node, loose = true))
+        frontier = f
+        fileNodes = emptyList()
     }
 
     val fileModule = HashMap<String, String>()
@@ -79,7 +90,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
     for (cut in frontier) {
         val moduleId = cut.node.dir.toString()
         val acc = accs.getOrPut(moduleId) { ModuleAcc(cut.node.dir, moduleLabel(cut.node.dir, root)) }
-        if (!cut.loose && cut.node.dirs.isNotEmpty()) acc.splittable = true
+        if (!cut.loose && cut.node.subtreeCount > 1) acc.splittable = true
         val owned = if (cut.loose) cut.node.files else cut.subtreeFiles()
         for (node in owned) {
             fileModule[node.id] = moduleId
@@ -94,6 +105,21 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
             }
         }
     }
+    for (node in fileNodes.sortedWith(compareBy({ it.label }, { it.id }))) {
+        val path = node.path ?: continue
+        val moduleId = path.toString()
+        val acc = accs.getOrPut(moduleId) { ModuleAcc(path.parent ?: root, node.label) }
+        fileModule[node.id] = moduleId
+        acc.fileCount++
+        acc.files.add(ModuleFile(node.id, node.label, path))
+        val ext = extensionOf(path)
+        if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
+        if (node.kind == NodeKind.ACTIVE ||
+            (activeNorm != null && path.toAbsolutePath().normalize() == activeNorm)
+        ) {
+            acc.active = true
+        }
+    }
 
     val weights = LinkedHashMap<Pair<String, String>, Int>()
     for (edge in slice.edges) {
@@ -101,6 +127,40 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
         val to = fileModule[edge.to] ?: continue
         if (from == to) continue
         weights.merge(from to to, 1, Int::plus)
+    }
+
+    if (scopeRoot != null) {
+        val byId = all.associateBy { it.id }
+        fun ghostFor(node: GraphNode): String? {
+            val ghostDir = node.path!!.parent ?: return null
+            val gid = ghostDir.toString()
+            val acc = accs.getOrPut(gid) {
+                ModuleAcc(ghostDir, moduleLabel(ghostDir, workspaceRoot)).also { it.external = true }
+            }
+            if (acc.files.none { it.id == node.id }) {
+                acc.fileCount++
+                acc.files.add(ModuleFile(node.id, node.label, node.path))
+                val ext = extensionOf(node.path)
+                if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
+            }
+            return gid
+        }
+        for (edge in slice.edges) {
+            val from = fileModule[edge.from]
+            val to = fileModule[edge.to]
+            when {
+                from != null && to == null -> {
+                    val ext = byId[edge.to] ?: continue
+                    val gid = ghostFor(ext) ?: continue
+                    if (gid != from) weights.merge(from to gid, 1, Int::plus)
+                }
+                from == null && to != null -> {
+                    val ext = byId[edge.from] ?: continue
+                    val gid = ghostFor(ext) ?: continue
+                    if (gid != to) weights.merge(gid to to, 1, Int::plus)
+                }
+            }
+        }
     }
 
     var nodes = accs.map { (id, acc) ->
@@ -112,7 +172,8 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
             kind = if (acc.active) NodeKind.ACTIVE else NodeKind.WORKSPACE_FILE,
             language = dominantLanguage(acc.languages),
             files = acc.files.sortedWith(compareBy({ it.name }, { it.id })),
-            splittable = acc.splittable,
+            splittable = acc.splittable && !acc.external,
+            external = acc.external,
         )
     }
     var edges = weights.map { (key, weight) -> ModuleEdge(key.first, key.second, weight) }
@@ -159,6 +220,7 @@ private class ModuleAcc(val dir: Path, val label: String) {
     var fileCount = 0
     var active = false
     var splittable = false
+    var external = false
     val languages = HashMap<String, Int>()
     val files = ArrayList<ModuleFile>()
 }

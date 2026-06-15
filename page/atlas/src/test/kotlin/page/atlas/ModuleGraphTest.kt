@@ -83,15 +83,48 @@ class ModuleGraphTest {
     }
 
     @Test
-    fun `module with subdirectories is splittable and a flat directory is not`() {
+    fun `module is splittable when it has subdirs or many files but a lone file is not`() {
         val nodes = ArrayList<GraphNode>()
         repeat(180) { nodes += node("ws/flat/Z$it.kt") }
         nodes += node("ws/lib/a/X.kt")
         nodes += node("ws/lib/b/Y.kt")
+        nodes += node("ws/solo/Only.kt")
         val graph = aggregateModules(GraphSlice(nodes, emptyList()))
 
         assertTrue(graph.nodes.first { it.label == "lib" }.splittable, "lib has subdirs a,b")
-        assertFalse(graph.nodes.first { it.label == "flat" }.splittable, "flat holds only files")
+        assertTrue(graph.nodes.first { it.label == "flat" }.splittable, "flat holds many files, drillable to file level")
+        assertFalse(graph.nodes.first { it.label == "solo" }.splittable, "solo holds a single file")
+    }
+
+    @Test
+    fun `scope into a flat folder yields one node per file`() {
+        val nodes = ArrayList<GraphNode>()
+        repeat(6) { nodes += node("ws/pkg/F$it.kt") }
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = Path.of("ws/pkg"))
+
+        assertEquals(6, graph.nodes.size, "each file becomes its own node")
+        assertTrue(graph.nodes.all { it.fileCount == 1 }, "file-level nodes hold a single file")
+        assertTrue(graph.nodes.none { it.splittable }, "single-file nodes are leaves")
+        assertTrue(graph.nodes.any { it.label == "F0.kt" }, "labeled by file name: ${graph.nodes.map { it.label }}")
+    }
+
+    @Test
+    fun `scope surfaces external dependencies as ghost nodes`() {
+        val nodes = ArrayList<GraphNode>()
+        repeat(3) { nodes += node("ws/pkg/F$it.kt") }
+        nodes += node("ws/util/Helper.kt")
+        val edges = listOf(
+            edge("ws/pkg/F0.kt", "ws/util/Helper.kt"),
+            edge("ws/util/Helper.kt", "ws/pkg/F1.kt"),
+        )
+        val graph = aggregateModules(GraphSlice(nodes, edges), scopeRoot = Path.of("ws/pkg"))
+
+        val ghost = graph.nodes.firstOrNull { it.external }
+        assertTrue(ghost != null, "util surfaces as ghost: ${graph.nodes.map { it.label to it.external }}")
+        assertEquals("util", ghost!!.label)
+        assertFalse(ghost.splittable, "ghost is not drillable")
+        assertTrue(graph.edges.any { it.to == ghost.id }, "in-scope file depends on ghost")
+        assertTrue(graph.edges.any { it.from == ghost.id }, "ghost uses in-scope file")
     }
 
     @Test
