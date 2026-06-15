@@ -7,8 +7,10 @@ import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.moduleDependsOn
+import page.atlas.graph.modulePath
 import page.atlas.graph.moduleUsedBy
 import java.nio.file.Path
+import kotlin.test.assertNull
 
 class ModulePathTest {
 
@@ -55,5 +57,28 @@ class ModulePathTest {
     fun `dangling edge target without node is dropped`() {
         val g = ModuleGraph(listOf(mod("a")), listOf(ModuleEdge("a", "ghost", 2)))
         assertEquals(emptyList(), moduleDependsOn(g, "a"))
+    }
+
+    @Test
+    fun `module path follows directed edges by shortest hop`() {
+        assertEquals(listOf("a", "b"), modulePath(graph, "a", "b"))
+        assertEquals(listOf("d", "a", "b"), modulePath(graph, "d", "b"))
+        assertEquals(listOf("a"), modulePath(graph, "a", "a"))
+    }
+
+    @Test
+    fun `module path returns null when no directed route exists`() {
+        assertNull(modulePath(graph, "b", "a"))
+        assertNull(modulePath(graph, "b", "zzz"))
+    }
+
+    @Test
+    fun `module path terminates on cycles`() {
+        val cyclic = ModuleGraph(
+            nodes = listOf(mod("x"), mod("y"), mod("z")),
+            edges = listOf(ModuleEdge("x", "y", 1), ModuleEdge("y", "x", 1)),
+        )
+        assertEquals(listOf("x", "y"), modulePath(cyclic, "x", "y"))
+        assertNull(modulePath(cyclic, "x", "z"))
     }
 }
