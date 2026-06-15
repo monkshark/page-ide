@@ -204,17 +204,20 @@ internal fun OverviewCanvas(
         for (edge in graph.edges) {
             val from = screenOf(edge.from, base, s) ?: continue
             val to = screenOf(edge.to, base, s) ?: continue
-            val dimmed = highlighted != null && (edge.from !in highlighted || edge.to !in highlighted)
+            val touchesFocus = focusId != null && (edge.from == focusId || edge.to == focusId)
             val inCycle = (edge.from to edge.to) in cycleKeys
             val color = when {
-                inCycle -> errorColor.copy(alpha = if (dimmed) 0.18f else 0.8f)
-                dimmed -> edgeColor.copy(alpha = 0.06f)
-                else -> edgeColor.copy(alpha = 0.4f)
+                touchesFocus -> primary.copy(alpha = 0.85f)
+                focusId != null -> edgeColor.copy(alpha = 0.03f)
+                inCycle -> errorColor.copy(alpha = 0.55f)
+                else -> edgeColor.copy(alpha = 0.08f)
             }
-            val stroke = (1.2f + ln(edge.weight.toFloat())).coerceAtMost(5f)
+            val drawHead = touchesFocus || (inCycle && focusId == null)
+            val weightStroke = (0.8f + ln(edge.weight.toFloat()) * 0.6f).coerceAtMost(4f)
+            val stroke = if (touchesFocus) weightStroke + 0.8f else weightStroke
             val toNode = nodeById[edge.to]
             val targetRadius = if (toNode != null) moduleRadius(toNode) * s else 0f
-            drawOverviewEdge(from, to, color, stroke, targetRadius)
+            drawOverviewEdge(from, to, color, stroke, targetRadius, drawHead)
         }
 
         for (node in graph.nodes) {
@@ -281,6 +284,7 @@ private fun DrawScope.drawOverviewEdge(
     color: Color,
     stroke: Float,
     targetRadius: Float,
+    drawHead: Boolean,
 ) {
     val chord = to - from
     val len = hypot(chord.x, chord.y)
@@ -294,6 +298,7 @@ private fun DrawScope.drawOverviewEdge(
         quadraticTo(control.x, control.y, end.x, end.y)
     }
     drawPath(curve, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+    if (!drawHead) return
     val headLen = min(9f, len * 0.4f)
     val headBase = end - unit * headLen
     val normal = Offset(-unit.y, unit.x) * headLen * 0.5f
