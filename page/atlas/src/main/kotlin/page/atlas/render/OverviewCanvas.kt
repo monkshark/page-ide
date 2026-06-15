@@ -277,8 +277,8 @@ internal fun OverviewCanvas(
                 highlighted?.contains(node.id) == true ||
                 graph.nodes.size <= labelBudget
             if (showLabel) {
-                val lang = if (node.language.isEmpty()) "" else " · ${node.language}"
-                val text = "${node.label} · ${node.fileCount} files$lang"
+                val short = node.label.substringAfterLast('/')
+                val text = if (s >= 1.1f) "$short · ${node.fileCount}" else short
                 val measured = textMeasurer.measure(AnnotatedString(text), labelStyle)
                 drawText(
                     textLayoutResult = measured,
