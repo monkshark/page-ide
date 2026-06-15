@@ -52,6 +52,7 @@ internal fun OverviewCanvas(
     view: MapViewState,
     selection: OverviewSelection,
     onSelectionChange: (OverviewSelection) -> Unit,
+    onOpenFile: (java.nio.file.Path) -> Unit,
 ) {
     val textMeasurer = rememberTextMeasurer()
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -207,10 +208,12 @@ internal fun OverviewCanvas(
                     },
                     onDoubleTap = { tap ->
                         val id = nodeAt(tap) ?: return@detectTapGestures
-                        val world = layout.positions[id] ?: return@detectTapGestures
-                        val (_, s) = viewTransform()
-                        scale = s
-                        pan = Offset(size.width / 2f - world.x.toFloat() * s, size.height / 2f - world.y.toFloat() * s)
+                        val node = nodeById[id] ?: return@detectTapGestures
+                        if (node.splittable) {
+                            onSelectionChange(selection.drillInto(id))
+                        } else {
+                            node.files.firstOrNull()?.let { onOpenFile(it.path) }
+                        }
                     },
                 )
             },

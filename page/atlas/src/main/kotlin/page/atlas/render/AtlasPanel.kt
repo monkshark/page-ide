@@ -160,8 +160,12 @@ fun AtlasContent(
     }
     val overviewView = remember { MapViewState() }
     var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
-    val moduleGraph = remember(slice) { aggregateModules(slice) }
+    val drillScope = remember(overviewSelection.drillPath) {
+        overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
+    }
+    val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
     val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
+    LaunchedEffect(drillScope) { overviewView.fitted = false }
     val activeModuleId = remember(moduleGraph) {
         moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
     }
@@ -214,6 +218,15 @@ fun AtlasContent(
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
                     searchOpen = true
+                    true
+                } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
+                    viewTab == AtlasViewTab.OVERVIEW &&
+                    (overviewSelection.kind != OverviewSelection.Kind.NONE || overviewSelection.drillPath.isNotEmpty())
+                ) {
+                    overviewSelection = when {
+                        overviewSelection.kind != OverviewSelection.Kind.NONE -> overviewSelection.clear()
+                        else -> overviewSelection.drillUp()
+                    }
                     true
                 } else {
                     false
@@ -349,6 +362,13 @@ fun AtlasContent(
                 )
             }
         } else if (viewTab == AtlasViewTab.OVERVIEW) {
+            if (overviewSelection.drillPath.isNotEmpty()) {
+                OverviewBreadcrumb(
+                    drillPath = overviewSelection.drillPath,
+                    onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                )
+                Divider()
+            }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 OverviewCanvas(
                     graph = moduleGraph,
@@ -358,6 +378,7 @@ fun AtlasContent(
                     view = overviewView,
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
+                    onOpenFile = onNodeClick,
                 )
                 val selectedModule = overviewSelection.moduleId
                     ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
@@ -478,6 +499,46 @@ fun AtlasContent(
         }
     }
 }
+
+@Composable
+private fun OverviewBreadcrumb(
+    drillPath: List<String>,
+    onNavigate: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        BreadcrumbSegment("root", current = false) { onNavigate(0) }
+        drillPath.forEachIndexed { index, id ->
+            Text(
+                text = "/",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val last = index == drillPath.lastIndex
+            BreadcrumbSegment(crumbLabel(id), current = last) { onNavigate(index + 1) }
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbSegment(label: String, current: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+        modifier = if (current) Modifier else Modifier.clickable { onClick() },
+    )
+}
+
+private fun crumbLabel(id: String): String =
+    id.substringAfterLast('/').substringAfterLast('\\').ifEmpty { id }
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
