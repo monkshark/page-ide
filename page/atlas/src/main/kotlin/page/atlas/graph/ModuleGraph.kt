@@ -10,6 +10,7 @@ data class ModuleNode(
     val kind: NodeKind,
     val language: String,
     val files: List<ModuleFile> = emptyList(),
+    val splittable: Boolean = false,
 )
 
 data class ModuleFile(val id: String, val name: String, val path: Path)
@@ -31,10 +32,12 @@ const val MODULE_MAX = 120
 const val TARGET_MODULES = 18
 const val ROOT_MODULE_LABEL = "<root>"
 
-fun aggregateModules(slice: GraphSlice, activePath: Path? = null): ModuleGraph {
-    val files = slice.nodes.filter { it.path != null }
+fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Path? = null): ModuleGraph {
+    val all = slice.nodes.filter { it.path != null }
+    val files = if (scopeRoot == null) all
+    else all.filter { (it.path!!.parent ?: it.path!!).startsWith(scopeRoot) }
     if (files.isEmpty()) return ModuleGraph.EMPTY
-    val root = commonRoot(files.map { it.path!!.parent ?: it.path!! })
+    val root = scopeRoot ?: commonRoot(files.map { it.path!!.parent ?: it.path!! })
     val activeNorm = activePath?.toAbsolutePath()?.normalize()
 
     val tree = DirNode(root)
@@ -76,6 +79,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null): ModuleGraph {
     for (cut in frontier) {
         val moduleId = cut.node.dir.toString()
         val acc = accs.getOrPut(moduleId) { ModuleAcc(cut.node.dir, moduleLabel(cut.node.dir, root)) }
+        if (!cut.loose && cut.node.dirs.isNotEmpty()) acc.splittable = true
         val owned = if (cut.loose) cut.node.files else cut.subtreeFiles()
         for (node in owned) {
             fileModule[node.id] = moduleId
@@ -108,6 +112,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null): ModuleGraph {
             kind = if (acc.active) NodeKind.ACTIVE else NodeKind.WORKSPACE_FILE,
             language = dominantLanguage(acc.languages),
             files = acc.files.sortedWith(compareBy({ it.name }, { it.id })),
+            splittable = acc.splittable,
         )
     }
     var edges = weights.map { (key, weight) -> ModuleEdge(key.first, key.second, weight) }
@@ -153,6 +158,7 @@ private class Cut(val node: DirNode, val loose: Boolean) {
 private class ModuleAcc(val dir: Path, val label: String) {
     var fileCount = 0
     var active = false
+    var splittable = false
     val languages = HashMap<String, Int>()
     val files = ArrayList<ModuleFile>()
 }

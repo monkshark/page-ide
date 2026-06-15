@@ -3,6 +3,7 @@ package page.atlas
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
@@ -65,6 +66,32 @@ class ModuleGraphTest {
         assertEquals(listOf("alpha.kt", "zeta.kt"), a.files.map { it.name })
         assertEquals(a.fileCount, a.files.size)
         assertEquals(Path.of("ws/a/alpha.kt"), a.files.first().path)
+    }
+
+    @Test
+    fun `scope root re-aggregates only that subtree into deeper modules`() {
+        val nodes = ArrayList<GraphNode>()
+        repeat(10) { nodes += node("ws/page/app/service/S$it.kt") }
+        repeat(8) { nodes += node("ws/page/app/ui/U$it.kt") }
+        repeat(5) { nodes += node("ws/page/atlas/A$it.kt") }
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = Path.of("ws/page/app"))
+
+        val labels = graph.nodes.mapTo(HashSet()) { it.label }
+        assertTrue("service" in labels, "drilled into app subtree: $labels")
+        assertTrue("ui" in labels, "drilled into app subtree: $labels")
+        assertEquals(18, graph.nodes.sumOf { it.fileCount }, "atlas subtree excluded by scope")
+    }
+
+    @Test
+    fun `module with subdirectories is splittable and a flat directory is not`() {
+        val nodes = ArrayList<GraphNode>()
+        repeat(180) { nodes += node("ws/flat/Z$it.kt") }
+        nodes += node("ws/lib/a/X.kt")
+        nodes += node("ws/lib/b/Y.kt")
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()))
+
+        assertTrue(graph.nodes.first { it.label == "lib" }.splittable, "lib has subdirs a,b")
+        assertFalse(graph.nodes.first { it.label == "flat" }.splittable, "flat holds only files")
     }
 
     @Test
