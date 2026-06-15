@@ -66,6 +66,7 @@ import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
+import page.atlas.graph.aggregateModules
 
 @Composable
 fun AtlasPanel(
@@ -156,6 +157,12 @@ fun AtlasContent(
     val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
     }
+    val overviewView = remember { MapViewState() }
+    val moduleGraph = remember(slice) { aggregateModules(slice) }
+    val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
+    val activeModuleId = remember(moduleGraph) {
+        moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
+    }
     val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
     val impacted = remember(slice, effectiveMarks) {
         vcsImpacted(slice.edges, effectiveMarks.keys)
@@ -175,6 +182,7 @@ fun AtlasContent(
         if (selectedId == null) tracePath = emptyList()
     }
     val searchSlice = when (viewTab) {
+        AtlasViewTab.OVERVIEW -> slice
         AtlasViewTab.DEPENDENCY -> mapSlice
         AtlasViewTab.GRAPH -> slice
         AtlasViewTab.CALLS -> callsSlice
@@ -259,6 +267,7 @@ fun AtlasContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            ModeChip("Overview", viewTab == AtlasViewTab.OVERVIEW) { onViewTabChange(AtlasViewTab.OVERVIEW) }
             ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
             ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
             if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
@@ -268,7 +277,7 @@ fun AtlasContent(
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
             }
-            if (viewTab == AtlasViewTab.DEPENDENCY) {
+            if (viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW) {
                 ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
             }
             if (viewTab == AtlasViewTab.GRAPH) {
@@ -330,12 +339,37 @@ fun AtlasContent(
                 Text(
                     text = when {
                         progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
-                        projectMode || viewTab == AtlasViewTab.DEPENDENCY -> "No source files"
+                        projectMode || viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW -> "No source files"
                         else -> "No imports"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else if (viewTab == AtlasViewTab.OVERVIEW) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                OverviewCanvas(
+                    graph = moduleGraph,
+                    layout = overviewLayout,
+                    activeModuleId = activeModuleId,
+                    followActive = followActive,
+                    view = overviewView,
+                )
+                if (moduleGraph.droppedModules > 0) {
+                    Text(
+                        text = "Showing largest ${moduleGraph.nodes.size} modules · ${moduleGraph.droppedModules} smaller hidden",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
