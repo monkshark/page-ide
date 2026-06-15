@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 import page.app.*
 import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeEvent
+import page.atlas.graph.FileRole
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
@@ -167,7 +168,7 @@ internal fun IdeMainLayout(
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasLoadProgress: Float? = null,
-    atlasUsedByCount: Int? = null,
+    atlasFileRole: FileRole? = null,
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
     atlasActiveId: String? = null,
@@ -637,7 +638,7 @@ internal fun IdeMainLayout(
             onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
             onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
             onRuntimeClick = { id -> runtimeDialogOpen = id },
-            usedByCount = atlasUsedByCount,
+            fileRole = atlasFileRole,
             onUsedByClick = onAtlasFocusActive,
         )
     }

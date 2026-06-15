@@ -465,14 +465,14 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runCatching { vcsMarksFrom(vcsProvider.statuses()) }.getOrDefault(emptyMap())
         }
     }
-    var atlasUsedByCount by remember { mutableStateOf<Int?>(null) }
+    var atlasFileRole by remember { mutableStateOf<page.atlas.graph.FileRole?>(null) }
     LaunchedEffect(atlasProvider, focusedActivePath) {
-        atlasUsedByCount = null
+        atlasFileRole = null
         val path = focusedActivePath ?: return@LaunchedEffect
         if (atlasProvider == null) return@LaunchedEffect
         kotlinx.coroutines.delay(700)
-        atlasUsedByCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { atlasProvider.dependentCountOf(path) }.getOrNull()
+        atlasFileRole = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { atlasProvider.fileRole(path) }.getOrNull()
         }
     }
     val atlasActiveId = remember(focusedActivePath) {
@@ -733,7 +733,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasMapView = atlasMapView,
                     atlasView = atlasView,
                     atlasLoadProgress = atlasLoadProgress,
-                    atlasUsedByCount = atlasUsedByCount,
+                    atlasFileRole = atlasFileRole,
                     onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
                     atlasActiveId = atlasActiveId,
