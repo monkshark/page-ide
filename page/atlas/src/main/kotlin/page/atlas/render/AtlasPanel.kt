@@ -138,6 +138,8 @@ fun AtlasContent(
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
+    showDock: Boolean = false,
+    onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
@@ -264,6 +266,14 @@ fun AtlasContent(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onExpand() }.padding(4.dp),
+                )
+            }
+            if (showDock) {
+                Text(
+                    text = "Dock",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { onDock() }.padding(4.dp),
                 )
             }
             Text(

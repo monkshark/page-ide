@@ -43,6 +43,7 @@ internal sealed interface IdeEvent {
         data object ToggleOutput : Panel
         data object CloseOutput : Panel
         data object ToggleAtlas : Panel
+        data object DockAtlas : Panel
         data object CloseAtlas : Panel
         data object FocusInAtlas : Panel
         data object ShowAtlasCalls : Panel

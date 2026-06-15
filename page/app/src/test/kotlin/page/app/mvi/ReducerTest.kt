@@ -68,33 +68,49 @@ class ReducerTest {
     }
 
     @Test
-    fun `toggle atlas flips open flag and close forces false`() {
+    fun `toggle atlas opens expanded by default and toggles off`() {
         val s = AppState()
         val opened = reduce(s, IdeEvent.Panel.ToggleAtlas)
-        assertTrue(opened.layout.atlasOpen)
+        assertFalse(opened.layout.atlasOpen)
+        assertEquals(ExpandedPanel.ATLAS, opened.layout.expandedPanel)
         val toggledOff = reduce(opened, IdeEvent.Panel.ToggleAtlas)
         assertFalse(toggledOff.layout.atlasOpen)
-        val closed = reduce(opened, IdeEvent.Panel.CloseAtlas)
-        assertFalse(closed.layout.atlasOpen)
+        assertEquals(ExpandedPanel.NONE, toggledOff.layout.expandedPanel)
     }
 
     @Test
-    fun `focus in atlas opens panel on dependency tab`() {
+    fun `dock atlas opens docked panel and collapses expanded`() {
+        val s = reduce(AppState(), IdeEvent.Panel.ToggleAtlas)
+        val docked = reduce(s, IdeEvent.Panel.DockAtlas)
+        assertTrue(docked.layout.atlasOpen)
+        assertEquals(ExpandedPanel.NONE, docked.layout.expandedPanel)
+    }
+
+    @Test
+    fun `close atlas clears docked and expanded`() {
+        val expanded = reduce(AppState(), IdeEvent.Panel.ToggleAtlas)
+        val closed = reduce(expanded, IdeEvent.Panel.CloseAtlas)
+        assertFalse(closed.layout.atlasOpen)
+        assertEquals(ExpandedPanel.NONE, closed.layout.expandedPanel)
+    }
+
+    @Test
+    fun `focus in atlas expands on dependency tab`() {
         val s = AppState().copy(
             layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.GRAPH),
         )
         val focused = reduce(s, IdeEvent.Panel.FocusInAtlas)
-        assertTrue(focused.layout.atlasOpen)
+        assertEquals(ExpandedPanel.ATLAS, focused.layout.expandedPanel)
         assertEquals(AtlasViewTab.DEPENDENCY, focused.layout.atlasViewTab)
     }
 
     @Test
-    fun `show atlas calls opens panel on calls tab`() {
+    fun `show atlas calls expands on calls tab`() {
         val s = AppState().copy(
             layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.DEPENDENCY),
         )
         val shown = reduce(s, IdeEvent.Panel.ShowAtlasCalls)
-        assertTrue(shown.layout.atlasOpen)
+        assertEquals(ExpandedPanel.ATLAS, shown.layout.expandedPanel)
         assertEquals(AtlasViewTab.CALLS, shown.layout.atlasViewTab)
     }
 
@@ -138,11 +154,12 @@ class ReducerTest {
     }
 
     @Test
-    fun `expand panel to atlas forces atlas open and collapse resets`() {
-        val s = AppState()
+    fun `expand panel to atlas closes dock and collapse resets`() {
+        val s = reduce(AppState(), IdeEvent.Panel.DockAtlas)
+        assertTrue(s.layout.atlasOpen)
         val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS))
         assertEquals(ExpandedPanel.ATLAS, expanded.layout.expandedPanel)
-        assertTrue(expanded.layout.atlasOpen)
+        assertFalse(expanded.layout.atlasOpen)
         val collapsed = reduce(expanded, IdeEvent.Panel.CollapsePanel)
         assertEquals(ExpandedPanel.NONE, collapsed.layout.expandedPanel)
     }

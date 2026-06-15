@@ -500,7 +500,7 @@ internal fun IdeMainLayout(
                     )
                 }
                 PillarPill(
-                    atlasActive = ui.atlasOpen,
+                    atlasActive = ui.atlasOpen || ui.expandedPanel == ExpandedPanel.ATLAS,
                     onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
                     currentPalette = palette,
                     onSelectPalette = onSelectPalette,
@@ -518,7 +518,7 @@ internal fun IdeMainLayout(
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
                 AtlasPanel(
                     slice = atlasSlice,
-                    onNodeClick = onOpenFile,
+                    onNodeClick = { path -> onOpenFile(path); onEvent(IdeEvent.Panel.CloseAtlas) },
                     onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
                     width = ui.atlasWidth,
                     projectMode = ui.atlasProjectMode,
@@ -767,8 +767,10 @@ internal fun IdeMainLayout(
         ) {
             AtlasContent(
                 slice = atlasSlice,
-                onNodeClick = onOpenFile,
+                onNodeClick = { path -> onOpenFile(path); onEvent(IdeEvent.Panel.CloseAtlas) },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+                showDock = true,
+                onDock = { onEvent(IdeEvent.Panel.DockAtlas) },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,
