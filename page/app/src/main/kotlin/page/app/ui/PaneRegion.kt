@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import page.app.*
 import page.app.state.EditorWorkspaceState
+import page.atlas.analyzer.ImportExtractor
 import page.editor.FileKind
 import page.editor.FileKinds
 import page.editor.SyntaxLexers
@@ -52,6 +53,7 @@ internal fun PaneRegion(
     onApplyRename: (RenameWorkspaceEdit) -> Unit = {},
     onRequestReferences: (Path, Int, Int, String) -> Unit = { _, _, _, _ -> },
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
+    onShowInAtlas: (Path) -> Unit = {},
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
     initialFoldedStartLines: Set<Int> = emptySet(),
@@ -175,6 +177,9 @@ internal fun PaneRegion(
                     onShowCallGraph = active?.path
                         ?.takeIf { activeCtrl?.supportsCallHierarchy == true }
                         ?.let { p -> { line, ch -> onShowCallGraph(p, line, ch) } },
+                    onShowInAtlas = active?.path
+                        ?.takeIf { ImportExtractor.supports(it) }
+                        ?.let { p -> { onShowInAtlas(p) } },
                     onRequestInlayHints = active?.path
                         ?.takeIf { activeCtrl?.status?.value == LspController.Status.READY }
                         ?.let { p ->

@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -466,14 +467,25 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runCatching { vcsMarksFrom(vcsProvider.statuses()) }.getOrDefault(emptyMap())
         }
     }
-    var atlasUsedByCount by remember { mutableStateOf<Int?>(null) }
+    var atlasFileRole by remember { mutableStateOf<page.atlas.graph.FileRole?>(null) }
     LaunchedEffect(atlasProvider, focusedActivePath) {
-        atlasUsedByCount = null
+        atlasFileRole = null
         val path = focusedActivePath ?: return@LaunchedEffect
         if (atlasProvider == null) return@LaunchedEffect
         kotlinx.coroutines.delay(700)
-        atlasUsedByCount = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { atlasProvider.dependentCountOf(path) }.getOrNull()
+        atlasFileRole = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { atlasProvider.fileRole(path) }.getOrNull()
+        }
+    }
+    var atlasProjectCycles by remember { mutableStateOf<List<List<page.atlas.graph.GraphNode>>>(emptyList()) }
+    LaunchedEffect(atlasProvider, focusedActivePath) {
+        if (atlasProvider == null) {
+            atlasProjectCycles = emptyList()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(700)
+        atlasProjectCycles = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { atlasProvider.projectCycles() }.getOrDefault(emptyList())
         }
     }
     val atlasActiveId = remember(focusedActivePath) {
@@ -494,6 +506,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val path = focusedActivePath ?: return@focusActiveInAtlas
         focusInAtlas(path)
     }
+    SideEffect { app.onFocusActiveInAtlas = focusActiveInAtlas }
 
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
@@ -734,7 +747,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasMapView = atlasMapView,
                     atlasView = atlasView,
                     atlasLoadProgress = atlasLoadProgress,
-                    atlasUsedByCount = atlasUsedByCount,
+                    atlasFileRole = atlasFileRole,
+                    atlasProjectCycles = atlasProjectCycles,
                     onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
                     atlasActiveId = atlasActiveId,
@@ -743,6 +757,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onAtlasCallsExpand = onAtlasCallsExpand,
                     onAtlasCallsOpen = onAtlasCallsOpen,
                     onShowCallGraph = showCallGraph,
+                    onShowInAtlas = focusInAtlas,
                     palette = palette,
                     onSelectPalette = { palette = it },
                   )

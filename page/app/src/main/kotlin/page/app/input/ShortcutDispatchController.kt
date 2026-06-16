@@ -34,6 +34,7 @@ internal class ShortcutDispatchController(
     private val jumpProblemRelative: (Boolean) -> Unit,
     private val refreshTree: () -> Unit,
     private val closeSearch: () -> Unit,
+    private val focusActiveInAtlas: () -> Unit,
 ) {
     fun handle(event: KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
@@ -72,6 +73,7 @@ internal class ShortcutDispatchController(
             ShortcutAction.JUMP_PROBLEM_PREV -> { jumpProblemRelative(false); true }
             ShortcutAction.REFRESH_TREE -> { refreshTree(); true }
             ShortcutAction.CLOSE_SEARCH -> { closeSearch(); true }
+            ShortcutAction.FOCUS_IN_ATLAS -> { focusActiveInAtlas(); true }
             ShortcutAction.NONE -> false
         }
     }
