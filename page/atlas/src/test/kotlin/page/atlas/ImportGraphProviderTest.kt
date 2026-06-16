@@ -288,6 +288,39 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `import edge appears when symbol lives in a differently named file`(@TempDir root: Path) {
+        val model = root.resolve("src/page/atlas/graph/GraphModel.kt")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "package page.atlas.graph\n\ndata class GraphSlice(val a: Int)\nclass GraphNode(val b: Int)")
+        val active = root.resolve("src/page/atlas/render/Canvas.kt")
+        Files.createDirectories(active.parent)
+        val text = """
+            package page.atlas.render
+
+            import page.atlas.graph.GraphSlice
+            import page.atlas.graph.GraphNode
+        """.trimIndent()
+        Files.writeString(active, text)
+        val slice = ImportGraphProvider(root).nodesForFile(active, text)
+        val workspace = slice.nodes.filter { it.kind == NodeKind.WORKSPACE_FILE }
+        assertEquals(1, workspace.size)
+        assertEquals(model.toAbsolutePath().normalize(), workspace.single().path)
+        assertEquals(1, slice.edges.size)
+        assertTrue(slice.nodes.none { it.kind == NodeKind.EXTERNAL })
+    }
+
+    @Test
+    fun `dependentCountOf counts importer of a symbol in a differently named file`(@TempDir root: Path) {
+        val model = root.resolve("graph/GraphModel.kt")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "package g\n\nclass GraphSlice\nclass GraphNode")
+        val importer = root.resolve("render/Canvas.kt")
+        Files.createDirectories(importer.parent)
+        Files.writeString(importer, "package r\n\nimport g.GraphSlice\n\nclass Canvas")
+        assertEquals(1, ImportGraphProvider(root).dependentCountOf(model))
+    }
+
+    @Test
     fun `extends outranks implements and import on the same edge`(@TempDir root: Path) {
         val base = root.resolve("src/sample/Base.kt")
         Files.createDirectories(base.parent)

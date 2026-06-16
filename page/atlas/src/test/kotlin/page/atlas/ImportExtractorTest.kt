@@ -182,4 +182,102 @@ class ImportExtractorTest {
         assertTrue(ImportExtractor.supports(Path.of("a.kt")))
         assertTrue(!ImportExtractor.supports(Path.of("notes.txt")))
     }
+
+    @Test
+    fun `kotlin top-level declarations across many symbols in one file`() {
+        val text = """
+            package page.atlas.graph
+
+            import foo.Bar
+
+            data class GraphSlice(val nodes: List<GraphNode>)
+
+            class GraphNode(val id: String)
+
+            sealed interface NodeKind {
+                object Active : NodeKind
+            }
+
+            enum class EdgeKind { IMPORT, CALLS }
+
+            internal object Registry {
+                val cache = mutableMapOf<String, Int>()
+            }
+
+            annotation class Marker(val name: String)
+
+            typealias Ids = List<String>
+
+            fun buildSlice(): GraphSlice? = null
+
+            private fun GraphNode.weight(): Int = 1
+
+            const val MAX = 100
+        """.trimIndent()
+        val decls = ImportExtractor.analyze(Path.of("GraphModel.kt"), text).declarations
+        assertEquals("page.atlas.graph", decls.packageName)
+        assertEquals(
+            listOf(
+                "GraphSlice", "GraphNode", "NodeKind", "EdgeKind", "Registry",
+                "Marker", "Ids", "buildSlice", "weight", "MAX",
+            ),
+            decls.symbols,
+        )
+    }
+
+    @Test
+    fun `kotlin nested declarations are excluded`() {
+        val text = """
+            package p
+
+            class Outer {
+                class Inner
+                fun member() {}
+                val field = 1
+            }
+        """.trimIndent()
+        val decls = ImportExtractor.analyze(Path.of("Outer.kt"), text).declarations
+        assertEquals("p", decls.packageName)
+        assertEquals(listOf("Outer"), decls.symbols)
+    }
+
+    @Test
+    fun `java top-level types in one file`() {
+        val text = """
+            package com.example.model;
+
+            import java.util.List;
+
+            @Deprecated
+            public final class Point {}
+
+            interface Shape {}
+
+            enum Color { RED, GREEN }
+
+            public record Pair(int a, int b) {}
+
+            @interface Json {}
+        """.trimIndent()
+        val decls = ImportExtractor.analyze(Path.of("Point.java"), text).declarations
+        assertEquals("com.example.model", decls.packageName)
+        assertEquals(listOf("Point", "Shape", "Color", "Pair", "Json"), decls.symbols)
+    }
+
+    @Test
+    fun `package-less kotlin file yields empty package`() {
+        val text = """
+            class Lonely
+        """.trimIndent()
+        val decls = ImportExtractor.analyze(Path.of("Lonely.kt"), text).declarations
+        assertEquals("", decls.packageName)
+        assertEquals(listOf("Lonely"), decls.symbols)
+    }
+
+    @Test
+    fun `unsupported language carries empty declarations`() {
+        val decls = ImportExtractor.analyze(Path.of("app.js"), "class Foo {}").declarations
+        assertEquals("", decls.packageName)
+        assertEquals(emptyList(), decls.symbols)
+    }
 }

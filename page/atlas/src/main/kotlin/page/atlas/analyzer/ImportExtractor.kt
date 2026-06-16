@@ -23,7 +23,17 @@ data class RawImport(
 
 data class RawRelation(val typeName: String, val kind: EdgeKind)
 
-data class FileAnalysis(val imports: List<RawImport>, val relations: List<RawRelation>) {
+data class FileDeclarations(val packageName: String, val symbols: List<String>) {
+    companion object {
+        val EMPTY = FileDeclarations("", emptyList())
+    }
+}
+
+data class FileAnalysis(
+    val imports: List<RawImport>,
+    val relations: List<RawRelation>,
+    val declarations: FileDeclarations = FileDeclarations.EMPTY,
+) {
     companion object {
         val EMPTY = FileAnalysis(emptyList(), emptyList())
     }
@@ -34,26 +44,58 @@ object ImportExtractor {
     private enum class Lang(
         val nodeTypes: Set<String>,
         val relationTypes: Set<String>,
+        val declTypes: Set<String>,
+        val packageType: String?,
         val factory: () -> TSLanguage,
     ) {
         JAVA(
             setOf("import_declaration"),
             setOf("superclass", "super_interfaces", "extends_interfaces"),
+            setOf(
+                "class_declaration",
+                "interface_declaration",
+                "enum_declaration",
+                "record_declaration",
+                "annotation_type_declaration",
+            ),
+            "package_declaration",
             ::TreeSitterJava,
         ),
-        KOTLIN(setOf("import_header"), setOf("delegation_specifier"), ::TreeSitterKotlin),
-        PYTHON(setOf("import_statement", "import_from_statement"), setOf("class_definition"), ::TreeSitterPython),
-        JS(setOf("import_statement"), setOf("class_heritage"), ::TreeSitterJavascript),
+        KOTLIN(
+            setOf("import_header"),
+            setOf("delegation_specifier"),
+            setOf(
+                "class_declaration",
+                "object_declaration",
+                "function_declaration",
+                "property_declaration",
+                "type_alias",
+            ),
+            "package_header",
+            ::TreeSitterKotlin,
+        ),
+        PYTHON(
+            setOf("import_statement", "import_from_statement"),
+            setOf("class_definition"),
+            emptySet(),
+            null,
+            ::TreeSitterPython,
+        ),
+        JS(setOf("import_statement"), setOf("class_heritage"), emptySet(), null, ::TreeSitterJavascript),
         TS(
             setOf("import_statement"),
             setOf("extends_clause", "implements_clause", "extends_type_clause"),
+            emptySet(),
+            null,
             ::TreeSitterTypescript,
         ),
-        GO(setOf("import_spec"), emptySet(), ::TreeSitterGo),
-        RUST(setOf("use_declaration"), emptySet(), ::TreeSitterRust),
+        GO(setOf("import_spec"), emptySet(), emptySet(), null, ::TreeSitterGo),
+        RUST(setOf("use_declaration"), emptySet(), emptySet(), null, ::TreeSitterRust),
         DART(
             setOf("import_specification", "library_export"),
             setOf("superclass", "interfaces"),
+            emptySet(),
+            null,
             ::TreeSitterDart,
         ),
     }
@@ -77,6 +119,17 @@ object ImportExtractor {
 
     private val parsers = mutableMapOf<Lang, TSParser>()
 
+    private val DECL_MODIFIERS = setOf(
+        "public", "private", "protected", "internal", "abstract", "final", "sealed", "open", "data",
+        "inline", "value", "companion", "external", "override", "lateinit", "const", "suspend", "operator",
+        "infix", "tailrec", "static", "native", "synchronized", "transient", "volatile", "strictfp",
+        "default", "expect", "actual",
+    )
+
+    private val DECL_KEYWORDS = setOf(
+        "class", "interface", "object", "fun", "val", "var", "typealias", "record", "enum", "annotation",
+    )
+
     fun supports(path: Path): Boolean = extOf(path) in langs
 
     fun extract(path: Path, text: String): List<RawImport> = analyze(path, text).imports
@@ -93,7 +146,46 @@ object ImportExtractor {
         return FileAnalysis(
             imports.flatMap { (type, snippet) -> parse(lang, type, snippet) },
             relations.flatMap { (type, snippet) -> parseRelation(lang, type, snippet) },
+            collectDeclarations(tree.rootNode, lang, text, byteToChar),
         )
+    }
+
+    private fun collectDeclarations(root: TSNode, lang: Lang, text: String, byteToChar: IntArray): FileDeclarations {
+        if (lang.declTypes.isEmpty() && lang.packageType == null) return FileDeclarations.EMPTY
+        val cursor = TSTreeCursor(root)
+        var packageName = ""
+        val symbols = mutableListOf<String>()
+        if (cursor.gotoFirstChild()) {
+            do {
+                val node = cursor.currentNode()
+                val type = node.type ?: ""
+                when {
+                    type == lang.packageType -> packageName = parsePackage(nodeText(node, text, byteToChar))
+                    type in lang.declTypes ->
+                        declaredName(nodeText(node, text, byteToChar))?.let { symbols += it }
+                }
+            } while (cursor.gotoNextSibling())
+        }
+        return FileDeclarations(packageName, symbols)
+    }
+
+    private fun parsePackage(snippet: String): String =
+        snippet.trim().removePrefix("package").trim().removeSuffix(";").substringBefore('\n').trim()
+
+    private fun declaredName(snippet: String): String? {
+        val header = snippet.substringBefore('{').substringBefore('=').replace("@interface", " interface ")
+        val cleaned = header.replace(Regex("@[\\w.]+(\\s*\\([^)]*\\))?"), " ")
+        val tokens = cleaned.split(Regex("\\s+")).filter { it.isNotBlank() }
+        var i = 0
+        while (i < tokens.size && tokens[i] in DECL_MODIFIERS) i++
+        if (i >= tokens.size) return null
+        if ((tokens[i] == "enum" || tokens[i] == "annotation") && i + 1 < tokens.size && tokens[i + 1] == "class") i++
+        if (tokens[i] !in DECL_KEYWORDS || i + 1 >= tokens.size) return null
+        val name = tokens[i + 1]
+            .substringBefore('<').substringBefore('(').substringBefore(':').substringAfterLast('.').trim()
+        return name.takeIf {
+            it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() }
+        }
     }
 
     private fun parserFor(lang: Lang): TSParser = synchronized(parsers) {
