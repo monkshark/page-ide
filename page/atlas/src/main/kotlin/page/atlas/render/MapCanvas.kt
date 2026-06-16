@@ -46,6 +46,7 @@ import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.min
 import kotlin.math.roundToInt
+import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphSlice
 import page.ui.CompactDropdown
 import page.ui.CompactMenuItem
@@ -350,6 +351,11 @@ internal fun MapCanvas(
                 }
             }
             val baseAlpha = mapEdgeBaseAlpha(edgesToDraw.size)
+            val boxDegree = HashMap<String, Int>()
+            for (e in toMap.edges) {
+                boxDegree.merge(e.from, 1, Int::plus)
+                boxDegree.merge(e.to, 1, Int::plus)
+            }
             val showAllBadges = edgesToDraw.size <= MAP_EDGE_BADGE_LIMIT
             for ((edge, a) in edgesToDraw) {
                 val from = byId[edge.from] ?: continue
@@ -368,14 +374,26 @@ internal fun MapCanvas(
                 val touchesSelection = edge.from == selectedId || edge.to == selectedId
                 val inCycle = (edge.from to edge.to) in cycleKeys
                 val onTrace = (edge.from to edge.to) in traceKeys
+                val inherit = edge.kind == EdgeKind.IMPLEMENTS || edge.kind == EdgeKind.EXTENDS
+                val maxDegree = maxOf(boxDegree[edge.from] ?: 0, boxDegree[edge.to] ?: 0)
+                val restAlpha =
+                    if (inherit) (baseAlpha + 0.12f).coerceAtMost(0.92f)
+                    else baseAlpha * mapEdgeDegreeFade(maxDegree)
                 val lineColor = when {
                     onTrace -> tertiary.copy(alpha = 0.95f)
                     inCycle && !focusActive -> errorColor.copy(alpha = 0.85f)
-                    !focusActive -> edgeColor.copy(alpha = baseAlpha)
+                    !focusActive && inherit -> secondary.copy(alpha = restAlpha)
+                    !focusActive -> edgeColor.copy(alpha = restAlpha)
                     edge.from == selectedId -> primary.copy(alpha = 0.9f)
                     edge.to == selectedId -> tertiary.copy(alpha = 0.9f)
                     inCycle -> errorColor.copy(alpha = 0.35f)
                     else -> edgeColor.copy(alpha = 0.15f)
+                }
+                val dashed = inCycle || (edge.kind == EdgeKind.IMPLEMENTS && !onTrace && !focusActive)
+                val strokeWidth = when {
+                    onTrace -> maxOf(stroke, 3f * inv)
+                    inherit && !focusActive -> stroke * 1.3f
+                    else -> stroke
                 }
                 val curve = Path().apply {
                     moveTo(start.x, start.y)
@@ -385,9 +403,9 @@ internal fun MapCanvas(
                     curve,
                     lineColor.fade(a),
                     style = Stroke(
-                        width = if (onTrace) maxOf(stroke, 3f * inv) else stroke,
+                        width = strokeWidth,
                         cap = StrokeCap.Round,
-                        pathEffect = if (inCycle) {
+                        pathEffect = if (dashed) {
                             PathEffect.dashPathEffect(floatArrayOf(7f * inv, 5f * inv))
                         } else {
                             null
@@ -648,6 +666,9 @@ internal fun traceEdgeKeys(boxes: List<MapBox>, path: List<String>): Set<Pair<St
 
 internal fun mapEdgeBaseAlpha(edgeCount: Int): Float =
     0.8f - 0.5f * ((edgeCount - 12f) / 48f).coerceIn(0f, 1f)
+
+internal fun mapEdgeDegreeFade(maxEndpointDegree: Int): Float =
+    (0.55f + 0.45f * ((maxEndpointDegree - 1).coerceAtLeast(0)) / 4f).coerceAtMost(1f)
 
 internal fun minimalPanInto(pan: Offset, box: MapBox, scale: Float, canvas: IntSize): Offset? {
     if (canvas.width <= 0 || canvas.height <= 0 || scale <= 0f) return null

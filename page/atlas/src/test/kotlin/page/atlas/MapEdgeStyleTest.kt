@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import page.atlas.render.mapEdgeBaseAlpha
+import page.atlas.render.mapEdgeDegreeFade
 
 class MapEdgeStyleTest {
 
@@ -24,5 +25,17 @@ class MapEdgeStyleTest {
     fun `dense maps clamp at the floor`() {
         assertEquals(0.3f, mapEdgeBaseAlpha(60))
         assertEquals(0.3f, mapEdgeBaseAlpha(500))
+    }
+
+    @Test
+    fun `leaf edges fade more than hub edges`() {
+        assertTrue(mapEdgeDegreeFade(1) < mapEdgeDegreeFade(3))
+        assertTrue(mapEdgeDegreeFade(3) < mapEdgeDegreeFade(10))
+    }
+
+    @Test
+    fun `well connected endpoints keep full strength`() {
+        assertEquals(1f, mapEdgeDegreeFade(5))
+        assertEquals(1f, mapEdgeDegreeFade(100))
     }
 }
