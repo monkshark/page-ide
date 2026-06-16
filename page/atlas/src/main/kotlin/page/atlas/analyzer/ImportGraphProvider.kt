@@ -13,6 +13,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
     private val index = WorkspaceIndex(root)
     private val cache = HashMap<String, CachedAnalysis>()
+    private val declarations = DeclarationIndex(index) { cachedAnalysis(it) }
 
     private data class CachedAnalysis(val mtime: Long, val analysis: FileAnalysis)
 
@@ -35,7 +36,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
-                val resolved = ImportResolver.resolve(raw, file, index)
+                val resolved = ImportResolver.resolve(raw, file, index, declarations)
                 val id = resolved?.let(::nodeId) ?: raw.target
                 if (id == fileId) continue
                 val node = nodes[id] ?: addNode(nodes, queue, id, raw, resolved) ?: continue
@@ -76,7 +77,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
-                val resolvedImport = ImportResolver.resolve(raw, file, index) ?: continue
+                val resolvedImport = ImportResolver.resolve(raw, file, index, declarations) ?: continue
                 val id = nodeId(resolvedImport)
                 if (id == fileId) continue
                 val node = nodes[id] ?: continue
@@ -99,7 +100,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             if (fileId == targetId) continue
             val analysis = cachedAnalysis(file) ?: continue
             val depends = mergeByTarget(analysis.imports).any { raw ->
-                ImportResolver.resolve(raw, file, index)?.let(::nodeId) == targetId
+                ImportResolver.resolve(raw, file, index, declarations)?.let(::nodeId) == targetId
             }
             if (depends) count++
         }
