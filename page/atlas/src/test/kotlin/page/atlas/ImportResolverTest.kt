@@ -6,6 +6,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.io.TempDir
+import page.atlas.analyzer.DeclarationIndex
+import page.atlas.analyzer.ImportExtractor
 import page.atlas.analyzer.ImportResolver
 import page.atlas.analyzer.RawImport
 import page.atlas.analyzer.WorkspaceIndex
@@ -127,5 +129,55 @@ class ImportResolverTest {
         Files.writeString(active, "package main")
         assertNull(ImportResolver.resolve(RawImport("java.util.List", false), active, WorkspaceIndex(root)))
         assertNull(ImportResolver.resolve(RawImport("express", false), root.resolve("app.ts"), WorkspaceIndex(root)))
+    }
+
+    private fun declIndex(root: Path): DeclarationIndex =
+        DeclarationIndex(WorkspaceIndex(root)) { file -> ImportExtractor.analyze(file, Files.readString(file)) }
+            .also { it.refreshIfStale() }
+
+    @Test
+    fun `kotlin import resolves via declaration index when filename differs`(@TempDir root: Path) {
+        val model = root.resolve("src/page/atlas/graph/GraphModel.kt")
+        Files.createDirectories(model.parent)
+        Files.writeString(
+            model,
+            "package page.atlas.graph\n\ndata class GraphSlice(val a: Int)\nclass GraphNode(val b: Int)",
+        )
+        val active = root.resolve("src/page/atlas/render/Canvas.kt")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "package page.atlas.render")
+        val index = WorkspaceIndex(root)
+        val decls = declIndex(root)
+        assertEquals(model, ImportResolver.resolve(RawImport("page.atlas.graph.GraphSlice", false), active, index, decls))
+        assertEquals(model, ImportResolver.resolve(RawImport("page.atlas.graph.GraphNode", false), active, index, decls))
+    }
+
+    @Test
+    fun `kotlin member import resolves to declaring file via index`(@TempDir root: Path) {
+        val model = root.resolve("util/Helpers.kt")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "package app.util\n\nobject Strings")
+        val active = root.resolve("Main.kt")
+        Files.writeString(active, "package app")
+        val decls = declIndex(root)
+        assertEquals(
+            model,
+            ImportResolver.resolve(RawImport("app.util.Strings.join", false), active, WorkspaceIndex(root), decls),
+        )
+    }
+
+    @Test
+    fun `index collision falls back to filename heuristic`(@TempDir root: Path) {
+        val a = root.resolve("a/Config.kt")
+        Files.createDirectories(a.parent)
+        Files.writeString(a, "package app\nclass Config")
+        val b = root.resolve("b/Settings.kt")
+        Files.createDirectories(b.parent)
+        Files.writeString(b, "package app\nclass Config")
+        val active = root.resolve("Main.kt")
+        Files.writeString(active, "package app")
+        val resolved =
+            ImportResolver.resolve(RawImport("app.Config", false), active, WorkspaceIndex(root), declIndex(root))
+        assertNull(resolved)
     }
 }

@@ -57,13 +57,18 @@ class WorkspaceIndex(private val root: Path) {
 
 object ImportResolver {
 
-    fun resolve(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
+    fun resolve(
+        raw: RawImport,
+        activeFile: Path,
+        index: WorkspaceIndex,
+        declIndex: DeclarationIndex? = null,
+    ): Path? {
         return when (extOf(activeFile)) {
             "js", "jsx", "mjs", "cjs", "ts", "tsx" -> resolveJsRelative(raw, activeFile)
             "py", "pyi" ->
                 if (raw.relative) resolvePythonRelative(raw, activeFile)
-                else resolveDotted(raw, activeFile, index, listOf("py", "pyi"))
-            "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"))
+                else resolveDotted(raw, activeFile, index, listOf("py", "pyi"), declIndex)
+            "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"), declIndex)
             "go" -> resolveGo(raw, index)
             "rs" -> resolveRust(raw, index)
             "dart" -> resolveDart(raw, activeFile, index)
@@ -84,8 +89,22 @@ object ImportResolver {
         return probes.firstOrNull { Files.isRegularFile(it) }
     }
 
-    private fun resolveDotted(raw: RawImport, activeFile: Path, index: WorkspaceIndex, exts: List<String>): Path? {
+    private fun resolveDotted(
+        raw: RawImport,
+        activeFile: Path,
+        index: WorkspaceIndex,
+        exts: List<String>,
+        declIndex: DeclarationIndex?,
+    ): Path? {
         index.refreshIfStale()
+        if (declIndex != null) {
+            declIndex.refreshIfStale()
+            declIndex.fileForFqn(raw.target)?.let { if (extOf(it) in exts) return it }
+            val enclosing = raw.target.substringBeforeLast('.', "")
+            if (enclosing.isNotEmpty()) {
+                declIndex.fileForFqn(enclosing)?.let { if (extOf(it) in exts) return it }
+            }
+        }
         val segments = raw.target.split('.').filter { it.isNotEmpty() }
         if (segments.isEmpty()) return null
         val active = normalized(activeFile)
