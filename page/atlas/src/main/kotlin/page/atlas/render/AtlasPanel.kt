@@ -38,14 +38,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -56,9 +48,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -76,6 +66,8 @@ import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
+import page.atlas.graph.aggregateModules
+import page.atlas.interaction.OverviewSelection
 
 @Composable
 fun AtlasPanel(
@@ -146,6 +138,8 @@ fun AtlasContent(
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
+    showDock: Boolean = false,
+    onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
@@ -166,6 +160,17 @@ fun AtlasContent(
     val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
     }
+    val overviewView = remember { MapViewState() }
+    var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
+    val drillScope = remember(overviewSelection.drillPath) {
+        overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
+    }
+    val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
+    val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
+    LaunchedEffect(drillScope) { overviewView.fitted = false }
+    val activeModuleId = remember(moduleGraph) {
+        moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
+    }
     val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
     val impacted = remember(slice, effectiveMarks) {
         vcsImpacted(slice.edges, effectiveMarks.keys)
@@ -185,6 +190,7 @@ fun AtlasContent(
         if (selectedId == null) tracePath = emptyList()
     }
     val searchSlice = when (viewTab) {
+        AtlasViewTab.OVERVIEW -> slice
         AtlasViewTab.DEPENDENCY -> mapSlice
         AtlasViewTab.GRAPH -> slice
         AtlasViewTab.CALLS -> callsSlice
@@ -214,6 +220,15 @@ fun AtlasContent(
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
                     searchOpen = true
+                    true
+                } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
+                    viewTab == AtlasViewTab.OVERVIEW &&
+                    (overviewSelection.kind != OverviewSelection.Kind.NONE || overviewSelection.drillPath.isNotEmpty())
+                ) {
+                    overviewSelection = when {
+                        overviewSelection.kind != OverviewSelection.Kind.NONE -> overviewSelection.clear()
+                        else -> overviewSelection.drillUp()
+                    }
                     true
                 } else {
                     false
@@ -253,6 +268,14 @@ fun AtlasContent(
                     modifier = Modifier.clickable { onExpand() }.padding(4.dp),
                 )
             }
+            if (showDock) {
+                Text(
+                    text = "Dock",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { onDock() }.padding(4.dp),
+                )
+            }
             Text(
                 text = "Close",
                 style = MaterialTheme.typography.labelSmall,
@@ -269,6 +292,7 @@ fun AtlasContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            ModeChip("Overview", viewTab == AtlasViewTab.OVERVIEW) { onViewTabChange(AtlasViewTab.OVERVIEW) }
             ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
             ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
             if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
@@ -278,7 +302,7 @@ fun AtlasContent(
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
             }
-            if (viewTab == AtlasViewTab.DEPENDENCY) {
+            if (viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW) {
                 ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
             }
             if (viewTab == AtlasViewTab.GRAPH) {
@@ -340,12 +364,72 @@ fun AtlasContent(
                 Text(
                     text = when {
                         progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
-                        projectMode || viewTab == AtlasViewTab.DEPENDENCY -> "No source files"
+                        projectMode || viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW -> "No source files"
                         else -> "No imports"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else if (viewTab == AtlasViewTab.OVERVIEW) {
+            if (overviewSelection.drillPath.isNotEmpty()) {
+                OverviewBreadcrumb(
+                    drillPath = overviewSelection.drillPath,
+                    onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                )
+                Divider()
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                OverviewCanvas(
+                    graph = moduleGraph,
+                    layout = overviewLayout,
+                    activeModuleId = activeModuleId,
+                    followActive = followActive,
+                    view = overviewView,
+                    selection = overviewSelection,
+                    onSelectionChange = { overviewSelection = it },
+                    onOpenFile = onNodeClick,
+                )
+                val selectedModule = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
+                    ?.let { id -> moduleGraph.nodes.firstOrNull { it.id == id } }
+                if (selectedModule != null) {
+                    OverviewInspector(
+                        graph = moduleGraph,
+                        module = selectedModule,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        onOpenFile = onNodeClick,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
+                val pathFrom = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                val pathTo = overviewSelection.pathTarget
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                if (pathFrom != null && pathTo != null) {
+                    OverviewPathPanel(
+                        graph = moduleGraph,
+                        from = pathFrom,
+                        to = pathTo,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
+                if (moduleGraph.droppedModules > 0) {
+                    Text(
+                        text = "Showing largest ${moduleGraph.nodes.size} modules · ${moduleGraph.droppedModules} smaller hidden",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -440,6 +524,46 @@ fun AtlasContent(
 }
 
 @Composable
+private fun OverviewBreadcrumb(
+    drillPath: List<String>,
+    onNavigate: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        BreadcrumbSegment("root", current = false) { onNavigate(0) }
+        drillPath.forEachIndexed { index, id ->
+            Text(
+                text = "/",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val last = index == drillPath.lastIndex
+            BreadcrumbSegment(crumbLabel(id), current = last) { onNavigate(index + 1) }
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbSegment(label: String, current: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+        modifier = if (current) Modifier else Modifier.clickable { onClick() },
+    )
+}
+
+private fun crumbLabel(id: String): String =
+    id.substringAfterLast('/').substringAfterLast('\\').ifEmpty { id }
+
+@Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text = label,
@@ -484,8 +608,7 @@ private fun LegendRow(
 
 @Composable
 private fun LegendItem(label: String, kind: EdgeKind) {
-    val importColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
+    val atlas = rememberAtlasTheme()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -494,21 +617,7 @@ private fun LegendItem(label: String, kind: EdgeKind) {
             val y = size.height / 2f
             val from = Offset(0f, y)
             val to = Offset(size.width, y)
-            when (kind) {
-                EdgeKind.IMPORT -> drawLine(importColor, from, to, strokeWidth = 1f)
-                EdgeKind.EXTENDS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 2f)
-                    drawArrowHead(from, to, 0f, relationColor, filled = true)
-                }
-                EdgeKind.IMPLEMENTS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 1.5f, pathEffect = dashEffect())
-                    drawArrowHead(from, to, 0f, relationColor, filled = false)
-                }
-                EdgeKind.CALLS -> {
-                    drawLine(relationColor, from, to, strokeWidth = 1f)
-                    drawArrowHead(from, to, 0f, relationColor, filled = true)
-                }
-            }
+            drawAtlasEdge(atlas, kind, from, to, targetRadius = 0f, alpha = 1f)
         }
         Text(
             text = label,
@@ -572,13 +681,8 @@ private fun AtlasCanvas(
         }
         map
     }
-    val activeColor = MaterialTheme.colorScheme.primary
-    val workspaceColor = MaterialTheme.colorScheme.secondary
-    val externalColor = MaterialTheme.colorScheme.outline
-    val edgeColor = MaterialTheme.colorScheme.outlineVariant
-    val relationColor = MaterialTheme.colorScheme.tertiary
-    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val labelStyle = TextStyle(fontSize = 10.sp, color = labelColor)
+    val atlas = rememberAtlasTheme()
+    val labelStyle = TextStyle(fontSize = 10.sp, color = atlas.label)
     val textMeasurer = rememberTextMeasurer()
 
     fun nodeRadius(id: String): Float {
@@ -676,12 +780,7 @@ private fun AtlasCanvas(
             val c = projectPoint(0f, ring.y, 0f, yaw, pitch, zoom, size.width, size.height)
             val rx = ring.radius * c.scale
             val ry = rx * abs(sin(pitch))
-            drawOval(
-                color = edgeColor.copy(alpha = 0.1f),
-                topLeft = Offset(c.x - rx, c.y - ry),
-                size = Size(rx * 2f, ry * 2f),
-                style = Stroke(width = 1f),
-            )
+            drawAtlasRing(atlas, Offset(c.x, c.y), rx, ry)
         }
 
         for (edge in slice.edges) {
@@ -692,77 +791,26 @@ private fun AtlasCanvas(
             val start = Offset(from.x, from.y)
             val end = Offset(to.x, to.y)
             val targetRadius = nodeRadius(edge.to) * to.scale
-            when (edge.kind) {
-                EdgeKind.IMPORT -> drawLine(
-                    color = edgeColor.copy(alpha = alpha),
-                    start = start,
-                    end = end,
-                    strokeWidth = 1f,
-                )
-                EdgeKind.EXTENDS -> {
-                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 2f)
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
-                }
-                EdgeKind.IMPLEMENTS -> {
-                    drawLine(
-                        color = relationColor.copy(alpha = alpha),
-                        start = start,
-                        end = end,
-                        strokeWidth = 1.5f,
-                        pathEffect = dashEffect(),
-                    )
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = false)
-                }
-                EdgeKind.CALLS -> {
-                    drawLine(relationColor.copy(alpha = alpha), start, end, strokeWidth = 1f)
-                    drawArrowHead(start, end, targetRadius, relationColor.copy(alpha = alpha), filled = true)
-                }
-            }
+            drawAtlasEdge(atlas, edge.kind, start, end, targetRadius, alpha)
         }
         for (p in projectedNodes) {
             val kind = kindById[p.id] ?: continue
-            val base = when (kind) {
-                NodeKind.ACTIVE -> activeColor
-                NodeKind.WORKSPACE_FILE -> workspaceColor
-                NodeKind.EXTERNAL -> externalColor
-                NodeKind.SYMBOL -> relationColor
-            }
             val pos = Offset(p.x, p.y)
             val r = (nodeRadius(p.id) * p.scale).coerceAtLeast(2f)
             var alpha = depthAlpha(p.depth)
             if (p.id in freshIds) alpha *= morphT
             if (highlighted != null && p.id !in highlighted) alpha *= 0.18f
             alpha = alpha.coerceIn(0f, 1f)
-            if (kind == NodeKind.ACTIVE) {
-                drawCircle(base.copy(alpha = alpha * 0.18f), radius = r * 2.4f, center = pos)
-                drawCircle(base.copy(alpha = alpha * 0.25f), radius = r * 1.6f, center = pos)
-            }
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        lerp(base, Color.White, 0.55f).copy(alpha = alpha),
-                        base.copy(alpha = alpha),
-                        lerp(base, Color.Black, 0.35f).copy(alpha = alpha),
-                    ),
-                    center = pos + Offset(-r * 0.35f, -r * 0.35f),
-                    radius = (r * 1.7f).coerceAtLeast(1f),
-                ),
-                radius = r,
-                center = pos,
-            )
+            drawAtlasNode(atlas, kind, pos, r, alpha)
             val mark = vcsMarks[p.id]
             if (mark != null) {
-                drawCircle(vcsColor(mark).copy(alpha = alpha * 0.9f), radius = r + 2.5f, center = pos, style = Stroke(width = 1.5f))
+                drawAtlasVcsMark(mark, pos, r, alpha)
             } else {
                 val impactDepth = vcsImpacted[p.id]
-                if (impactDepth != null) {
-                    val impactA = alpha * if (impactDepth <= 1) 0.85f else 0.4f
-                    drawCircle(vcsImpactColor.copy(alpha = impactA), radius = r + 2.5f, center = pos, style = Stroke(width = 1f))
-                }
+                if (impactDepth != null) drawAtlasVcsImpact(impactDepth, pos, r, alpha)
             }
             if (p.id == selectedId) {
-                val ringR = r + if (mark != null) 5f else 3f
-                drawCircle(labelColor.copy(alpha = alpha * 0.8f), radius = ringR, center = pos, style = Stroke(width = 1.5f))
+                drawAtlasSelectionRing(atlas, pos, r, hasMark = mark != null, alpha = alpha)
             }
             val showLabel = p.id == hoverId ||
                 p.id == selectedId ||
@@ -772,12 +820,7 @@ private fun AtlasCanvas(
             if (showLabel) {
                 val raw = labelById[p.id] ?: continue
                 val label = if (raw.length > 28) raw.take(27) + "…" else raw
-                val measured = textMeasurer.measure(AnnotatedString(label), labelStyle)
-                drawText(
-                    textLayoutResult = measured,
-                    color = labelColor.copy(alpha = alpha),
-                    topLeft = Offset(pos.x - measured.size.width / 2f, pos.y + r + 3f),
-                )
+                drawAtlasLabel(atlas, textMeasurer, labelStyle, label, pos, r, alpha)
             }
         }
     }
@@ -795,27 +838,3 @@ private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel 
     )
 }
 
-private fun dashEffect(): PathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))
-
-private fun DrawScope.drawArrowHead(
-    from: Offset,
-    to: Offset,
-    targetRadius: Float,
-    color: Color,
-    filled: Boolean,
-) {
-    val direction = to - from
-    val length = hypot(direction.x, direction.y)
-    if (length < 1f) return
-    val unit = Offset(direction.x / length, direction.y / length)
-    val tip = to - unit * (targetRadius + 2f)
-    val base = tip - unit * 9f
-    val normal = Offset(-unit.y, unit.x) * 4.5f
-    val head = Path().apply {
-        moveTo(tip.x, tip.y)
-        lineTo(base.x + normal.x, base.y + normal.y)
-        lineTo(base.x - normal.x, base.y - normal.y)
-        close()
-    }
-    if (filled) drawPath(head, color) else drawPath(head, color, style = Stroke(width = 1.5f))
-}

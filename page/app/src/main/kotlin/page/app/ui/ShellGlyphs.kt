@@ -117,6 +117,54 @@ internal fun OutputGlyph(tint: Color, size: Dp = 14.dp) {
     }
 }
 
+private fun roundedTriangle(vertices: List<Offset>, radius: Float): Path {
+    val path = Path()
+    val n = vertices.size
+    fun toward(from: Offset, to: Offset): Offset {
+        val dx = to.x - from.x
+        val dy = to.y - from.y
+        val len = kotlin.math.hypot(dx, dy)
+        return Offset(from.x + dx / len * radius, from.y + dy / len * radius)
+    }
+    for (i in 0 until n) {
+        val v = vertices[i]
+        val prev = vertices[(i + n - 1) % n]
+        val next = vertices[(i + 1) % n]
+        val pIn = toward(v, prev)
+        val pOut = toward(v, next)
+        if (i == 0) path.moveTo(pIn.x, pIn.y) else path.lineTo(pIn.x, pIn.y)
+        path.quadraticBezierTo(v.x, v.y, pOut.x, pOut.y)
+    }
+    path.close()
+    return path
+}
+
+@Composable
+internal fun ProblemsGlyph(tint: Color, size: Dp = 14.dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val strokeW = w * 0.1f
+        val triangle = roundedTriangle(
+            listOf(
+                Offset(w * 0.5f, h * 0.01f),
+                Offset(w * 0.99f, h * 0.83f),
+                Offset(w * 0.01f, h * 0.83f),
+            ),
+            radius = w * 0.17f,
+        )
+        drawPath(triangle, color = tint, style = strokeStyle(strokeW))
+        drawLine(
+            color = tint,
+            start = Offset(w * 0.5f, h * 0.35f),
+            end = Offset(w * 0.5f, h * 0.57f),
+            strokeWidth = strokeW,
+            cap = StrokeCap.Round,
+        )
+        drawCircle(color = tint, radius = strokeW * 0.62f, center = Offset(w * 0.5f, h * 0.70f))
+    }
+}
+
 @Composable
 internal fun SettingsGlyph(tint: Color, size: Dp = 14.dp) {
     Canvas(modifier = Modifier.size(size)) {

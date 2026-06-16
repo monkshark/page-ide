@@ -42,7 +42,7 @@ data class MapModel(
 }
 
 internal const val MAP_GAP = 64f
-internal const val MAP_PUSH_GAP = 22f
+internal const val MAP_PUSH_GAP = 8f
 internal const val MAP_PAD = 18f
 internal const val MAP_HEADER_H = 16f
 internal const val MAP_FILE_H = 20f
@@ -393,32 +393,79 @@ private fun shelfPack(
     fun priority(id: String): Int =
         rank.entries.filter { belongsTo(it.key, id) }.minOfOrNull { it.value }
             ?: if (id in offsets) Int.MAX_VALUE - 1 else Int.MAX_VALUE
-    val order = items.indices.sortedBy { priority(items[it].id) }
-    val placed = ArrayList<FloatArray>(items.size)
-    val pushers = ArrayList<Boolean>(items.size)
+    val homeRect = Array(items.size) { i ->
+        val off = offsets[items[i].id]
+        floatArrayOf(homes[i].first + (off?.x ?: 0f), homes[i].second + (off?.y ?: 0f), items[i].w, items[i].h)
+    }
+    val grown = BooleanArray(items.size) { i ->
+        items[i].w > items[i].stableW + 0.5f || items[i].h > items[i].stableH + 0.5f
+    }
+    val finalRect = Array(items.size) { homeRect[it].copyOf() }
+    fun overlapRect(a: FloatArray, b: FloatArray): Boolean =
+        a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
+    fun relocate(index: Int, against: List<Int>) {
+        val item = items[index]
+        var px = homeRect[index][0]
+        var py = homeRect[index][1]
+        fun hit(hx: Float, hy: Float): FloatArray? {
+            val probe = floatArrayOf(hx, hy, item.w, item.h)
+            for (j in against) {
+                if (j == index) continue
+                if (overlapRect(probe, finalRect[j])) return finalRect[j]
+            }
+            return null
+        }
+        fun clearDist(dx: Int, dy: Int): Float {
+            var sx = px
+            var sy = py
+            var dist = 0f
+            var guard = 0
+            while (guard++ < 256) {
+                val r = hit(sx, sy) ?: break
+                val step = when {
+                    dx > 0 -> r[0] + r[2] + MAP_PUSH_GAP - sx
+                    dx < 0 -> sx + item.w + MAP_PUSH_GAP - r[0]
+                    dy > 0 -> r[1] + r[3] + MAP_PUSH_GAP - sy
+                    else -> sy + item.h + MAP_PUSH_GAP - r[1]
+                }
+                sx += dx * step
+                sy += dy * step
+                dist += step
+            }
+            return dist
+        }
+        if (hit(px, py) != null) {
+            val right = clearDist(1, 0)
+            val left = clearDist(-1, 0)
+            val down = clearDist(0, 1)
+            val up = clearDist(0, -1)
+            when (minOf(right, left, down, up)) {
+                right -> px += right
+                left -> px -= left
+                down -> py += down
+                else -> py -= up
+            }
+        }
+        finalRect[index] = floatArrayOf(px, py, item.w, item.h)
+    }
+    val grownOrder = items.indices.filter { grown[it] }
+        .sortedWith(compareBy({ priority(items[it].id) }, { it }))
+    val placedGrown = ArrayList<Int>()
+    for (index in grownOrder) {
+        relocate(index, placedGrown)
+        placedGrown += index
+    }
+    val everyone = items.indices.toList()
+    val movers = items.indices.filter { i ->
+        !grown[i] && grownOrder.any { g -> overlapRect(homeRect[i], finalRect[g]) }
+    }.sortedWith(compareBy({ priority(items[it].id) }, { it }))
+    for (index in movers) relocate(index, everyone)
     val anchors = arrayOfNulls<Pair<Float, Float>>(items.size)
-    for (index in order) {
+    for (index in items.indices) {
         val item = items[index]
         val off = offsets[item.id]
-        var px = homes[index].first + (off?.x ?: 0f)
-        var py = homes[index].second + (off?.y ?: 0f)
-        while (true) {
-            var hit: FloatArray? = null
-            for (i in placed.indices) {
-                if (off != null && !pushers[i]) continue
-                val r = placed[i]
-                if (px < r[0] + r[2] && r[0] < px + item.w && py < r[1] + r[3] && r[1] < py + item.h) {
-                    hit = r
-                    break
-                }
-            }
-            if (hit == null) break
-            val dx = hit[0] + hit[2] + MAP_PUSH_GAP - px
-            val dy = hit[1] + hit[3] + MAP_PUSH_GAP - py
-            if (dx <= dy) px += dx else py += dy
-        }
-        placed += floatArrayOf(px, py, item.w, item.h)
-        pushers += justExpanded != null && belongsTo(justExpanded, item.id)
+        val px = finalRect[index][0]
+        val py = finalRect[index][1]
         if (off == null) {
             anchors[index] = px to py
         } else {
