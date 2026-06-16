@@ -66,6 +66,8 @@ import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
+import page.atlas.graph.aggregateModules
+import page.atlas.interaction.OverviewSelection
 
 @Composable
 fun AtlasPanel(
@@ -136,6 +138,8 @@ fun AtlasContent(
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
+    showDock: Boolean = false,
+    onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     loadProgress: Float? = null,
@@ -156,6 +160,17 @@ fun AtlasContent(
     val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
     }
+    val overviewView = remember { MapViewState() }
+    var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
+    val drillScope = remember(overviewSelection.drillPath) {
+        overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
+    }
+    val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
+    val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
+    LaunchedEffect(drillScope) { overviewView.fitted = false }
+    val activeModuleId = remember(moduleGraph) {
+        moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
+    }
     val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
     val impacted = remember(slice, effectiveMarks) {
         vcsImpacted(slice.edges, effectiveMarks.keys)
@@ -175,6 +190,7 @@ fun AtlasContent(
         if (selectedId == null) tracePath = emptyList()
     }
     val searchSlice = when (viewTab) {
+        AtlasViewTab.OVERVIEW -> slice
         AtlasViewTab.DEPENDENCY -> mapSlice
         AtlasViewTab.GRAPH -> slice
         AtlasViewTab.CALLS -> callsSlice
@@ -204,6 +220,15 @@ fun AtlasContent(
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
                     searchOpen = true
+                    true
+                } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
+                    viewTab == AtlasViewTab.OVERVIEW &&
+                    (overviewSelection.kind != OverviewSelection.Kind.NONE || overviewSelection.drillPath.isNotEmpty())
+                ) {
+                    overviewSelection = when {
+                        overviewSelection.kind != OverviewSelection.Kind.NONE -> overviewSelection.clear()
+                        else -> overviewSelection.drillUp()
+                    }
                     true
                 } else {
                     false
@@ -243,6 +268,14 @@ fun AtlasContent(
                     modifier = Modifier.clickable { onExpand() }.padding(4.dp),
                 )
             }
+            if (showDock) {
+                Text(
+                    text = "Dock",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { onDock() }.padding(4.dp),
+                )
+            }
             Text(
                 text = "Close",
                 style = MaterialTheme.typography.labelSmall,
@@ -259,6 +292,7 @@ fun AtlasContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            ModeChip("Overview", viewTab == AtlasViewTab.OVERVIEW) { onViewTabChange(AtlasViewTab.OVERVIEW) }
             ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
             ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
             if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
@@ -268,7 +302,7 @@ fun AtlasContent(
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
             }
-            if (viewTab == AtlasViewTab.DEPENDENCY) {
+            if (viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW) {
                 ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
             }
             if (viewTab == AtlasViewTab.GRAPH) {
@@ -330,12 +364,72 @@ fun AtlasContent(
                 Text(
                     text = when {
                         progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
-                        projectMode || viewTab == AtlasViewTab.DEPENDENCY -> "No source files"
+                        projectMode || viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW -> "No source files"
                         else -> "No imports"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        } else if (viewTab == AtlasViewTab.OVERVIEW) {
+            if (overviewSelection.drillPath.isNotEmpty()) {
+                OverviewBreadcrumb(
+                    drillPath = overviewSelection.drillPath,
+                    onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                )
+                Divider()
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                OverviewCanvas(
+                    graph = moduleGraph,
+                    layout = overviewLayout,
+                    activeModuleId = activeModuleId,
+                    followActive = followActive,
+                    view = overviewView,
+                    selection = overviewSelection,
+                    onSelectionChange = { overviewSelection = it },
+                    onOpenFile = onNodeClick,
+                )
+                val selectedModule = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
+                    ?.let { id -> moduleGraph.nodes.firstOrNull { it.id == id } }
+                if (selectedModule != null) {
+                    OverviewInspector(
+                        graph = moduleGraph,
+                        module = selectedModule,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        onOpenFile = onNodeClick,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
+                val pathFrom = overviewSelection.moduleId
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                val pathTo = overviewSelection.pathTarget
+                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
+                if (pathFrom != null && pathTo != null) {
+                    OverviewPathPanel(
+                        graph = moduleGraph,
+                        from = pathFrom,
+                        to = pathTo,
+                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    )
+                }
+                if (moduleGraph.droppedModules > 0) {
+                    Text(
+                        text = "Showing largest ${moduleGraph.nodes.size} modules · ${moduleGraph.droppedModules} smaller hidden",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -428,6 +522,46 @@ fun AtlasContent(
         }
     }
 }
+
+@Composable
+private fun OverviewBreadcrumb(
+    drillPath: List<String>,
+    onNavigate: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        BreadcrumbSegment("root", current = false) { onNavigate(0) }
+        drillPath.forEachIndexed { index, id ->
+            Text(
+                text = "/",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val last = index == drillPath.lastIndex
+            BreadcrumbSegment(crumbLabel(id), current = last) { onNavigate(index + 1) }
+        }
+    }
+}
+
+@Composable
+private fun BreadcrumbSegment(label: String, current: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+        modifier = if (current) Modifier else Modifier.clickable { onClick() },
+    )
+}
+
+private fun crumbLabel(id: String): String =
+    id.substringAfterLast('/').substringAfterLast('\\').ifEmpty { id }
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {

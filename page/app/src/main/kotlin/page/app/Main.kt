@@ -421,9 +421,10 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val atlasViewTab = layoutUiState.atlasViewTab
     val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
     LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasViewTab, atlasProvider, focusedActivePath, focusedActiveText) {
-        val dependencyTab = atlasViewTab == page.atlas.render.AtlasViewTab.DEPENDENCY
+        val projectScope = atlasViewTab == page.atlas.render.AtlasViewTab.DEPENDENCY ||
+            atlasViewTab == page.atlas.render.AtlasViewTab.OVERVIEW
         if ((!atlasOpen && !atlasExpanded) || atlasProvider == null ||
-            (!dependencyTab && !atlasProjectMode && focusedActivePath == null)
+            (!projectScope && !atlasProjectMode && focusedActivePath == null)
         ) {
             atlasSlice = GraphSlice.EMPTY
             atlasLoadProgress = null
@@ -437,7 +438,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 when {
-                    dependencyTab -> {
+                    projectScope -> {
                         val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText, onProgress)
                         val file = focusedActivePath
                             ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
