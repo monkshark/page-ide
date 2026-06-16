@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -493,6 +494,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val path = focusedActivePath ?: return@focusActiveInAtlas
         focusInAtlas(path)
     }
+    SideEffect { app.onFocusActiveInAtlas = focusActiveInAtlas }
 
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
@@ -742,6 +744,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onAtlasCallsExpand = onAtlasCallsExpand,
                     onAtlasCallsOpen = onAtlasCallsOpen,
                     onShowCallGraph = showCallGraph,
+                    onShowInAtlas = focusInAtlas,
                     palette = palette,
                     onSelectPalette = { palette = it },
                   )
