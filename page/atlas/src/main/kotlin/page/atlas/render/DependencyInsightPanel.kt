@@ -54,10 +54,24 @@ fun DependencyInsightPanel(
         cycleGroups.flatMapTo(HashSet()) { group -> group.members.map { it.id } }
     }
     val focusNode = remember(slice, focusId) { slice.nodes.firstOrNull { it.id == focusId } }
+    val neighborhood = remember(slice, focusId) {
+        focusId?.let { GraphInsights.neighborhood(slice, it, limit = 5) }
+    }
     val direct = impact.count { it.depth == 1 }
     val transitive = impact.size - direct
 
     Column(modifier.fillMaxSize()) {
+        if (neighborhood?.focus != null &&
+            (neighborhood.incoming.isNotEmpty() || neighborhood.outgoing.isNotEmpty())
+        ) {
+            NeighborhoodGraphlet(
+                neighborhood = neighborhood,
+                onRefocus = onRefocus,
+                onOpen = onOpen,
+                modifier = Modifier.fillMaxWidth().height(168.dp),
+            )
+            InsightDivider()
+        }
         Column(Modifier.weight(1.1f).fillMaxWidth()) {
             ImpactHeader(
                 title = focusNode?.label ?: "—",
