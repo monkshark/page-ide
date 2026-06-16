@@ -46,10 +46,6 @@ import page.atlas.graph.NodeKind
 import page.atlas.graph.modulePath
 import page.atlas.interaction.OverviewSelection
 
-private val OutEdgeColor = Color(0xFF6E8BFF)
-private val InEdgeColor = Color(0xFF4FD3C7)
-private val PathEdgeColor = Color(0xFFE7B45C)
-
 @Composable
 internal fun OverviewCanvas(
     graph: ModuleGraph,
@@ -67,6 +63,7 @@ internal fun OverviewCanvas(
     val primary = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
     val edgeColor = labelColor
+    val roles = atlasRoleColors()
 
     val maxFiles = remember(graph) { graph.nodes.maxOfOrNull { it.fileCount }?.coerceAtLeast(1) ?: 1 }
     val hubW = remember(graph) {
@@ -272,9 +269,9 @@ internal fun OverviewCanvas(
             val touchesFocus = focusId != null && (edge.from == focusId || edge.to == focusId)
             val inCycle = (edge.from to edge.to) in cycleKeys
             val color = when {
-                pathEdgeKeys != null -> if (onPathEdge) PathEdgeColor.copy(alpha = 0.95f) else edgeColor.copy(alpha = 0.03f)
-                out -> OutEdgeColor.copy(alpha = 0.9f)
-                incoming -> InEdgeColor.copy(alpha = 0.9f)
+                pathEdgeKeys != null -> if (onPathEdge) roles.path.copy(alpha = 0.95f) else edgeColor.copy(alpha = 0.03f)
+                out -> roles.dependency.copy(alpha = 0.9f)
+                incoming -> roles.usedBy.copy(alpha = 0.9f)
                 touchesFocus -> primary.copy(alpha = 0.85f)
                 focusId != null -> edgeColor.copy(alpha = 0.03f)
                 inCycle -> errorColor.copy(alpha = 0.55f)
@@ -350,7 +347,7 @@ internal fun OverviewCanvas(
             val pathEnd = pathIds != null && (node.id == pathIds.first() || node.id == pathIds.last())
             if (pathEnd) {
                 drawCircle(
-                    color = PathEdgeColor.copy(alpha = 0.95f),
+                    color = roles.path.copy(alpha = 0.95f),
                     radius = r + 3f,
                     center = center,
                     style = Stroke(width = 2f),
