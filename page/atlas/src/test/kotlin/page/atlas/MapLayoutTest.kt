@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
@@ -467,6 +468,25 @@ class MapLayoutTest {
         assertEquals(beforeChild.x + 120f, child.x)
         assertEquals(beforeChild.y + 80f, child.y)
         assertEquals(map.boxes.first { it.id == id("ws/b") }, moved.first { it.id == id("ws/b") })
+    }
+
+    @Test
+    fun `collapsed edges keep the strongest relation kind`() {
+        val slice = GraphSlice(
+            listOf(
+                node("ws/a/impl.kt", NodeKind.ACTIVE),
+                node("ws/a/sub.kt"),
+                node("ws/b/base.kt"),
+            ),
+            listOf(
+                GraphEdge(id("ws/a/impl.kt"), id("ws/b/base.kt"), EdgeKind.IMPORT),
+                GraphEdge(id("ws/a/sub.kt"), id("ws/b/base.kt"), EdgeKind.EXTENDS),
+            ),
+        )
+        val map = buildMap(slice, emptySet(), width)
+        val aggregated = map.edges.single { it.from == id("ws/a") && it.to == id("ws/b") }
+        assertEquals(2, aggregated.weight)
+        assertEquals(EdgeKind.EXTENDS, aggregated.kind)
     }
 
     @Test

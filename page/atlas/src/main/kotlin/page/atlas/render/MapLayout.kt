@@ -6,6 +6,7 @@ import java.util.TreeSet
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
+import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
@@ -27,7 +28,19 @@ data class MapBox(
     val h: Float,
 )
 
-data class MapEdge(val from: String, val to: String, val weight: Int)
+data class MapEdge(
+    val from: String,
+    val to: String,
+    val weight: Int,
+    val kind: EdgeKind = EdgeKind.IMPORT,
+)
+
+internal fun edgeKindRank(kind: EdgeKind): Int = when (kind) {
+    EdgeKind.IMPORT -> 0
+    EdgeKind.CALLS -> 0
+    EdgeKind.IMPLEMENTS -> 1
+    EdgeKind.EXTENDS -> 2
+}
 
 data class MapModel(
     val boxes: List<MapBox>,
@@ -152,11 +165,15 @@ fun buildMap(
     assignReps(root, null)
 
     val weights = LinkedHashMap<Pair<String, String>, Int>()
+    val kinds = HashMap<Pair<String, String>, EdgeKind>()
     for (edge in slice.edges) {
         val from = repOf[edge.from] ?: continue
         val to = repOf[edge.to] ?: continue
         if (from == to) continue
-        weights.merge(from to to, 1, Int::plus)
+        val key = from to to
+        weights.merge(key, 1, Int::plus)
+        val current = kinds[key]
+        if (current == null || edgeKindRank(edge.kind) > edgeKindRank(current)) kinds[key] = edge.kind
     }
 
     val activeId = activeNode?.id
@@ -169,7 +186,8 @@ fun buildMap(
     val topKids =
         orderedKids(root, 0, expanded, trail, activeId, labelWidth, nodeWeights, offsets, rank, justExpanded, pushes)
     val (boxes, width, height) = shelfPack(topKids, offsets, rank, justExpanded, pushes)
-    return MapModel(boxes, weights.map { (key, w) -> MapEdge(key.first, key.second, w) }, width, height, pushes)
+    val edges = weights.map { (key, w) -> MapEdge(key.first, key.second, w, kinds[key] ?: EdgeKind.IMPORT) }
+    return MapModel(boxes, edges, width, height, pushes)
 }
 
 private class DirTree(val label: String, val dirPath: Path) {
