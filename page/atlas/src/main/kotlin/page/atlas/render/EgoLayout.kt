@@ -49,6 +49,7 @@ data class EgoTransform(val scale: Float, val offset: Offset) {
 const val EGO_WIDTH = 1280f
 const val EGO_HEIGHT = 800f
 const val EGO_OVERFLOW_PREFIX = "__more__:"
+const val EGO_PREV_PREFIX = "__prev__:"
 
 private const val DEP_X = 0.18f
 private const val FOCUS_X = 0.5f
@@ -56,19 +57,24 @@ private const val IMPORT_X = 0.82f
 private const val CENTER_Y = 0.505f
 private const val VERTICAL_BAND = 0.82f
 private const val MAX_SPACING = 96f
-private const val MAX_ROWS = 10
-private const val COL_SPACING = 66f
 private const val FOCUS_R = 46f
 private const val NEIGHBOR_R = 27f
 private const val EXTERNAL_R = 15f
 private const val DEGREE_K = 3.5f
 private const val VISIBLE_PER_COLUMN = 8
 
+fun egoColumnOf(markerId: String): EgoColumn? {
+    val suffix = markerId.substringAfterLast(':', "")
+    return EgoColumn.entries.firstOrNull { it.name == suffix }
+}
+
 fun buildEgoModel(
     slice: GraphSlice,
     focusId: String,
     width: Float = EGO_WIDTH,
     height: Float = EGO_HEIGHT,
+    depPage: Int = 0,
+    impPage: Int = 0,
 ): EgoModel {
     val focus = slice.nodes.firstOrNull { it.id == focusId } ?: return EgoModel.EMPTY
     val incoming = slice.edges.filter { it.to == focusId }.mapTo(HashSet()) { it.from }
@@ -94,8 +100,8 @@ fun buildEgoModel(
         focus.id, focus.label, EgoColumn.FOCUS,
         Offset(width * FOCUS_X, centerY), radiusFor(EgoColumn.FOCUS, degree[focus.id] ?: 0), focus.path == null,
     )
-    nodes += placeColumn(deps, EgoColumn.DEPENDENT, width * DEP_X, centerY, band, degree)
-    nodes += placeColumn(imps, EgoColumn.IMPORT, width * IMPORT_X, centerY, band, degree)
+    nodes += placeColumn(deps, EgoColumn.DEPENDENT, width * DEP_X, centerY, band, degree, depPage)
+    nodes += placeColumn(imps, EgoColumn.IMPORT, width * IMPORT_X, centerY, band, degree, impPage)
 
     val byId = nodes.associateBy { it.id }
     val focusNode = byId[focusId] ?: return EgoModel(nodes, emptyList(), focusId, width, height)
@@ -124,33 +130,43 @@ private fun placeColumn(
     centerY: Float,
     band: Float,
     degree: Map<String, Int>,
+    page: Int,
 ): List<EgoNode> {
-    val overflow = (sorted.size - VISIBLE_PER_COLUMN).coerceAtLeast(0)
-    val shown = sorted.take(VISIBLE_PER_COLUMN)
-    val count = shown.size + if (overflow > 0) 1 else 0
-    if (count == 0) return emptyList()
+    val total = sorted.size
+    if (total == 0) return emptyList()
+    val pageCount = (total + VISIBLE_PER_COLUMN - 1) / VISIBLE_PER_COLUMN
+    val clamped = page.coerceIn(0, pageCount - 1)
+    val start = clamped * VISIBLE_PER_COLUMN
+    val end = min(start + VISIBLE_PER_COLUMN, total)
+    val window = sorted.subList(start, end)
+    val hasPrev = start > 0
+    val hasNext = end < total
+
+    val count = window.size + (if (hasPrev) 1 else 0) + (if (hasNext) 1 else 0)
+    val rowSpacing = if (count <= 1) 0f else min(band / (count - 1), MAX_SPACING)
     val result = ArrayList<EgoNode>(count)
-    val cols = ((count + MAX_ROWS - 1) / MAX_ROWS).coerceAtLeast(1)
-    val rows = (count + cols - 1) / cols
-    val rowSpacing = if (rows <= 1) 0f else min(band / (rows - 1), MAX_SPACING)
-    for (i in 0 until count) {
-        val c = i / rows
-        val r = i % rows
-        val rowsInCol = if (c < cols - 1) rows else count - rows * c
-        val x = baseX + (c - (cols - 1) / 2f) * COL_SPACING
-        val y = centerY + (r - (rowsInCol - 1) / 2f) * rowSpacing
-        if (i < shown.size) {
-            val node = shown[i]
-            result += EgoNode(
-                node.id, node.label, column,
-                Offset(x, y), radiusFor(column, degree[node.id] ?: 0), node.path == null,
-            )
-        } else {
-            result += EgoNode(
-                "$EGO_OVERFLOW_PREFIX${column.name}", "+$overflow more", column,
-                Offset(x, y), NEIGHBOR_R * 0.78f, false, overflow = overflow,
-            )
-        }
+    var i = 0
+    fun yAt(index: Int) = centerY + (index - (count - 1) / 2f) * rowSpacing
+    if (hasPrev) {
+        result += EgoNode(
+            "$EGO_PREV_PREFIX${column.name}", "↑ $start more", column,
+            Offset(baseX, yAt(i)), NEIGHBOR_R * 0.7f, false, overflow = start,
+        )
+        i++
+    }
+    for (node in window) {
+        result += EgoNode(
+            node.id, node.label, column,
+            Offset(baseX, yAt(i)), radiusFor(column, degree[node.id] ?: 0), node.path == null,
+        )
+        i++
+    }
+    if (hasNext) {
+        val hidden = total - end
+        result += EgoNode(
+            "$EGO_OVERFLOW_PREFIX${column.name}", "+$hidden more", column,
+            Offset(baseX, yAt(i)), NEIGHBOR_R * 0.78f, false, overflow = hidden,
+        )
     }
     return result
 }

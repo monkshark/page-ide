@@ -12,6 +12,8 @@ class EgoViewState {
     var selectedId by mutableStateOf<String?>(null)
     var hoveredId by mutableStateOf<String?>(null)
     var pendingFocusId by mutableStateOf<String?>(null)
+    var depPage by mutableStateOf(0)
+    var impPage by mutableStateOf(0)
     private var sliceKey: GraphSlice? = null
     private var focusKey: String? = null
 
@@ -22,6 +24,16 @@ class EgoViewState {
         zoom = 1f
         selectedId = null
         hoveredId = null
+        depPage = 0
+        impPage = 0
+    }
+
+    fun pageColumn(column: EgoColumn, delta: Int) {
+        when (column) {
+            EgoColumn.DEPENDENT -> depPage = (depPage + delta).coerceAtLeast(0)
+            EgoColumn.IMPORT -> impPage = (impPage + delta).coerceAtLeast(0)
+            else -> Unit
+        }
     }
 
     fun onSliceChanged(slice: GraphSlice) {

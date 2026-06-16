@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +60,9 @@ fun EgoCanvas(
     LaunchedEffect(focusId) { view.onFocusChanged(focusId) }
     LaunchedEffect(slice, view.pendingFocusId) { view.onSliceChanged(slice) }
 
-    val model = remember(slice, focusId) { buildEgoModel(slice, focusId) }
+    val model = remember(slice, focusId, view.depPage, view.impPage) {
+        buildEgoModel(slice, focusId, depPage = view.depPage, impPage = view.impPage)
+    }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverPos by remember { mutableStateOf<Offset?>(null) }
 
@@ -90,7 +94,7 @@ fun EgoCanvas(
 
     val transform = transformNow()
     val hoverId = hoverPos?.let { egoNodeAt(model, transform, it)?.id }
-        ?.takeUnless { it.startsWith(EGO_OVERFLOW_PREFIX) }
+        ?.takeUnless { it.startsWith(EGO_OVERFLOW_PREFIX) || it.startsWith(EGO_PREV_PREFIX) }
     val activeFocus = view.selectedId ?: hoverId
     val highlighted = activeFocus?.let { neighbors[it].orEmpty() + it }
 
@@ -126,9 +130,12 @@ fun EgoCanvas(
                     detectTapGestures(
                         onTap = { tap ->
                             val hit = egoNodeAt(model, transformNow(), tap)?.id
-                                ?.takeUnless { id -> id.startsWith(EGO_OVERFLOW_PREFIX) }
                             when {
                                 hit == null || hit == focusId -> view.selectedId = null
+                                hit.startsWith(EGO_OVERFLOW_PREFIX) ->
+                                    egoColumnOf(hit)?.let { view.pageColumn(it, 1) }
+                                hit.startsWith(EGO_PREV_PREFIX) ->
+                                    egoColumnOf(hit)?.let { view.pageColumn(it, -1) }
                                 else -> onRefocus(hit)
                             }
                         },
@@ -182,8 +189,7 @@ fun EgoCanvas(
                     )
                 }
                 run {
-                    val raw = node.label
-                    val label = if (raw.length > 24) raw.take(23) + "…" else raw
+                    val label = ellipsizeMiddle(node.label, 28)
                     val measured = textMeasurer.measure(AnnotatedString(label), labelStyle)
                     drawText(
                         textLayoutResult = measured,
@@ -206,6 +212,17 @@ fun EgoCanvas(
             drawEgoMinimap(theme, model, area, viewport)
         }
 
+        val hovered = hoverId?.let { id -> model.nodes.firstOrNull { it.id == id } }
+        if (hovered != null) {
+            val sourceNode = slice.nodes.firstOrNull { it.id == hovered.id }
+            val sp = transform.toScreen(hovered.center)
+            EgoTooltip(
+                label = hovered.label,
+                path = sourceNode?.path?.toString(),
+                x = (sp.x + 12f).toInt(),
+                y = (sp.y - 16f).toInt(),
+            )
+        }
         EgoHeaderChip(modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
         EgoInfoCard(
             fileName = focusNode?.label ?: "—",
@@ -345,4 +362,33 @@ private fun HudButton(label: String, onClick: () -> Unit) {
         style = TextStyle(fontSize = 13.sp, color = Glass.colors.text, fontWeight = FontWeight.SemiBold),
         modifier = Modifier.clickable { onClick() }.padding(horizontal = 4.dp),
     )
+}
+
+@Composable
+private fun EgoTooltip(label: String, path: String?, x: Int, y: Int) {
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(x, y) }
+            .width(260.dp)
+            .background(Glass.colors.surfaceOverlay, RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label,
+                style = TextStyle(fontSize = 11.sp, color = Glass.colors.text, fontWeight = FontWeight.Medium),
+            )
+            if (!path.isNullOrEmpty()) {
+                Text(path, style = TextStyle(fontSize = 9.sp, color = Glass.colors.faint), maxLines = 2)
+            }
+        }
+    }
+}
+
+private fun ellipsizeMiddle(text: String, max: Int): String {
+    if (text.length <= max) return text
+    val keep = (max - 1).coerceAtLeast(2)
+    val head = (keep + 1) / 2
+    val tail = keep / 2
+    return text.take(head) + "…" + text.takeLast(tail)
 }

@@ -125,6 +125,24 @@ class EgoLayoutTest {
     }
 
     @Test
+    fun `paging to the next page reveals the hidden tail with a prev marker`() {
+        val nodes = ArrayList<GraphNode>()
+        val edges = ArrayList<GraphEdge>()
+        nodes += node("focus", NodeKind.ACTIVE)
+        repeat(20) { i ->
+            val id = "dep%02d".format(i)
+            nodes += node(id)
+            edges += GraphEdge(id, "focus", EdgeKind.IMPORT)
+        }
+        val model = buildEgoModel(GraphSlice(nodes, edges), "focus", depPage = 1)
+        val column = model.nodes.filter { it.column == EgoColumn.DEPENDENT }
+        assertEquals(8, column.count { it.overflow == 0 }, "second page still shows a full window")
+        assertEquals(1, column.count { it.id.startsWith("__prev__:") }, "a prev marker appears once past the first page")
+        assertEquals(4, column.first { it.id.startsWith("__more__:") }.overflow, "the next marker carries the remaining tail")
+        assertTrue(column.none { it.id == "dep00" }, "the first page is no longer drawn")
+    }
+
+    @Test
     fun `imports overflow independently of dependents`() {
         val nodes = ArrayList<GraphNode>()
         val edges = ArrayList<GraphEdge>()
