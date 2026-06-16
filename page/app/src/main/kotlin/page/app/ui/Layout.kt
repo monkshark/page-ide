@@ -48,6 +48,7 @@ import page.app.*
 import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeEvent
 import page.atlas.graph.FileRole
+import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
@@ -169,6 +170,7 @@ internal fun IdeMainLayout(
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasLoadProgress: Float? = null,
     atlasFileRole: FileRole? = null,
+    atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
     atlasActiveId: String? = null,
@@ -256,11 +258,14 @@ internal fun IdeMainLayout(
                 }
             }
     }
-    val scopedDiagnostics = diagnosticsInScope(
-        all = lspRouter.allDiagnosticsByUri,
-        scope = LocalPageSettings.current.lsp.diagnosticsScope,
-        focusedPath = editor.focused().book.active?.path,
-        openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+    val scopedDiagnostics = mergeDiagnostics(
+        diagnosticsInScope(
+            all = lspRouter.allDiagnosticsByUri,
+            scope = LocalPageSettings.current.lsp.diagnosticsScope,
+            focusedPath = editor.focused().book.active?.path,
+            openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+        ),
+        cycleDiagnostics(atlasProjectCycles),
     )
     val scopedProblemsCount = scopedDiagnostics.values.sumOf { it.size }
     Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent { event ->

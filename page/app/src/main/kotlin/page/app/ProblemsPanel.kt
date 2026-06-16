@@ -59,7 +59,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.awt.Cursor
+import page.atlas.graph.GraphNode
 import page.lsp.Diagnostic
+import page.lsp.DiagnosticPosition
 import page.lsp.DiagnosticSeverity
 import page.ui.CompactContextMenuRepresentation
 import page.ui.Glass
@@ -486,6 +488,42 @@ internal fun diagnosticsInScope(
             all.filterKeys { val p = uriToPath(it); p != null && p in normalized }
         }
     }
+}
+
+internal fun cycleDiagnostics(cycles: List<List<GraphNode>>): Map<String, List<Diagnostic>> {
+    if (cycles.isEmpty()) return emptyMap()
+    val out = LinkedHashMap<String, MutableList<Diagnostic>>()
+    for (cycle in cycles) {
+        val members = cycle.mapNotNull { it.path }
+        if (members.size < 2) continue
+        val names = members.map { it.fileName.toString() }.sorted()
+        val message = "Dependency cycle · ${names.size} files: ${names.joinToString(", ")}"
+        for (path in members) {
+            val uri = path.toUri().toString()
+            out.getOrPut(uri) { mutableListOf() }.add(
+                Diagnostic(
+                    start = DiagnosticPosition(0, 0),
+                    end = DiagnosticPosition(0, 0),
+                    severity = DiagnosticSeverity.WARNING,
+                    message = message,
+                    source = "atlas",
+                ),
+            )
+        }
+    }
+    return out
+}
+
+internal fun mergeDiagnostics(
+    base: Map<String, List<Diagnostic>>,
+    extra: Map<String, List<Diagnostic>>,
+): Map<String, List<Diagnostic>> {
+    if (extra.isEmpty()) return base
+    val merged = LinkedHashMap(base)
+    for ((uri, list) in extra) {
+        merged[uri] = merged[uri].orEmpty() + list
+    }
+    return merged
 }
 
 private fun flattenAndSort(diagnostics: Map<String, List<Diagnostic>>): List<ProblemEntry> {

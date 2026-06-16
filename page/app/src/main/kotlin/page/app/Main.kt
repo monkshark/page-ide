@@ -476,6 +476,17 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             runCatching { atlasProvider.fileRole(path) }.getOrNull()
         }
     }
+    var atlasProjectCycles by remember { mutableStateOf<List<List<page.atlas.graph.GraphNode>>>(emptyList()) }
+    LaunchedEffect(atlasProvider, focusedActivePath) {
+        if (atlasProvider == null) {
+            atlasProjectCycles = emptyList()
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(700)
+        atlasProjectCycles = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { atlasProvider.projectCycles() }.getOrDefault(emptyList())
+        }
+    }
     val atlasActiveId = remember(focusedActivePath) {
         focusedActivePath?.toAbsolutePath()?.normalize()?.toString()
     }
@@ -736,6 +747,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasView = atlasView,
                     atlasLoadProgress = atlasLoadProgress,
                     atlasFileRole = atlasFileRole,
+                    atlasProjectCycles = atlasProjectCycles,
                     onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
                     atlasActiveId = atlasActiveId,
