@@ -6,7 +6,51 @@ data class CycleGroup(val members: List<GraphNode>)
 
 data class HubFile(val node: GraphNode, val dependents: Int)
 
+data class Neighbor(val node: GraphNode, val weight: Int)
+
+data class Neighborhood(
+    val focus: GraphNode?,
+    val incoming: List<Neighbor>,
+    val outgoing: List<Neighbor>,
+    val incomingTotal: Int,
+    val outgoingTotal: Int,
+    val inCycle: Boolean,
+)
+
 object GraphInsights {
+
+    fun neighborhood(slice: GraphSlice, focusId: String, limit: Int = 6): Neighborhood {
+        val byId = slice.nodes.associateBy { it.id }
+        val focus = byId[focusId]
+            ?: return Neighborhood(null, emptyList(), emptyList(), 0, 0, false)
+        val indegree = indegrees(slice.edges)
+        val incomingIds = LinkedHashSet<String>()
+        val outgoingIds = LinkedHashSet<String>()
+        for (edge in slice.edges) {
+            if (edge.from == edge.to) continue
+            if (edge.to == focusId) incomingIds += edge.from
+            if (edge.from == focusId) outgoingIds += edge.to
+        }
+        fun neighbors(ids: Set<String>): List<Neighbor> =
+            ids.mapNotNull { byId[it] }
+                .map { Neighbor(it, indegree[it.id] ?: 0) }
+                .sortedWith(
+                    compareByDescending<Neighbor> { it.weight }
+                        .thenBy { it.node.label.lowercase() }
+                        .thenBy { it.node.id },
+                )
+        val incoming = neighbors(incomingIds)
+        val outgoing = neighbors(outgoingIds)
+        val inCycle = cycles(slice.edges).any { focusId in it }
+        return Neighborhood(
+            focus = focus,
+            incoming = incoming.take(limit),
+            outgoing = outgoing.take(limit),
+            incomingTotal = incoming.size,
+            outgoingTotal = outgoing.size,
+            inCycle = inCycle,
+        )
+    }
 
     fun impact(slice: GraphSlice, focusId: String): List<ImpactedFile> {
         val byId = slice.nodes.associateBy { it.id }

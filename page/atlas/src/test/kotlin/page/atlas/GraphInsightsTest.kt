@@ -210,6 +210,91 @@ class GraphInsightsTest {
     }
 
     @Test
+    fun `neighborhood splits direct dependents from direct imports`() {
+        val slice = GraphSlice(
+            listOf(file("focus"), file("dep"), file("imp"), external("lib")),
+            listOf(edge("dep", "focus"), edge("focus", "imp"), edge("focus", "lib")),
+        )
+        val hood = GraphInsights.neighborhood(slice, "focus")
+        assertEquals("focus", hood.focus?.id)
+        assertEquals(listOf("dep"), hood.incoming.map { it.node.id })
+        assertEquals(listOf("imp", "lib"), hood.outgoing.map { it.node.id })
+        assertEquals(1, hood.incomingTotal)
+        assertEquals(2, hood.outgoingTotal)
+    }
+
+    @Test
+    fun `neighborhood is one hop only and ignores transitive edges`() {
+        val slice = GraphSlice(
+            listOf(file("focus"), file("dep"), file("far")),
+            listOf(edge("dep", "focus"), edge("far", "dep")),
+        )
+        val hood = GraphInsights.neighborhood(slice, "focus")
+        assertEquals(listOf("dep"), hood.incoming.map { it.node.id })
+        assertTrue(hood.incoming.none { it.node.id == "far" }, "two-hop dependents are excluded")
+    }
+
+    @Test
+    fun `neighborhood weights each side by its own dependents and sorts by weight`() {
+        val slice = GraphSlice(
+            listOf(file("focus"), file("big"), file("small"), file("hub"), file("p"), file("q")),
+            listOf(
+                edge("big", "focus"), edge("small", "focus"),
+                edge("focus", "hub"),
+                edge("p", "big"), edge("q", "big"),
+                edge("p", "hub"), edge("q", "hub"),
+            ),
+        )
+        val hood = GraphInsights.neighborhood(slice, "focus")
+        assertEquals(listOf("big", "small"), hood.incoming.map { it.node.id })
+        assertEquals(2, hood.incoming.first { it.node.id == "big" }.weight)
+        assertEquals(0, hood.incoming.first { it.node.id == "small" }.weight)
+        assertEquals(3, hood.outgoing.first { it.node.id == "hub" }.weight)
+    }
+
+    @Test
+    fun `neighborhood caps each side at the limit but reports the full total`() {
+        val deps = (1..9).map { file("d$it") }
+        val edges = deps.map { edge(it.id, "focus") }
+        val slice = GraphSlice(listOf(file("focus")) + deps, edges)
+        val hood = GraphInsights.neighborhood(slice, "focus", limit = 4)
+        assertEquals(4, hood.incoming.size)
+        assertEquals(9, hood.incomingTotal)
+        assertEquals(0, hood.outgoingTotal)
+    }
+
+    @Test
+    fun `neighborhood dedupes multi-symbol edges to the same neighbor`() {
+        val slice = GraphSlice(
+            listOf(file("focus"), file("dep")),
+            listOf(edge("dep", "focus"), edge("dep", "focus")),
+        )
+        val hood = GraphInsights.neighborhood(slice, "focus")
+        assertEquals(listOf("dep"), hood.incoming.map { it.node.id })
+        assertEquals(1, hood.incomingTotal)
+    }
+
+    @Test
+    fun `neighborhood flags a focus that sits in a cycle`() {
+        val slice = GraphSlice(
+            listOf(file("focus"), file("a")),
+            listOf(edge("focus", "a"), edge("a", "focus")),
+        )
+        val hood = GraphInsights.neighborhood(slice, "focus")
+        assertTrue(hood.inCycle, "focus and a form a cycle")
+        assertEquals(listOf("a"), hood.incoming.map { it.node.id })
+        assertEquals(listOf("a"), hood.outgoing.map { it.node.id })
+    }
+
+    @Test
+    fun `neighborhood is empty when focus is absent`() {
+        val slice = GraphSlice(listOf(file("a")), listOf(edge("a", "a")))
+        val hood = GraphInsights.neighborhood(slice, "missing")
+        assertEquals(null, hood.focus)
+        assertTrue(hood.incoming.isEmpty() && hood.outgoing.isEmpty())
+    }
+
+    @Test
     fun `cycleGroups resolves member ids to nodes`() {
         val slice = GraphSlice(
             listOf(file("a"), file("b"), file("c")),
