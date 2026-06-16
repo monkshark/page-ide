@@ -180,6 +180,9 @@ fun AtlasContent(
     var searchIndex by remember { mutableStateOf(-1) }
     var tracePath by remember(slice) { mutableStateOf<List<String>>(emptyList()) }
     var traceMessage by remember { mutableStateOf<String?>(null) }
+    var depFocused by remember { mutableStateOf(true) }
+    val egoView = remember { EgoViewState() }
+    var egoFocusOverride by remember(activeFileId) { mutableStateOf<String?>(null) }
     LaunchedEffect(traceMessage) {
         if (traceMessage != null) {
             delay(2500)
@@ -302,7 +305,11 @@ fun AtlasContent(
             if (vcsMarks.isNotEmpty()) {
                 ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
             }
-            if (viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW) {
+            if (viewTab == AtlasViewTab.DEPENDENCY) {
+                ModeChip("Focused", depFocused) { depFocused = true }
+                ModeChip("Map", !depFocused) { depFocused = false }
+            }
+            if ((viewTab == AtlasViewTab.DEPENDENCY && !depFocused) || viewTab == AtlasViewTab.OVERVIEW) {
                 ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
             }
             if (viewTab == AtlasViewTab.GRAPH) {
@@ -432,6 +439,36 @@ fun AtlasContent(
                 }
             }
         } else if (viewTab == AtlasViewTab.DEPENDENCY) {
+            if (depFocused) {
+                val egoFocus = remember(slice, activeFileId, selectedId, egoFocusOverride) {
+                    egoFocusOverride?.takeIf { id -> slice.nodes.any { it.id == id } }
+                        ?: listOf(activeFileId, selectedId)
+                            .firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
+                        ?: slice.nodes.firstOrNull()?.id
+                }
+                if (egoFocus == null) {
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Open a file to see its dependencies",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        EgoCanvas(
+                            slice = slice,
+                            focusId = egoFocus,
+                            onNodeClick = onNodeClick,
+                            view = egoView,
+                            onRefocus = { egoFocusOverride = it },
+                        )
+                    }
+                }
+            } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 MapCanvas(
                     slice = mapSlice,
@@ -503,6 +540,7 @@ fun AtlasContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
             }
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
