@@ -109,6 +109,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         return dependencyDigest().roleOf(nodeId(path))
     }
 
+    fun projectCycles(): List<List<GraphNode>> = dependencyDigest().cycleGroups
+
     fun dependentCountOf(path: Path): Int? = fileRole(path)?.dependents
 
     private fun addNode(

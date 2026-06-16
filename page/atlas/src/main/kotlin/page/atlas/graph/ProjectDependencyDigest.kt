@@ -13,6 +13,7 @@ data class DependencyDigest(
     val dependents: Map<String, Int>,
     val cycleMembers: Set<String>,
     val hubIds: Set<String>,
+    val cycleGroups: List<List<GraphNode>> = emptyList(),
     val truncated: Boolean = false,
 ) {
     fun roleOf(id: String): FileRole = FileRole(
@@ -36,22 +37,32 @@ fun dependencyDigest(slice: GraphSlice, truncated: Boolean = false): DependencyD
     }
     val dependents = slice.nodes.associate { it.id to (indegree[it.id] ?: 0) }
     val hubIds = dependents.asSequence().filter { it.value >= HUB_DEPENDENTS_MIN }.map { it.key }.toHashSet()
-    return DependencyDigest(dependents, cycleMembersOf(slice.edges), hubIds, truncated)
+    val byId = slice.nodes.associateBy { it.id }
+    val cycleMembers = slice.edges.filter { it.from == it.to }.mapTo(HashSet()) { it.from }
+    val cycleGroups = ArrayList<List<GraphNode>>()
+    for (component in stronglyConnectedComponents(slice.edges)) {
+        if (component.size <= 1) continue
+        cycleMembers += component
+        cycleGroups += component.mapNotNull { byId[it] }
+    }
+    return DependencyDigest(
+        dependents = dependents,
+        cycleMembers = cycleMembers,
+        hubIds = hubIds,
+        cycleGroups = cycleGroups,
+        truncated = truncated,
+    )
 }
 
-private fun cycleMembersOf(edges: List<GraphEdge>): Set<String> {
-    if (edges.isEmpty()) return emptySet()
+private fun stronglyConnectedComponents(edges: List<GraphEdge>): List<List<String>> {
+    if (edges.isEmpty()) return emptyList()
     val nodes = LinkedHashSet<String>()
     val adj = HashMap<String, MutableList<String>>()
     val radj = HashMap<String, MutableList<String>>()
-    val selfLoops = HashSet<String>()
     for (edge in edges) {
+        if (edge.from == edge.to) continue
         nodes += edge.from
         nodes += edge.to
-        if (edge.from == edge.to) {
-            selfLoops += edge.from
-            continue
-        }
         adj.getOrPut(edge.from) { mutableListOf() } += edge.to
         radj.getOrPut(edge.to) { mutableListOf() } += edge.from
     }
@@ -74,31 +85,25 @@ private fun cycleMembersOf(edges: List<GraphEdge>): Set<String> {
         }
     }
     val comp = HashMap<String, Int>()
-    val compSize = HashMap<Int, Int>()
-    var compId = 0
+    val groups = ArrayList<MutableList<String>>()
     for (start in order.asReversed()) {
         if (start in comp) continue
-        var size = 0
+        val id = groups.size
+        val members = ArrayList<String>()
         val stack = ArrayDeque<String>()
         stack.addLast(start)
-        comp[start] = compId
+        comp[start] = id
         while (stack.isNotEmpty()) {
             val v = stack.removeLast()
-            size++
+            members += v
             for (w in radj[v].orEmpty()) {
                 if (w !in comp) {
-                    comp[w] = compId
+                    comp[w] = id
                     stack.addLast(w)
                 }
             }
         }
-        compSize[compId] = size
-        compId++
+        groups += members
     }
-    val out = HashSet<String>(selfLoops)
-    for (node in nodes) {
-        val c = comp[node]
-        if (c != null && (compSize[c] ?: 0) > 1) out += node
-    }
-    return out
+    return groups
 }

@@ -82,4 +82,43 @@ class ProjectDependencyDigestTest {
         assertFalse(digest.roleOf("anything").inCycle)
         assertFalse(digest.roleOf("anything").isHub)
     }
+
+    @Test
+    fun `a multi file cycle is grouped once with every member`() {
+        val digest = dependencyDigest(
+            slice(
+                listOf("a", "b", "c", "d", "x"),
+                listOf("a" to "b", "b" to "c", "c" to "a", "c" to "d", "x" to "a"),
+            ),
+        )
+        assertEquals(1, digest.cycleGroups.size)
+        assertEquals(setOf("a", "b", "c"), digest.cycleGroups.single().map { it.id }.toSet())
+    }
+
+    @Test
+    fun `a self loop is not reported as a multi file cycle group`() {
+        val digest = dependencyDigest(slice(listOf("a"), listOf("a" to "a")))
+        assertTrue(digest.roleOf("a").inCycle)
+        assertTrue(digest.cycleGroups.isEmpty())
+    }
+
+    @Test
+    fun `independent cycles become separate groups`() {
+        val digest = dependencyDigest(
+            slice(
+                listOf("a", "b", "c", "d"),
+                listOf("a" to "b", "b" to "a", "c" to "d", "d" to "c"),
+            ),
+        )
+        val grouped = digest.cycleGroups.map { group -> group.map { it.id }.toSet() }.toSet()
+        assertEquals(setOf(setOf("a", "b"), setOf("c", "d")), grouped)
+    }
+
+    @Test
+    fun `an acyclic slice has no cycle groups`() {
+        val digest = dependencyDigest(
+            slice(listOf("a", "b", "c"), listOf("a" to "b", "b" to "c")),
+        )
+        assertTrue(digest.cycleGroups.isEmpty())
+    }
 }
