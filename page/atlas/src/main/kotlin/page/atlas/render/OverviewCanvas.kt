@@ -101,6 +101,14 @@ private data class DrillTransition(
     val capCycKeys: Set<Pair<String, String>>,
 )
 
+internal data class DrilledModule(
+    val node: ModuleNode,
+    val isHub: Boolean,
+    val inCycle: Boolean,
+    val usedBy: Int,
+    val aspect: Float,
+)
+
 private fun cardHeight(fileCount: Int, maxFiles: Int): Float {
     val rel = sqrt((fileCount.toFloat() / maxFiles).coerceIn(0f, 1f))
     return CARD_MIN_H + rel * (CARD_MAX_H - CARD_MIN_H)
@@ -177,7 +185,11 @@ internal fun OverviewCanvas(
     selection: OverviewSelection,
     onSelectionChange: (OverviewSelection) -> Unit,
     onOpenFile: (java.nio.file.Path) -> Unit,
-    onDrillFrom: (Rect, ModuleNode) -> Unit = { _, _ -> },
+    onDrillFrom: (Rect, DrilledModule) -> Unit = { _, _ -> },
+    drillingOutId: String? = null,
+    parentGraph: ModuleGraph? = null,
+    parentLayout: ModuleLayerLayout? = null,
+    onDrillingInChange: (Boolean) -> Unit = {},
 ) {
     val textMeasurer = rememberTextMeasurer(cacheSize = 256)
     val surface = MaterialTheme.colorScheme.surface
@@ -220,6 +232,21 @@ internal fun OverviewCanvas(
     }
     val nodeById = remember(graph) { graph.nodes.associateBy { it.id } }
 
+    val parentScene = remember(parentGraph, parentLayout) {
+        if (parentGraph != null && parentLayout != null) buildOverviewCards(parentGraph, parentLayout) else null
+    }
+    val parentIndeg = remember(parentGraph) {
+        val inn = HashMap<String, Int>()
+        parentGraph?.edges?.forEach { if (it.from != it.to) inn.merge(it.to, 1, Int::plus) }
+        inn
+    }
+    val parentCycleKeys = remember(parentGraph) {
+        if (parentGraph != null) mapCycleEdges(parentGraph.edges.map { MapEdge(it.from, it.to, it.weight) }) else emptySet()
+    }
+    val parentCycleNodes = remember(parentCycleKeys) {
+        parentCycleKeys.flatMapTo(HashSet()) { listOf(it.first, it.second) }
+    }
+
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var hoverId by remember(graph) { mutableStateOf<String?>(null) }
     val selectedId = selection.moduleId?.takeIf { selection.kind == OverviewSelection.Kind.MODULE }
@@ -236,17 +263,19 @@ internal fun OverviewCanvas(
     var scale by view::scale
     var fitted by view::fitted
 
-    fun fitTransform(): Pair<Offset, Float> {
+    fun fitTransformFor(s: OverviewCardScene): Pair<Offset, Float> {
         val cw = canvasSize.width.toFloat()
         val ch = canvasSize.height.toFloat()
-        if (cw <= 0f || ch <= 0f || scene.boxes.isEmpty()) return Offset.Zero to 1f
-        val w = scene.width + 160f
-        val h = (scene.bottom - scene.top) + 160f
+        if (cw <= 0f || ch <= 0f || s.boxes.isEmpty()) return Offset.Zero to 1f
+        val w = s.width + 160f
+        val h = (s.bottom - s.top) + 160f
         val fit = if (w <= 0f || h <= 0f) 1f else min(cw / w, ch / h).coerceIn(0.1f, 1.6f)
-        val cx = scene.width / 2f
-        val cy = (scene.top + scene.bottom) / 2f
+        val cx = s.width / 2f
+        val cy = (s.top + s.bottom) / 2f
         return Offset(cw / 2f - cx * fit, ch / 2f - cy * fit) to fit
     }
+
+    fun fitTransform(): Pair<Offset, Float> = fitTransformFor(scene)
 
     fun viewTransform(): Pair<Offset, Float> = if (scale > 0f) pan to scale else fitTransform()
 
@@ -255,9 +284,12 @@ internal fun OverviewCanvas(
     val anim = remember { Animatable(0f) }
     var transition by remember { mutableStateOf<DrillTransition?>(null) }
     val transitioning = transition != null
+    val outAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(transitioning) { onDrillingInChange(transitioning) }
 
     LaunchedEffect(scene, canvasSize, fitted, transitioning) {
-        if (transitioning) return@LaunchedEffect
+        if (transitioning || drillingOutId != null) return@LaunchedEffect
         if (canvasSize.width <= 0 || scene.boxes.isEmpty()) return@LaunchedEffect
         if (fitted) return@LaunchedEffect
         val (p, s) = fitTransform()
@@ -291,8 +323,21 @@ internal fun OverviewCanvas(
         prevDrillDepth = depth
     }
 
+    LaunchedEffect(drillingOutId, parentScene != null, canvasSize) {
+        if (drillingOutId != null && parentScene != null && canvasSize.width > 0) {
+            val (pp, ps) = fitTransformFor(parentScene)
+            pan = pp
+            scale = ps
+            fitted = true
+            outAnim.snapTo(0f)
+            outAnim.animateTo(1f, tween(DRILL_TRANSITION_MS, easing = FastOutSlowInEasing))
+        } else {
+            outAnim.snapTo(0f)
+        }
+    }
+
     LaunchedEffect(activeModuleId, followActive, canvasSize) {
-        if (transition != null) return@LaunchedEffect
+        if (transition != null || drillingOutId != null) return@LaunchedEffect
         if (!followActive || canvasSize.width <= 0) return@LaunchedEffect
         val id = activeModuleId ?: return@LaunchedEffect
         val world = centerOf(id) ?: return@LaunchedEffect
@@ -318,7 +363,7 @@ internal fun OverviewCanvas(
     }
 
     fun nodeAt(pos: Offset): String? {
-        if (transition != null) return null
+        if (transition != null || drillingOutId != null) return null
         val (base, s) = viewTransform()
         if (s <= 0f) return null
         for (node in graph.nodes) {
@@ -512,7 +557,13 @@ internal fun OverviewCanvas(
                                         capBase.x + box.right * capScale,
                                         capBase.y + box.bottom * capScale,
                                     ),
-                                    node,
+                                    DrilledModule(
+                                        node = node,
+                                        isHub = (indeg[id] ?: 0) >= HUB_MIN_DEPENDENTS,
+                                        inCycle = id in cycleNodes,
+                                        usedBy = indeg[id] ?: 0,
+                                        aspect = box.h / box.w,
+                                    ),
                                 )
                                 transition = DrillTransition(scene, graph, id, capBase, capScale, indeg, cycleNodes, cycleKeys)
                                 onSelectionChange(selection.drillInto(id))
@@ -553,6 +604,27 @@ internal fun OverviewCanvas(
                 val footer = "Showing largest ${scene.visible.size} modules · ${scene.hiddenCount} smaller hidden"
                 drawText(textMeasurer.measure(AnnotatedString(footer), legendStyle), topLeft = Offset(14f, size.height - 22f))
             }
+            return@Canvas
+        }
+
+        val outId = drillingOutId
+        if (outId != null && parentScene != null && parentGraph != null && parentScene.boxes.isNotEmpty()) {
+            val p = outAnim.value
+            val q = 1f - p
+            val aA = smoothstep(q, 0f, 0.40f)
+            val aC = smoothstep(q, 0.35f, 0.85f)
+            if (scene.boxes.isNotEmpty()) {
+                val (childBase, childScale) = fitTransform()
+                val exitX = maxOf(120f, size.width * 0.18f) * (1f - aC)
+                val exitY = maxOf(160f, size.height * 0.22f) * (1f - aC)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(exitX, exitY), false, null, indeg, cycleNodes, cycleKeys)
+            }
+            val (pBase, pScale) = fitTransformFor(parentScene)
+            drawLayer(
+                this, parentScene, parentGraph, pBase, pScale,
+                1f - aA, Offset.Zero, true, outId,
+                parentIndeg, parentCycleNodes, parentCycleKeys,
+            )
             return@Canvas
         }
 
