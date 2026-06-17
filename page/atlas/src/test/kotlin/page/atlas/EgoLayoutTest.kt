@@ -3,6 +3,7 @@ package page.atlas
 import androidx.compose.ui.geometry.Offset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -40,16 +41,18 @@ class EgoLayoutTest {
     private fun EgoModel.byId(id: String) = nodes.first { it.id == id }
 
     @Test
-    fun `only dependents are drawn and they sit left of the focus`() {
+    fun `dependents sit left and imports sit right of the focus`() {
         val model = buildEgoModel(egoSlice(), "focus")
         val dep = model.byId("dep")
         val focus = model.byId("focus")
+        val imp = model.byId("imp")
 
         assertEquals(EgoColumn.DEPENDENT, dep.column)
         assertEquals(EgoColumn.FOCUS, focus.column)
+        assertEquals(EgoColumn.IMPORT, imp.column)
         assertTrue(dep.center.x < focus.center.x, "dependents left of focus")
-        assertTrue(model.nodes.none { it.id == "imp" }, "imports are not drawn as nodes")
-        assertTrue(model.nodes.none { it.id == "ext" }, "externals are not drawn as nodes")
+        assertTrue(imp.center.x > focus.center.x, "imports right of focus")
+        assertTrue(model.nodes.none { it.id == "ext" }, "two-hop nodes are not drawn")
     }
 
     @Test
@@ -60,11 +63,13 @@ class EgoLayoutTest {
     }
 
     @Test
-    fun `every drawn edge points at the focus`() {
+    fun `dependent edges point at the focus and import edges leave it`() {
         val model = buildEgoModel(egoSlice(), "focus")
         val depEdge = model.edges.first { it.from == "dep" && it.to == "focus" }
         assertTrue(depEdge.toFocus)
-        assertTrue(model.edges.all { it.to == "focus" && it.toFocus }, "only dependent edges are drawn")
+        val impEdge = model.edges.first { it.from == "focus" && it.to == "imp" }
+        assertFalse(impEdge.toFocus)
+        assertTrue(model.edges.all { it.from == "focus" || it.to == "focus" }, "every edge touches the focus")
     }
 
     @Test
@@ -115,6 +120,24 @@ class EgoLayoutTest {
         assertEquals(1, more.size, "exactly one overflow node collapses the tail")
         assertEquals(42, more.first().overflow, "overflow carries the hidden remainder")
         assertEquals("+42 more", more.first().label)
+    }
+
+    @Test
+    fun `imports overflow folds into a single more node on the right`() {
+        val nodes = ArrayList<GraphNode>()
+        val edges = ArrayList<GraphEdge>()
+        nodes += node("focus", NodeKind.ACTIVE)
+        repeat(20) { i ->
+            val id = "imp%02d".format(i)
+            nodes += node(id)
+            edges += GraphEdge("focus", id, EdgeKind.IMPORT)
+        }
+        val model = buildEgoModel(GraphSlice(nodes, edges), "focus")
+        val column = model.nodes.filter { it.column == EgoColumn.IMPORT }
+        assertEquals(8, column.count { it.overflow == 0 }, "only the visible cap is drawn as real imports")
+        assertEquals(1, column.count { it.overflow > 0 }, "exactly one overflow node collapses the tail")
+        assertEquals(12, column.first { it.overflow > 0 }.overflow, "overflow carries the hidden remainder")
+        assertTrue(model.byId("focus").center.x < column.first().center.x, "imports lie right of focus")
     }
 
     @Test

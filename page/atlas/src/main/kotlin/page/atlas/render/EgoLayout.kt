@@ -49,8 +49,9 @@ const val EGO_WIDTH = 1280f
 const val EGO_HEIGHT = 800f
 const val EGO_OVERFLOW_PREFIX = "__more__:"
 
-private const val DEP_X = 0.24f
-private const val FOCUS_X = 0.72f
+private const val DEP_X = 0.20f
+private const val FOCUS_X = 0.50f
+private const val IMPORT_X = 0.80f
 private const val CENTER_Y = 0.505f
 private const val VERTICAL_BAND = 0.82f
 private const val MAX_SPACING = 96f
@@ -70,20 +71,17 @@ fun buildEgoModel(
 ): EgoModel {
     val focus = slice.nodes.firstOrNull { it.id == focusId } ?: return EgoModel.EMPTY
     val incoming = slice.edges.filter { it.to == focusId }.mapTo(HashSet()) { it.from }
+    val outgoing = slice.edges.filter { it.from == focusId }.mapTo(HashSet()) { it.to }
     val degree = HashMap<String, Int>()
     for (e in slice.edges) {
         degree[e.from] = (degree[e.from] ?: 0) + 1
         degree[e.to] = (degree[e.to] ?: 0) + 1
     }
-    val sorted = slice.nodes
-        .filter { it.id != focusId && it.id in incoming }
-        .sortedWith(
-            compareByDescending<page.atlas.graph.GraphNode> { degree[it.id] ?: 0 }
-                .thenBy { it.label.lowercase() }
-                .thenBy { it.id },
-        )
-    val overflow = (sorted.size - VISIBLE_PER_COLUMN).coerceAtLeast(0)
-    val shown = sorted.take(VISIBLE_PER_COLUMN)
+    val order = compareByDescending<page.atlas.graph.GraphNode> { degree[it.id] ?: 0 }
+        .thenBy { it.label.lowercase() }
+        .thenBy { it.id }
+    val dependents = slice.nodes.filter { it.id != focusId && it.id in incoming }.sortedWith(order)
+    val imports = slice.nodes.filter { it.id != focusId && it.id in outgoing && it.id !in incoming }.sortedWith(order)
     val centerY = height * CENTER_Y
     val band = height * VERTICAL_BAND
     val nodes = ArrayList<EgoNode>()
@@ -91,48 +89,67 @@ fun buildEgoModel(
         focus.id, focus.label, EgoColumn.FOCUS,
         Offset(width * FOCUS_X, centerY), radiusFor(EgoColumn.FOCUS, degree[focus.id] ?: 0), focus.path == null,
     )
-    val count = shown.size + if (overflow > 0) 1 else 0
-    if (count > 0) {
-        val baseX = width * columnX(EgoColumn.DEPENDENT)
-        val cols = ((count + MAX_ROWS - 1) / MAX_ROWS).coerceAtLeast(1)
-        val rows = (count + cols - 1) / cols
-        val rowSpacing = if (rows <= 1) 0f else min(band / (rows - 1), MAX_SPACING)
-        for (i in 0 until count) {
-            val c = i / rows
-            val r = i % rows
-            val rowsInCol = if (c < cols - 1) rows else count - rows * c
-            val x = baseX + (c - (cols - 1) / 2f) * COL_SPACING
-            val y = centerY + (r - (rowsInCol - 1) / 2f) * rowSpacing
-            if (i < shown.size) {
-                val node = shown[i]
-                nodes += EgoNode(
-                    node.id, node.label, EgoColumn.DEPENDENT,
-                    Offset(x, y), radiusFor(EgoColumn.DEPENDENT, degree[node.id] ?: 0), node.path == null,
-                )
-            } else {
-                nodes += EgoNode(
-                    "$EGO_OVERFLOW_PREFIX${EgoColumn.DEPENDENT.name}", "+$overflow more", EgoColumn.DEPENDENT,
-                    Offset(x, y), NEIGHBOR_R * 0.78f, false, overflow = overflow,
-                )
-            }
-        }
-    }
+    placeColumn(nodes, dependents, EgoColumn.DEPENDENT, width * columnX(EgoColumn.DEPENDENT), centerY, band, degree)
+    placeColumn(nodes, imports, EgoColumn.IMPORT, width * columnX(EgoColumn.IMPORT), centerY, band, degree)
     val byId = nodes.associateBy { it.id }
+    val focusNode = byId.getValue(focusId)
     val edges = ArrayList<EgoEdge>()
-    for (e in slice.edges) {
-        if (e.to != focusId) continue
-        val from = byId[e.from] ?: continue
-        val to = byId[e.to] ?: continue
-        if (from.id == to.id) continue
-        val start = Offset(from.center.x + from.radius, from.center.y)
-        val end = Offset(to.center.x - to.radius, to.center.y)
-        val midX = (start.x + end.x) / 2f
-        edges += EgoEdge(
-            e.from, e.to, toFocus = e.to == focusId,
-            start = start, c1 = Offset(midX, start.y), c2 = Offset(midX, end.y), end = end,
-        )
+    for (dep in dependents) {
+        val from = byId[dep.id] ?: continue
+        if (from.id == focusId) continue
+        edges += egoEdge(dep.id, focusId, toFocus = true, from = from, to = focusNode)
+    }
+    for (imp in imports) {
+        val to = byId[imp.id] ?: continue
+        if (to.id == focusId || to.column != EgoColumn.IMPORT) continue
+        edges += egoEdge(focusId, imp.id, toFocus = false, from = focusNode, to = to)
     }
     return EgoModel(nodes, edges, focusId, width, height)
+}
+
+private fun placeColumn(
+    nodes: ArrayList<EgoNode>,
+    candidates: List<page.atlas.graph.GraphNode>,
+    column: EgoColumn,
+    baseX: Float,
+    centerY: Float,
+    band: Float,
+    degree: Map<String, Int>,
+) {
+    val overflow = (candidates.size - VISIBLE_PER_COLUMN).coerceAtLeast(0)
+    val shown = candidates.take(VISIBLE_PER_COLUMN)
+    val count = shown.size + if (overflow > 0) 1 else 0
+    if (count == 0) return
+    val cols = ((count + MAX_ROWS - 1) / MAX_ROWS).coerceAtLeast(1)
+    val rows = (count + cols - 1) / cols
+    val rowSpacing = if (rows <= 1) 0f else min(band / (rows - 1), MAX_SPACING)
+    for (i in 0 until count) {
+        val c = i / rows
+        val r = i % rows
+        val rowsInCol = if (c < cols - 1) rows else count - rows * c
+        val x = baseX + (c - (cols - 1) / 2f) * COL_SPACING
+        val y = centerY + (r - (rowsInCol - 1) / 2f) * rowSpacing
+        if (i < shown.size) {
+            val node = shown[i]
+            nodes += EgoNode(
+                node.id, node.label, column,
+                Offset(x, y), radiusFor(column, degree[node.id] ?: 0), node.path == null,
+            )
+        } else {
+            nodes += EgoNode(
+                "$EGO_OVERFLOW_PREFIX${column.name}", "+$overflow more", column,
+                Offset(x, y), NEIGHBOR_R * 0.78f, false, overflow = overflow,
+            )
+        }
+    }
+}
+
+private fun egoEdge(fromId: String, toId: String, toFocus: Boolean, from: EgoNode, to: EgoNode): EgoEdge {
+    val rightward = from.center.x <= to.center.x
+    val start = Offset(from.center.x + if (rightward) from.radius else -from.radius, from.center.y)
+    val end = Offset(to.center.x + if (rightward) -to.radius else to.radius, to.center.y)
+    val midX = (start.x + end.x) / 2f
+    return EgoEdge(fromId, toId, toFocus, start, Offset(midX, start.y), Offset(midX, end.y), end)
 }
 
 fun egoTransform(
@@ -172,5 +189,6 @@ private fun radiusFor(column: EgoColumn, degree: Int): Float {
 
 private fun columnX(column: EgoColumn): Float = when (column) {
     EgoColumn.FOCUS -> FOCUS_X
-    else -> DEP_X
+    EgoColumn.IMPORT -> IMPORT_X
+    EgoColumn.DEPENDENT, EgoColumn.EXTERNAL -> DEP_X
 }

@@ -188,7 +188,8 @@ fun EgoCanvas(
                 }
             }
 
-            drawFlowLabel(theme, textMeasurer, flowTitleStyle, flowSubStyle, model, EgoColumn.DEPENDENT, "DEPENDENTS", "imported by this file", t)
+            drawFlowLabel(theme, textMeasurer, flowTitleStyle, flowSubStyle, model, EgoColumn.DEPENDENT, "USED BY", "depends on this file", t)
+            drawFlowLabel(theme, textMeasurer, flowTitleStyle, flowSubStyle, model, EgoColumn.IMPORT, "USES", "this file depends on", t)
 
             val area = Rect(size.width - 172f, size.height - 126f, size.width - 16f, size.height - 46f)
             val viewport = Rect(
@@ -277,7 +278,7 @@ private fun EgoInfoCard(
         }
         Box(modifier = Modifier.padding(top = 6.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("$dependents dependents", style = TextStyle(fontSize = 12.sp, color = Color(0xFF6E8BFF), fontWeight = FontWeight.Medium))
+                Text("$dependents dependents", style = TextStyle(fontSize = 12.sp, color = atlasRoleColors().usedBy, fontWeight = FontWeight.Medium))
                 Text("$imports imports · $cycles cycles", style = TextStyle(fontSize = 10.sp, color = Glass.colors.faint))
             }
         }
@@ -293,8 +294,9 @@ private fun EgoLegend(theme: EgoTheme, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LegendDot("dependents", theme.dependent)
+        LegendDot("used by", theme.dependent)
         LegendDot("this file", theme.focus)
+        LegendDot("uses", theme.importNode)
     }
 }
 
