@@ -1,5 +1,7 @@
 package page.atlas.render
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +48,7 @@ import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.modulePath
 import page.atlas.interaction.OverviewSelection
+import page.ui.Glass
 
 private const val CARD_W = 132f
 private const val EXTERNAL_W = 156f
@@ -242,6 +246,18 @@ internal fun OverviewCanvas(
         fitted = true
     }
 
+    val motion = Glass.motion
+    val drillAnim = remember { Animatable(1f) }
+    var prevDrillDepth by remember { mutableStateOf(selection.drillPath.size) }
+    LaunchedEffect(selection.drillPath.size) {
+        val depth = selection.drillPath.size
+        if (depth > prevDrillDepth) {
+            drillAnim.snapTo(0f)
+            drillAnim.animateTo(1f, tween(motion.base, easing = motion.easing))
+        }
+        prevDrillDepth = depth
+    }
+
     LaunchedEffect(activeModuleId, followActive, canvasSize, scene) {
         if (!followActive || canvasSize.width <= 0) return@LaunchedEffect
         val id = activeModuleId ?: return@LaunchedEffect
@@ -285,6 +301,7 @@ internal fun OverviewCanvas(
     Canvas(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = 0.4f + 0.6f * drillAnim.value }
             .clipToBounds()
             .onSizeChanged { canvasSize = it }
             .pointerInput(Unit) {
@@ -361,8 +378,13 @@ internal fun OverviewCanvas(
             },
     ) {
         if (scene.boxes.isEmpty()) return@Canvas
-        val (base, s) = viewTransform()
-        if (s <= 0f) return@Canvas
+        val (fitBase, fitScale) = viewTransform()
+        if (fitScale <= 0f) return@Canvas
+        val diveK = 1f + (1f - drillAnim.value) * 0.06f
+        val s = fitScale * diveK
+        val pivotX = size.width / 2f
+        val pivotY = size.height / 2f
+        val base = Offset(pivotX - (pivotX - fitBase.x) * diveK, pivotY - (pivotY - fitBase.y) * diveK)
         val onPath = pathNodeSet != null
         val focusId = if (onPath) null else selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
         val highlighted = if (onPath) pathNodeSet else focusId?.let { adjacency[it].orEmpty() + it }
