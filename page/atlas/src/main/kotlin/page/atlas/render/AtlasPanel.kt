@@ -381,13 +381,6 @@ fun AtlasContent(
                 )
             }
         } else if (viewTab == AtlasViewTab.OVERVIEW) {
-            if (overviewSelection.drillPath.isNotEmpty()) {
-                OverviewBreadcrumb(
-                    drillPath = overviewSelection.drillPath,
-                    onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
-                )
-                Divider()
-            }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 OverviewCanvas(
                     graph = moduleGraph,
@@ -399,6 +392,23 @@ fun AtlasContent(
                     onSelectionChange = { overviewSelection = it },
                     onOpenFile = onNodeClick,
                 )
+                if (overviewSelection.drillPath.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
+                                RoundedCornerShape(8.dp),
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        OverviewBreadcrumb(
+                            drillPath = overviewSelection.drillPath,
+                            onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                        )
+                    }
+                }
                 val selectedModule = overviewSelection.moduleId
                     ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
                     ?.let { id -> moduleGraph.nodes.firstOrNull { it.id == id } }
@@ -576,10 +586,6 @@ private fun OverviewBreadcrumb(
     onNavigate: (Int) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
