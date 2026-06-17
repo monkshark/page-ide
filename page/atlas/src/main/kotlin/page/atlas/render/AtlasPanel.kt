@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -38,6 +39,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -47,7 +51,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -65,6 +71,7 @@ import kotlinx.coroutines.delay
 import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
+import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
 import page.atlas.interaction.OverviewSelection
@@ -162,12 +169,13 @@ fun AtlasContent(
     }
     val overviewView = remember { MapViewState() }
     var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
+    var drillFrom by remember(slice) { mutableStateOf<Pair<String, Rect>?>(null) }
+    var drilledInfo by remember(slice) { mutableStateOf<Map<String, ModuleNode>>(emptyMap()) }
     val drillScope = remember(overviewSelection.drillPath) {
         overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
     }
     val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
     val overviewLayout = remember(moduleGraph) { layeredModuleLayout(moduleGraph) }
-    LaunchedEffect(drillScope) { overviewView.fitted = false }
     val activeModuleId = remember(moduleGraph) {
         moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
     }
@@ -381,7 +389,13 @@ fun AtlasContent(
                 )
             }
         } else if (viewTab == AtlasViewTab.OVERVIEW) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .onGloballyPositioned { overviewBoxPos = it.positionInRoot() },
+            ) {
                 OverviewCanvas(
                     graph = moduleGraph,
                     layout = overviewLayout,
@@ -391,22 +405,40 @@ fun AtlasContent(
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
                     onOpenFile = onNodeClick,
+                    onDrillFrom = { rect, node ->
+                        drillFrom = node.id to rect
+                        drilledInfo = drilledInfo + (node.id to node)
+                    },
                 )
                 if (overviewSelection.drillPath.isNotEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(8.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
-                                RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        OverviewBreadcrumb(
-                            drillPath = overviewSelection.drillPath,
-                            onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
-                        )
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
+                                    RoundedCornerShape(8.dp),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            OverviewBreadcrumb(
+                                drillPath = overviewSelection.drillPath,
+                                onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                            )
+                        }
+                        overviewSelection.drillPath.forEachIndexed { i, id ->
+                            DrilledCard(
+                                animKey = id,
+                                node = drilledInfo[id],
+                                fallbackLabel = crumbLabel(id),
+                                flyFrom = if (i == overviewSelection.drillPath.lastIndex && drillFrom?.first == id) drillFrom?.second else null,
+                                boxPos = overviewBoxPos,
+                            )
+                        }
                     }
                 }
                 val selectedModule = overviewSelection.moduleId
@@ -615,6 +647,72 @@ private fun BreadcrumbSegment(label: String, current: Boolean, onClick: () -> Un
 
 private fun crumbLabel(id: String): String =
     id.substringAfterLast('/').substringAfterLast('\\').ifEmpty { id }
+
+@Composable
+private fun DrilledCard(animKey: String, node: ModuleNode?, fallbackLabel: String, flyFrom: Rect?, boxPos: Offset) {
+    val title = node?.label?.substringAfterLast('/')?.ifEmpty { fallbackLabel } ?: fallbackLabel
+    val fileCount = node?.fileCount ?: 0
+    val enter = remember(animKey) { Animatable(0f) }
+    var slotPos by remember { mutableStateOf(Offset.Zero) }
+    var slotWidth by remember { mutableStateOf(0) }
+    val fly = remember(animKey) { flyFrom }
+    val ready = slotWidth > 0
+    LaunchedEffect(animKey, fly != null, ready) {
+        if (fly == null || ready) enter.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
+    }
+    Box(
+        modifier = Modifier
+            .onGloballyPositioned {
+                slotPos = it.positionInRoot()
+                slotWidth = it.size.width
+            }
+            .graphicsLayer {
+                val p = enter.value
+                when {
+                    fly != null && ready -> {
+                        transformOrigin = TransformOrigin(0f, 0f)
+                        translationX = (boxPos.x + fly.left - slotPos.x) * (1f - p)
+                        translationY = (boxPos.y + fly.top - slotPos.y) * (1f - p)
+                        val startScale = fly.width / slotWidth
+                        val sc = startScale + (1f - startScale) * p
+                        scaleX = sc
+                        scaleY = sc
+                        alpha = 1f
+                    }
+                    fly != null -> alpha = 0f
+                    else -> {
+                        alpha = p
+                        translationX = (1f - p) * 28.dp.toPx()
+                        translationY = (1f - p) * 14.dp.toPx()
+                    }
+                }
+            }
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(8.dp),
+            )
+            .border(
+                1.2.dp,
+                MaterialTheme.colorScheme.outline,
+                RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "$fileCount files",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
