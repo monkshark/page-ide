@@ -1,6 +1,7 @@
 package page.atlas.render
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -26,7 +28,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,6 +42,8 @@ import kotlin.math.hypot
 import kotlin.math.ln
 import kotlin.math.min
 import kotlin.math.sqrt
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleLayer
@@ -48,7 +51,6 @@ import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.modulePath
 import page.atlas.interaction.OverviewSelection
-import page.ui.Glass
 
 private const val CARD_W = 132f
 private const val EXTERNAL_W = 156f
@@ -64,6 +66,7 @@ private const val HUB_MIN_DEPENDENTS = 4
 private const val BAND_TOP = -40f
 private const val BAND_LABEL_Y = -34f
 private const val BAND_DIVIDER_Y = -14f
+private const val DRILL_TRANSITION_MS = 700
 
 internal data class CardBox(val x: Float, val y: Float, val w: Float, val h: Float) {
     val centerX get() = x + w / 2f
@@ -85,6 +88,17 @@ internal data class OverviewCardScene(
     val width: Float,
     val top: Float,
     val bottom: Float,
+)
+
+private data class DrillTransition(
+    val oldScene: OverviewCardScene,
+    val oldGraph: ModuleGraph,
+    val drilledId: String,
+    val capBase: Offset,
+    val capScale: Float,
+    val capIndeg: Map<String, Int>,
+    val capCycNodes: Set<String>,
+    val capCycKeys: Set<Pair<String, String>>,
 )
 
 private fun cardHeight(fileCount: Int, maxFiles: Int): Float {
@@ -163,8 +177,9 @@ internal fun OverviewCanvas(
     selection: OverviewSelection,
     onSelectionChange: (OverviewSelection) -> Unit,
     onOpenFile: (java.nio.file.Path) -> Unit,
+    onDrillFrom: (Rect, ModuleNode) -> Unit = { _, _ -> },
 ) {
-    val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = rememberTextMeasurer(cacheSize = 256)
     val surface = MaterialTheme.colorScheme.surface
     val cardFill = MaterialTheme.colorScheme.surfaceVariant
     val outline = MaterialTheme.colorScheme.outline
@@ -237,7 +252,12 @@ internal fun OverviewCanvas(
 
     fun centerOf(id: String): Offset? = scene.boxes[id]?.let { Offset(it.centerX, it.centerY) }
 
-    LaunchedEffect(scene, canvasSize, fitted) {
+    val anim = remember { Animatable(0f) }
+    var transition by remember { mutableStateOf<DrillTransition?>(null) }
+    val transitioning = transition != null
+
+    LaunchedEffect(scene, canvasSize, fitted, transitioning) {
+        if (transitioning) return@LaunchedEffect
         if (canvasSize.width <= 0 || scene.boxes.isEmpty()) return@LaunchedEffect
         if (fitted) return@LaunchedEffect
         val (p, s) = fitTransform()
@@ -246,19 +266,33 @@ internal fun OverviewCanvas(
         fitted = true
     }
 
-    val motion = Glass.motion
-    val drillAnim = remember { Animatable(1f) }
     var prevDrillDepth by remember { mutableStateOf(selection.drillPath.size) }
     LaunchedEffect(selection.drillPath.size) {
         val depth = selection.drillPath.size
-        if (depth > prevDrillDepth) {
-            drillAnim.snapTo(0f)
-            drillAnim.animateTo(1f, tween(motion.slow, easing = motion.easing))
+        if (depth > prevDrillDepth && transition != null) {
+            try {
+                anim.snapTo(0f)
+                anim.animateTo(1f, tween(DRILL_TRANSITION_MS, easing = FastOutSlowInEasing))
+                val (fp, fs) = fitTransform()
+                pan = fp
+                scale = fs
+                fitted = true
+            } finally {
+                transition = null
+                withContext(NonCancellable) { anim.snapTo(0f) }
+            }
+        } else if (depth != prevDrillDepth) {
+            transition = null
+            val (fp, fs) = fitTransform()
+            pan = fp
+            scale = fs
+            fitted = true
         }
         prevDrillDepth = depth
     }
 
-    LaunchedEffect(activeModuleId, followActive, canvasSize, scene) {
+    LaunchedEffect(activeModuleId, followActive, canvasSize) {
+        if (transition != null) return@LaunchedEffect
         if (!followActive || canvasSize.width <= 0) return@LaunchedEffect
         val id = activeModuleId ?: return@LaunchedEffect
         val world = centerOf(id) ?: return@LaunchedEffect
@@ -284,6 +318,7 @@ internal fun OverviewCanvas(
     }
 
     fun nodeAt(pos: Offset): String? {
+        if (transition != null) return null
         val (base, s) = viewTransform()
         if (s <= 0f) return null
         for (node in graph.nodes) {
@@ -298,10 +333,110 @@ internal fun OverviewCanvas(
         return null
     }
 
+    fun drawLayer(
+        scope: DrawScope,
+        layerScene: OverviewCardScene,
+        layerGraph: ModuleGraph,
+        base: Offset,
+        s: Float,
+        alpha: Float,
+        offset: Offset,
+        drawBands: Boolean,
+        exclude: String?,
+        inDeg: Map<String, Int>,
+        cycNodes: Set<String>,
+        cycKeys: Set<Pair<String, String>>,
+    ) = with(scope) {
+        if (alpha <= 0.01f || s <= 0f) return@with
+        fun lx(v: Float) = base.x + v * s + offset.x
+        fun ly(v: Float) = base.y + v * s + offset.y
+        if (drawBands) {
+            for (band in layerScene.bands) {
+                val measured = textMeasurer.measure(AnnotatedString(layerLabel(band.layer)), bandStyle)
+                drawText(
+                    textLayoutResult = measured,
+                    color = labelColor.copy(alpha = 0.65f * alpha),
+                    topLeft = Offset(lx(band.centerX) - measured.size.width / 2f, ly(BAND_LABEL_Y)),
+                )
+            }
+            if (layerScene.bands.isNotEmpty()) {
+                drawLine(
+                    color = outline.copy(alpha = 0.5f * alpha),
+                    start = Offset(lx(layerScene.bands.first().left), ly(BAND_DIVIDER_Y)),
+                    end = Offset(lx(layerScene.bands.last().right), ly(BAND_DIVIDER_Y)),
+                    strokeWidth = 1f,
+                )
+            }
+        }
+        val curvePath = Path()
+        val headPath = Path()
+        for (edge in layerGraph.edges) {
+            if (edge.from !in layerScene.visible || edge.to !in layerScene.visible) continue
+            if (exclude != null && (edge.from == exclude || edge.to == exclude)) continue
+            val sb = layerScene.boxes[edge.from] ?: continue
+            val tb = layerScene.boxes[edge.to] ?: continue
+            val inCyc = (edge.from to edge.to) in cycKeys
+            val color = if (inCyc) roles.cycle.copy(alpha = 0.55f * alpha) else roles.dependency.copy(alpha = 0.22f * alpha)
+            val stroke = (0.8f + ln(edge.weight.toFloat()) * 0.6f).coerceAtMost(4f)
+            val leftToRight = tb.centerX >= sb.centerX
+            val from = Offset(lx(if (leftToRight) sb.right else sb.x), ly(sb.centerY))
+            val to = Offset(lx(if (leftToRight) tb.x else tb.right), ly(tb.centerY))
+            drawCardEdge(from, to, color, stroke, inCyc, curvePath, headPath)
+        }
+        for (node in layerGraph.nodes) {
+            if (node.id !in layerScene.visible) continue
+            if (exclude != null && node.id == exclude) continue
+            val b = layerScene.boxes[node.id] ?: continue
+            val left = lx(b.x)
+            val top = ly(b.y)
+            val w = b.w * s
+            val h = b.h * s
+            val isHub = (inDeg[node.id] ?: 0) >= HUB_MIN_DEPENDENTS
+            val inCyc = node.id in cycNodes
+            val topLeft = Offset(left, top)
+            val sz = Size(w, h)
+            val corner = CornerRadius(8f * s)
+            if (!node.external) {
+                drawRoundRect(color = surface.copy(alpha = alpha), topLeft = topLeft, size = sz, cornerRadius = corner)
+                drawRoundRect(color = cardFill.copy(alpha = alpha), topLeft = topLeft, size = sz, cornerRadius = corner)
+            }
+            val borderColor = when {
+                node.external -> roles.neutral.copy(alpha = 0.7f * alpha)
+                isHub -> roles.hub.copy(alpha = 0.55f * alpha)
+                inCyc -> roles.cycle.copy(alpha = 0.7f * alpha)
+                else -> outline.copy(alpha = 0.9f * alpha)
+            }
+            val borderStyle = if (node.external) {
+                Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)))
+            } else {
+                Stroke(width = 1.2f)
+            }
+            drawRoundRect(color = borderColor, topLeft = topLeft, size = sz, cornerRadius = corner, style = borderStyle)
+            var titleX = left + 14f
+            if (!node.external && isHub) {
+                drawCircle(color = roles.hub.copy(alpha = alpha), radius = 5f, center = Offset(left + 18f, top + 20f))
+                titleX = left + 34f
+            } else if (!node.external && inCyc) {
+                drawCircle(color = roles.cycle.copy(alpha = alpha), radius = 6f, center = Offset(left + 18f, top + 18f), style = Stroke(width = 2f))
+                titleX = left + 34f
+            }
+            if (w < 56f) continue
+            val short = node.label.substringAfterLast('/')
+            val titleMeasured = textMeasurer.measure(AnnotatedString(short), titleStyle)
+            drawText(titleMeasured, color = onSurface.copy(alpha = alpha), topLeft = Offset(titleX, top + 8f))
+            val files = node.fileCount
+            val faint = labelColor.copy(alpha = 0.7f * alpha)
+            when {
+                node.external -> drawText(textMeasurer.measure(AnnotatedString("external"), bodyStyle), color = faint, topLeft = Offset(left + 14f, top + h - 22f))
+                isHub -> drawText(textMeasurer.measure(AnnotatedString("$files files · used by ${inDeg[node.id] ?: 0}"), bodyStyle), color = roles.hub.copy(alpha = alpha), topLeft = Offset(left + 14f, top + h - 22f))
+                else -> drawText(textMeasurer.measure(AnnotatedString("$files files"), bodyStyle), color = faint, topLeft = Offset(left + 14f, top + h - 22f))
+            }
+        }
+    }
+
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = 0.4f + 0.6f * drillAnim.value }
             .clipToBounds()
             .onSizeChanged { canvasSize = it }
             .pointerInput(Unit) {
@@ -367,7 +502,21 @@ internal fun OverviewCanvas(
                         val id = nodeAt(pos) ?: return@awaitEachGesture
                         val node = nodeById[id] ?: return@awaitEachGesture
                         if (node.splittable) {
-                            onSelectionChange(selection.drillInto(id))
+                            val box = scene.boxes[id]
+                            if (box != null) {
+                                val (capBase, capScale) = viewTransform()
+                                onDrillFrom(
+                                    Rect(
+                                        capBase.x + box.x * capScale,
+                                        capBase.y + box.y * capScale,
+                                        capBase.x + box.right * capScale,
+                                        capBase.y + box.bottom * capScale,
+                                    ),
+                                    node,
+                                )
+                                transition = DrillTransition(scene, graph, id, capBase, capScale, indeg, cycleNodes, cycleKeys)
+                                onSelectionChange(selection.drillInto(id))
+                            }
                         } else if (node.files.size == 1) {
                             onOpenFile(node.files.first().path)
                         } else {
@@ -377,14 +526,41 @@ internal fun OverviewCanvas(
                 }
             },
     ) {
+        val activeTransition = transition
+        if (activeTransition != null) {
+            val p = anim.value
+            val aA = smoothstep(p, 0f, 0.40f)
+            val aC = smoothstep(p, 0.35f, 0.85f)
+
+            if (scene.boxes.isNotEmpty()) {
+                val (childBase, childScale) = fitTransform()
+                val enterX = maxOf(120f, size.width * 0.18f) * (1f - aC)
+                val enterY = maxOf(160f, size.height * 0.22f) * (1f - aC)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(enterX, enterY), false, null, indeg, cycleNodes, cycleKeys)
+            }
+            drawLayer(
+                this, activeTransition.oldScene, activeTransition.oldGraph,
+                activeTransition.capBase, activeTransition.capScale,
+                1f - aA, Offset.Zero, true, activeTransition.drilledId,
+                activeTransition.capIndeg, activeTransition.capCycNodes, activeTransition.capCycKeys,
+            )
+
+            val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
+            val legend = "columns = dependency depth · size = files · red = hub · amber = cycle"
+            val legendY = if (scene.hiddenCount > 0) size.height - 38f else size.height - 22f
+            drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
+            if (scene.hiddenCount > 0) {
+                val footer = "Showing largest ${scene.visible.size} modules · ${scene.hiddenCount} smaller hidden"
+                drawText(textMeasurer.measure(AnnotatedString(footer), legendStyle), topLeft = Offset(14f, size.height - 22f))
+            }
+            return@Canvas
+        }
+
         if (scene.boxes.isEmpty()) return@Canvas
         val (fitBase, fitScale) = viewTransform()
         if (fitScale <= 0f) return@Canvas
-        val diveK = 1f + (1f - drillAnim.value) * 0.22f
-        val s = fitScale * diveK
-        val pivotX = 0f
-        val pivotY = 0f
-        val base = Offset(pivotX - (pivotX - fitBase.x) * diveK, pivotY - (pivotY - fitBase.y) * diveK)
+        val base = fitBase
+        val s = fitScale
         val onPath = pathNodeSet != null
         val focusId = if (onPath) null else selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
         val highlighted = if (onPath) pathNodeSet else focusId?.let { adjacency[it].orEmpty() + it }
@@ -414,6 +590,8 @@ internal fun OverviewCanvas(
         fun sx(v: Float) = base.x + v * s
         fun sy(v: Float) = base.y + v * s
 
+        val curvePath = Path()
+        val headPath = Path()
         for (edge in graph.edges) {
             if (edge.from !in scene.visible || edge.to !in scene.visible) continue
             val sb = scene.boxes[edge.from] ?: continue
@@ -442,7 +620,7 @@ internal fun OverviewCanvas(
             val leftToRight = tb.centerX >= sb.centerX
             val from = Offset(sx(if (leftToRight) sb.right else sb.x), sy(sb.centerY))
             val to = Offset(sx(if (leftToRight) tb.x else tb.right), sy(tb.centerY))
-            drawCardEdge(from, to, color, stroke, drawHead)
+            drawCardEdge(from, to, color, stroke, drawHead, curvePath, headPath)
         }
 
         for (node in graph.nodes) {
@@ -533,7 +711,11 @@ internal fun OverviewCanvas(
             "columns = dependency depth · size = files · red = hub · amber = cycle"
         }
         val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
-        val legendY = if (selection.drillPath.isNotEmpty()) 38f else 12f
+        val legendY = when {
+            selection.drillPath.isEmpty() -> 12f
+            scene.hiddenCount > 0 -> size.height - 38f
+            else -> size.height - 22f
+        }
         drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
 
         if (scene.hiddenCount > 0) {
@@ -543,6 +725,9 @@ internal fun OverviewCanvas(
         }
     }
 }
+
+private fun smoothstep(p: Float, a: Float, b: Float): Float =
+    ((p - a) / (b - a)).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
 private fun DrawScope.drawCardLine(
     measurer: androidx.compose.ui.text.TextMeasurer,
@@ -555,12 +740,11 @@ private fun DrawScope.drawCardLine(
     drawText(measurer.measure(AnnotatedString(text), style), color = color, topLeft = Offset(x, y))
 }
 
-private fun DrawScope.drawCardEdge(from: Offset, to: Offset, color: Color, stroke: Float, drawHead: Boolean) {
+private fun DrawScope.drawCardEdge(from: Offset, to: Offset, color: Color, stroke: Float, drawHead: Boolean, curve: Path, head: Path) {
     val midX = (from.x + to.x) / 2f
-    val curve = Path().apply {
-        moveTo(from.x, from.y)
-        cubicTo(midX, from.y, midX, to.y, to.x, to.y)
-    }
+    curve.reset()
+    curve.moveTo(from.x, from.y)
+    curve.cubicTo(midX, from.y, midX, to.y, to.x, to.y)
     drawPath(curve, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
     if (!drawHead) return
     val dir = to - Offset(midX, to.y)
@@ -569,11 +753,10 @@ private fun DrawScope.drawCardEdge(from: Offset, to: Offset, color: Color, strok
     val headLen = 8f
     val headBase = to - unit * headLen
     val normal = Offset(-unit.y, unit.x) * (headLen * 0.5f)
-    val head = Path().apply {
-        moveTo(to.x, to.y)
-        lineTo(headBase.x + normal.x, headBase.y + normal.y)
-        lineTo(headBase.x - normal.x, headBase.y - normal.y)
-        close()
-    }
+    head.reset()
+    head.moveTo(to.x, to.y)
+    head.lineTo(headBase.x + normal.x, headBase.y + normal.y)
+    head.lineTo(headBase.x - normal.x, headBase.y - normal.y)
+    head.close()
     drawPath(head, color)
 }
