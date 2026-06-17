@@ -18,8 +18,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -71,7 +74,6 @@ import kotlinx.coroutines.delay
 import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
-import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
 import page.atlas.interaction.OverviewSelection
@@ -170,12 +172,22 @@ fun AtlasContent(
     val overviewView = remember { MapViewState() }
     var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
     var drillFrom by remember(slice) { mutableStateOf<Pair<String, Rect>?>(null) }
-    var drilledInfo by remember(slice) { mutableStateOf<Map<String, ModuleNode>>(emptyMap()) }
+    var drilledInfo by remember(slice) { mutableStateOf<Map<String, DrilledModule>>(emptyMap()) }
+    var drillOutTo by remember(slice) { mutableStateOf<Int?>(null) }
+    var drillingIn by remember(slice) { mutableStateOf(false) }
     val drillScope = remember(overviewSelection.drillPath) {
         overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
     }
     val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
     val overviewLayout = remember(moduleGraph) { layeredModuleLayout(moduleGraph) }
+    val drillingOutId = if (drillOutTo != null) overviewSelection.drillPath.lastOrNull() else null
+    val parentDrillScope = remember(overviewSelection.drillPath, drillOutTo) {
+        drillOutTo?.let { t -> overviewSelection.drillPath.getOrNull(t - 1)?.let { FilePath.of(it) } }
+    }
+    val parentModuleGraph = remember(slice, parentDrillScope, drillOutTo != null) {
+        if (drillOutTo != null) aggregateModules(slice, scopeRoot = parentDrillScope) else null
+    }
+    val parentOverviewLayout = remember(parentModuleGraph) { parentModuleGraph?.let { layeredModuleLayout(it) } }
     val activeModuleId = remember(moduleGraph) {
         moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
     }
@@ -405,10 +417,14 @@ fun AtlasContent(
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
                     onOpenFile = onNodeClick,
-                    onDrillFrom = { rect, node ->
-                        drillFrom = node.id to rect
-                        drilledInfo = drilledInfo + (node.id to node)
+                    onDrillFrom = { rect, drilled ->
+                        drillFrom = drilled.node.id to rect
+                        drilledInfo = drilledInfo + (drilled.node.id to drilled)
                     },
+                    drillingOutId = drillingOutId,
+                    parentGraph = parentModuleGraph,
+                    parentLayout = parentOverviewLayout,
+                    onDrillingInChange = { drillingIn = it },
                 )
                 if (overviewSelection.drillPath.isNotEmpty()) {
                     Column(
@@ -427,16 +443,31 @@ fun AtlasContent(
                         ) {
                             OverviewBreadcrumb(
                                 drillPath = overviewSelection.drillPath,
-                                onNavigate = { depth -> overviewSelection = overviewSelection.drillUpTo(depth) },
+                                onNavigate = { depth ->
+                                    if (!drillingIn && drillOutTo == null && depth < overviewSelection.drillPath.size) {
+                                        drillOutTo = depth
+                                    }
+                                },
                             )
                         }
                         overviewSelection.drillPath.forEachIndexed { i, id ->
+                            val isDeepest = i == overviewSelection.drillPath.lastIndex
                             DrilledCard(
                                 animKey = id,
-                                node = drilledInfo[id],
+                                drilled = drilledInfo[id],
                                 fallbackLabel = crumbLabel(id),
-                                flyFrom = if (i == overviewSelection.drillPath.lastIndex && drillFrom?.first == id) drillFrom?.second else null,
+                                flyFrom = if (isDeepest && drillFrom?.first == id) drillFrom?.second else null,
                                 boxPos = overviewBoxPos,
+                                exiting = drillOutTo != null && i >= drillOutTo!!,
+                                exitToHole = drillOutTo == overviewSelection.drillPath.lastIndex,
+                                onClick = { if (!drillingIn && drillOutTo == null) drillOutTo = i },
+                                onExited = {
+                                    val target = drillOutTo
+                                    if (target != null) {
+                                        overviewSelection = overviewSelection.drillUpTo(target)
+                                        drillOutTo = null
+                                    }
+                                },
                             )
                         }
                     }
@@ -649,17 +680,53 @@ private fun crumbLabel(id: String): String =
     id.substringAfterLast('/').substringAfterLast('\\').ifEmpty { id }
 
 @Composable
-private fun DrilledCard(animKey: String, node: ModuleNode?, fallbackLabel: String, flyFrom: Rect?, boxPos: Offset) {
+private fun DrilledCard(
+    animKey: String,
+    drilled: DrilledModule?,
+    fallbackLabel: String,
+    flyFrom: Rect?,
+    boxPos: Offset,
+    exiting: Boolean = false,
+    exitToHole: Boolean = false,
+    onClick: () -> Unit = {},
+    onExited: () -> Unit = {},
+) {
+    val roles = atlasRoleColors()
+    val node = drilled?.node
     val title = node?.label?.substringAfterLast('/')?.ifEmpty { fallbackLabel } ?: fallbackLabel
     val fileCount = node?.fileCount ?: 0
+    val isHub = drilled?.isHub == true
+    val inCycle = drilled?.inCycle == true
+    val usedBy = drilled?.usedBy ?: 0
+    val aspect = (drilled?.aspect ?: 0.5f).coerceIn(0.35f, 1f)
+
     val enter = remember(animKey) { Animatable(0f) }
     var slotPos by remember { mutableStateOf(Offset.Zero) }
     var slotWidth by remember { mutableStateOf(0) }
     val fly = remember(animKey) { flyFrom }
     val ready = slotWidth > 0
-    LaunchedEffect(animKey, fly != null, ready) {
-        if (fly == null || ready) enter.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
+    var arrived by remember(animKey) { mutableStateOf(fly == null) }
+    LaunchedEffect(animKey, fly != null, ready, exiting) {
+        if (exiting) {
+            enter.animateTo(0f, tween(700, easing = FastOutSlowInEasing))
+            onExited()
+        } else if (fly == null || ready) {
+            enter.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
+            arrived = true
+        }
     }
+
+    val cardWidth = 132.dp
+    val cardHeight = cardWidth * aspect
+    val titleX = if (isHub || inCycle) 34.dp else 14.dp
+    val borderColor = when {
+        isHub -> roles.hub.copy(alpha = 0.55f)
+        inCycle -> roles.cycle.copy(alpha = 0.7f)
+        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.9f)
+    }
+    val subColor = if (isHub) roles.hub else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+    val subText = if (isHub) "$fileCount files · used by $usedBy" else "$fileCount files"
+
     Box(
         modifier = Modifier
             .onGloballyPositioned {
@@ -669,6 +736,11 @@ private fun DrilledCard(animKey: String, node: ModuleNode?, fallbackLabel: Strin
             .graphicsLayer {
                 val p = enter.value
                 when {
+                    exiting && !exitToHole -> {
+                        alpha = p
+                        translationX = (1f - p) * 8.dp.toPx()
+                        translationY = (1f - p) * 8.dp.toPx()
+                    }
                     fly != null && ready -> {
                         transformOrigin = TransformOrigin(0f, 0f)
                         translationX = (boxPos.x + fly.left - slotPos.x) * (1f - p)
@@ -687,30 +759,40 @@ private fun DrilledCard(animKey: String, node: ModuleNode?, fallbackLabel: Strin
                     }
                 }
             }
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(8.dp),
-            )
-            .border(
-                1.2.dp,
-                MaterialTheme.colorScheme.outline,
-                RoundedCornerShape(8.dp),
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .size(cardWidth, cardHeight)
+            .clickable(enabled = arrived && !exiting) { onClick() }
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+            .border(1.2.dp, borderColor, RoundedCornerShape(8.dp)),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+        if (isHub) {
+            Box(
+                modifier = Modifier
+                    .offset(x = 13.dp, y = 15.dp)
+                    .size(10.dp)
+                    .background(roles.hub, CircleShape),
             )
-            Text(
-                text = "$fileCount files",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else if (inCycle) {
+            Box(
+                modifier = Modifier
+                    .offset(x = 12.dp, y = 12.dp)
+                    .size(12.dp)
+                    .border(2.dp, roles.cycle, CircleShape),
             )
         }
+        Text(
+            text = title,
+            style = TextStyle(fontSize = 11.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            modifier = Modifier.offset(x = titleX, y = 8.dp),
+        )
+        Text(
+            text = subText,
+            style = TextStyle(fontSize = 10.sp),
+            color = subColor,
+            maxLines = 1,
+            modifier = Modifier.offset(x = 14.dp, y = cardHeight - 22.dp),
+        )
     }
 }
 
