@@ -35,16 +35,17 @@ data class EgoTheme(
 @Composable
 fun rememberEgoTheme(): EgoTheme {
     val colors = Glass.colors
+    val roles = atlasRoleColors(colors)
     return remember(colors) {
         EgoTheme(
             canvas = Color(0xFF0A0D14),
-            focus = colors.primary,
-            dependent = Color(0xFF6E8BFF),
-            importNode = Color(0xFF4FD3C7),
-            external = Color(0xFF6B7689),
-            edgeDependent = Color(0xFF6E8BFF),
-            edgeImport = Color(0xFF4FD3C7),
-            edgeExternal = Color(0xFF6B7689),
+            focus = colors.text,
+            dependent = roles.usedBy,
+            importNode = roles.dependency,
+            external = roles.neutral,
+            edgeDependent = roles.usedBy,
+            edgeImport = roles.dependency,
+            edgeExternal = roles.neutral,
             highlight = Color.White,
             shadow = Color.Black,
             label = colors.muted,
