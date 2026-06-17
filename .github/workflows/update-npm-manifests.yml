@@ -85,8 +85,8 @@ jobs:
           token: ${{ secrets.MANIFEST_BOT_PAT }}
           branch: chore/npm-manifest-refresh
           delete-branch: true
-          commit-message: "docs(lsp): npm registry manifest 자동 갱신"
-          title: "docs(lsp): npm registry manifest 자동 갱신"
+          commit-message: "npm registry manifest 자동 갱신"
+          title: "npm registry manifest 자동 갱신"
           body: |
             10 개 npm 패키지 (typescript-language-server, vscode-langservers-extracted, yaml-language-server, bash-language-server, pyright, dockerfile-language-server-nodejs, @vue/language-server, svelte-language-server, intelephense, sql-language-server) 의 latest + version 목록을 `docs/lsp/*.json` 에 반영합니다.
 

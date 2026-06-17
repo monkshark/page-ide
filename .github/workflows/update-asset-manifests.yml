@@ -95,8 +95,8 @@ jobs:
           token: ${{ secrets.MANIFEST_BOT_PAT }}
           branch: chore/asset-manifest-refresh
           delete-branch: true
-          commit-message: "docs: page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
-          title: "docs: page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
+          commit-message: "page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
+          title: "page-ide-assets 자산 + Adoptium JDK 매니페스트 자동 갱신"
           body: |
             monkshark/page-ide-assets 번들 자산 + Adoptium JDK 버전을 정적 매니페스트로 갱신.
             - `docs/lsp/*-bundle.json` — metals/jdtls/dart/flutter/ruby 번들 자산명
