@@ -253,7 +253,7 @@ internal fun OverviewCanvas(
         val depth = selection.drillPath.size
         if (depth > prevDrillDepth) {
             drillAnim.snapTo(0f)
-            drillAnim.animateTo(1f, tween(motion.base, easing = motion.easing))
+            drillAnim.animateTo(1f, tween(motion.slow, easing = motion.easing))
         }
         prevDrillDepth = depth
     }
@@ -380,10 +380,10 @@ internal fun OverviewCanvas(
         if (scene.boxes.isEmpty()) return@Canvas
         val (fitBase, fitScale) = viewTransform()
         if (fitScale <= 0f) return@Canvas
-        val diveK = 1f + (1f - drillAnim.value) * 0.06f
+        val diveK = 1f + (1f - drillAnim.value) * 0.22f
         val s = fitScale * diveK
-        val pivotX = size.width / 2f
-        val pivotY = size.height / 2f
+        val pivotX = 0f
+        val pivotY = 0f
         val base = Offset(pivotX - (pivotX - fitBase.x) * diveK, pivotY - (pivotY - fitBase.y) * diveK)
         val onPath = pathNodeSet != null
         val focusId = if (onPath) null else selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
@@ -533,7 +533,8 @@ internal fun OverviewCanvas(
             "columns = dependency depth · size = files · red = hub · amber = cycle"
         }
         val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
-        drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, 12f))
+        val legendY = if (selection.drillPath.isNotEmpty()) 38f else 12f
+        drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
 
         if (scene.hiddenCount > 0) {
             val footer = "Showing largest ${scene.visible.size} modules · ${scene.hiddenCount} smaller hidden"
