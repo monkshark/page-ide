@@ -70,6 +70,17 @@ class OverviewCardsTest {
     }
 
     @Test
+    fun tallLayerWrapsIntoBalancedSubColumns() {
+        val nodes = (1..14).map { mod("m$it", fileCount = 5) }
+        val scene = scene(ModuleGraph(nodes = nodes, edges = emptyList()))
+        val perColumn = scene.boxes.values.groupBy { it.x }.mapValues { it.value.size }
+        assertTrue(perColumn.size >= 2, "tall layer wraps into multiple sub-columns")
+        assertTrue(perColumn.values.max() <= 6, "no sub-column exceeds the row cap")
+        assertEquals(1, scene.bands.size)
+        assertEquals(14, scene.boxes.size)
+    }
+
+    @Test
     fun emptyGraphHasNoCards() {
         val scene = scene(ModuleGraph.EMPTY)
         assertTrue(scene.boxes.isEmpty())

@@ -52,6 +52,9 @@ private const val CARD_MIN_H = 52f
 private const val CARD_MAX_H = 128f
 private const val EXTERNAL_H = 50f
 private const val CARD_GAP = 14f
+private const val MAX_ROWS_PER_COL = 6
+private const val SUBCOL_GAP = 16f
+private const val LAYER_GAP = 44f
 private const val MODULE_CAP = 24
 private const val HUB_MIN_DEPENDENTS = 4
 private const val BAND_TOP = -40f
@@ -65,9 +68,14 @@ internal data class CardBox(val x: Float, val y: Float, val w: Float, val h: Flo
     val bottom get() = y + h
 }
 
+internal data class OverviewBand(val layer: ModuleLayer, val left: Float, val width: Float) {
+    val centerX get() = left + width / 2f
+    val right get() = left + width
+}
+
 internal data class OverviewCardScene(
     val boxes: Map<String, CardBox>,
-    val bands: List<Pair<ModuleLayer, Float>>,
+    val bands: List<OverviewBand>,
     val visible: Set<String>,
     val hiddenCount: Int,
     val width: Float,
@@ -94,26 +102,33 @@ internal fun buildOverviewCards(graph: ModuleGraph, layout: ModuleLayerLayout): 
     val visibleSet = visibleNodes.mapTo(HashSet()) { it.id }
 
     val boxes = HashMap<String, CardBox>()
-    val bands = ArrayList<Pair<ModuleLayer, Float>>()
+    val bands = ArrayList<OverviewBand>()
     var maxRight = 0f
     var maxBottom = 0f
+    var layerLeft = 0f
     for (layer in layout.columns) {
-        val x = (layout.columnX[layer] ?: continue).toFloat()
         val inLayer = visibleNodes
             .filter { layout.layerOf[it.id] == layer }
             .sortedBy { layout.positions[it.id]?.y ?: 0.0 }
         if (inLayer.isEmpty()) continue
-        bands.add(layer to x)
-        var y = 0f
-        for (n in inLayer) {
+        val cardW = inLayer.maxOf { if (it.external) EXTERNAL_W else CARD_W }
+        val cols = ((inLayer.size + MAX_ROWS_PER_COL - 1) / MAX_ROWS_PER_COL).coerceAtLeast(1)
+        val rows = (inLayer.size + cols - 1) / cols
+        val subStep = cardW + SUBCOL_GAP
+        val colTop = FloatArray(cols)
+        inLayer.forEachIndexed { i, n ->
+            val c = i / rows
             val w = if (n.external) EXTERNAL_W else CARD_W
             val h = if (n.external) EXTERNAL_H else cardHeight(n.fileCount, maxFiles)
-            val box = CardBox(x, y, w, h)
+            val box = CardBox(layerLeft + c * subStep, colTop[c], w, h)
             boxes[n.id] = box
-            y += h + CARD_GAP
+            colTop[c] = box.bottom + CARD_GAP
             maxRight = maxOf(maxRight, box.right)
             maxBottom = maxOf(maxBottom, box.bottom)
         }
+        val layerWidth = (cols - 1) * subStep + cardW
+        bands.add(OverviewBand(layer, layerLeft, layerWidth))
+        layerLeft += layerWidth + LAYER_GAP
     }
     return OverviewCardScene(
         boxes = boxes,
@@ -352,9 +367,9 @@ internal fun OverviewCanvas(
         val focusId = if (onPath) null else selectedId ?: hoverId ?: activeModuleId?.takeIf { followActive }
         val highlighted = if (onPath) pathNodeSet else focusId?.let { adjacency[it].orEmpty() + it }
 
-        for ((layer, colX) in scene.bands) {
-            val measured = textMeasurer.measure(AnnotatedString(layerLabel(layer)), bandStyle)
-            val cx = base.x + (colX + CARD_W / 2f) * s
+        for (band in scene.bands) {
+            val measured = textMeasurer.measure(AnnotatedString(layerLabel(band.layer)), bandStyle)
+            val cx = base.x + band.centerX * s
             val cy = base.y + BAND_LABEL_Y * s
             drawText(
                 textLayoutResult = measured,
@@ -363,8 +378,8 @@ internal fun OverviewCanvas(
             )
         }
         if (scene.bands.isNotEmpty()) {
-            val firstX = base.x + scene.bands.first().second * s
-            val lastX = base.x + (scene.bands.last().second + CARD_W) * s
+            val firstX = base.x + scene.bands.first().left * s
+            val lastX = base.x + scene.bands.last().right * s
             val dy = base.y + BAND_DIVIDER_Y * s
             drawLine(
                 color = outline.copy(alpha = 0.5f),
