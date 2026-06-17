@@ -82,8 +82,8 @@ jobs:
           token: ${{ secrets.MANIFEST_BOT_PAT }}
           branch: chore/release-manifest-refresh
           delete-branch: true
-          commit-message: "docs(lsp): GitHub release manifest 자동 갱신"
-          title: "docs(lsp): GitHub release manifest 자동 갱신"
+          commit-message: "GitHub release manifest 자동 갱신"
+          title: "GitHub release manifest 자동 갱신"
           body: |
             rust/clangd(c·cpp)/lua/markdown/zig/elixir/clojure/haskell 의 최신 release 목록을 `docs/lsp/*.json` 에 반영합니다.
 

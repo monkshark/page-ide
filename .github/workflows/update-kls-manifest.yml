@@ -57,8 +57,8 @@ jobs:
           token: ${{ secrets.MANIFEST_BOT_PAT }}
           branch: chore/kls-manifest-refresh
           delete-branch: true
-          commit-message: "docs(lsp): KLS release manifest 자동 갱신"
-          title: "docs(lsp): KLS release manifest 자동 갱신"
+          commit-message: "KLS release manifest 자동 갱신"
+          title: "KLS release manifest 자동 갱신"
           body: |
             Monkshark fork + fwcd upstream 의 최신 release 목록을 `docs/lsp/kotlin.json` 에 반영합니다.
 
