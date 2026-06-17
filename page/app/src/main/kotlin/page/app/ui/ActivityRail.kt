@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import page.app.mvi.SideView
 import page.ui.Glass
 import page.ui.GlassTooltip
@@ -168,15 +169,15 @@ private fun RailItem(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 9.dp, end = 9.dp)
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(colors.danger),
+                        .size(13.dp)
+                        .background(colors.danger, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = if (badge > 9) "9+" else badge.toString(),
                         color = colors.onPrimary,
-                        fontSize = Glass.type.label,
+                        fontSize = 9.sp,
+                        lineHeight = 9.sp,
                         textAlign = TextAlign.Center,
                     )
                 }

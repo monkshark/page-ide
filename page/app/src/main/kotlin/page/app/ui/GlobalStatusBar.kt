@@ -38,6 +38,7 @@ import page.app.PubSyncRegistry
 import page.app.dartSiblingLspStatus
 import page.app.lspStatusLineText
 import page.app.state.EditorWorkspaceState
+import page.atlas.graph.FileRole
 import page.editor.FileKind
 import page.editor.FileKinds
 import page.editor.TextBuffer
@@ -58,7 +59,7 @@ internal fun GlobalStatusBar(
     onProblemsToggle: () -> Unit,
     onTodoToggle: () -> Unit,
     onRuntimeClick: ((String) -> Unit)?,
-    usedByCount: Int? = null,
+    fileRole: FileRole? = null,
     onUsedByClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -134,7 +135,7 @@ internal fun GlobalStatusBar(
                     label = "warnings",
                     onClick = onProblemsToggle,
                 )
-                if (usedByCount != null) UsedByBadge(count = usedByCount, onClick = onUsedByClick)
+                if (fileRole != null) StructureChips(role = fileRole, onClick = onUsedByClick)
             }
             TodoStatusBadge(
                 count = todoCount,
@@ -418,16 +419,76 @@ private fun TodoStatusBadge(
 }
 
 @Composable
-private fun UsedByBadge(count: Int, onClick: (() -> Unit)? = null) {
-    val color = if (onClick != null) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.onSurfaceVariant
-    val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Text(
-        text = "Used by $count",
-        modifier = mod,
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-    )
+private fun StructureChips(role: FileRole, onClick: (() -> Unit)?) {
+    val countText = if (role.truncated) "${role.dependents}+" else "${role.dependents}"
+    if (role.inCycle) {
+        StructureChip(
+            color = Glass.colors.warn,
+            label = "In cycle",
+            tooltip = "This file is part of a dependency cycle. Click to inspect in Atlas.",
+            onClick = onClick,
+        )
+    }
+    when {
+        role.isHub -> StructureChip(
+            color = Glass.colors.primary,
+            label = "Hub · used by $countText",
+            tooltip = "$countText files depend on this file — a structural hub. Click to inspect in Atlas.",
+            onClick = onClick,
+        )
+        role.dependents > 0 -> StructureChip(
+            color = null,
+            label = "Used by $countText",
+            tooltip = "$countText files import this file. Click to inspect in Atlas.",
+            onClick = onClick,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StructureChip(
+    color: Color?,
+    label: String,
+    tooltip: String,
+    onClick: (() -> Unit)?,
+) {
+    val rowMod = if (onClick != null) Modifier.clickable { onClick() } else Modifier
+    val textColor = if (color == null) {
+        if (onClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    TooltipArea(
+        tooltip = {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+            ) {
+                Text(
+                    text = tooltip,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            }
+        },
+    ) {
+        Row(
+            modifier = rowMod,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (color != null) {
+                Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor,
+            )
+        }
+    }
 }
 
 @Composable

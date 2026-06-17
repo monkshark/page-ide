@@ -80,4 +80,11 @@ class ShortcutResolverTest {
     fun `F5 refreshes the tree`() {
         assertEquals(ShortcutAction.REFRESH_TREE, resolve(Key.F5))
     }
+
+    @Test
+    fun `ctrl alt A focuses the active file in Atlas without colliding with plain ctrl A`() {
+        assertEquals(ShortcutAction.FOCUS_IN_ATLAS, resolve(Key.A, ctrl = true, alt = true))
+        assertEquals(ShortcutAction.NONE, resolve(Key.A, ctrl = true))
+        assertEquals(ShortcutAction.NONE, resolve(Key.A, alt = true))
+    }
 }

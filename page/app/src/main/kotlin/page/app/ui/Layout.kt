@@ -47,6 +47,8 @@ import kotlinx.coroutines.withContext
 import page.app.*
 import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeEvent
+import page.atlas.graph.FileRole
+import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasPanel
@@ -167,7 +169,8 @@ internal fun IdeMainLayout(
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasLoadProgress: Float? = null,
-    atlasUsedByCount: Int? = null,
+    atlasFileRole: FileRole? = null,
+    atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
     atlasActiveId: String? = null,
@@ -176,6 +179,7 @@ internal fun IdeMainLayout(
     onAtlasCallsExpand: (String) -> Unit = {},
     onAtlasCallsOpen: (String) -> Unit = {},
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
+    onShowInAtlas: (Path) -> Unit = {},
     palette: GlassPalette = GlassPalette.Signature,
     onSelectPalette: (GlassPalette) -> Unit = {},
 ) {
@@ -254,11 +258,14 @@ internal fun IdeMainLayout(
                 }
             }
     }
-    val scopedDiagnostics = diagnosticsInScope(
-        all = lspRouter.allDiagnosticsByUri,
-        scope = LocalPageSettings.current.lsp.diagnosticsScope,
-        focusedPath = editor.focused().book.active?.path,
-        openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+    val scopedDiagnostics = mergeDiagnostics(
+        diagnosticsInScope(
+            all = lspRouter.allDiagnosticsByUri,
+            scope = LocalPageSettings.current.lsp.diagnosticsScope,
+            focusedPath = editor.focused().book.active?.path,
+            openPaths = (editor.primaryPane.book.tabs + editor.secondaryPane.book.tabs).map { it.path }.toSet(),
+        ),
+        cycleDiagnostics(atlasProjectCycles),
     )
     val scopedProblemsCount = scopedDiagnostics.values.sumOf { it.size }
     Box(modifier = Modifier.fillMaxSize().onPreviewKeyEvent { event ->
@@ -422,6 +429,7 @@ internal fun IdeMainLayout(
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
                                 onShowCallGraph = onShowCallGraph,
+                                onShowInAtlas = onShowInAtlas,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -456,6 +464,7 @@ internal fun IdeMainLayout(
                                 onApplyRename = onApplyRename,
                                 onRequestReferences = onRequestReferences,
                                 onShowCallGraph = onShowCallGraph,
+                                onShowInAtlas = onShowInAtlas,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -489,6 +498,7 @@ internal fun IdeMainLayout(
                         onApplyRename = onApplyRename,
                         onRequestReferences = onRequestReferences,
                         onShowCallGraph = onShowCallGraph,
+                        onShowInAtlas = onShowInAtlas,
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -637,7 +647,7 @@ internal fun IdeMainLayout(
             onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
             onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
             onRuntimeClick = { id -> runtimeDialogOpen = id },
-            usedByCount = atlasUsedByCount,
+            fileRole = atlasFileRole,
             onUsedByClick = onAtlasFocusActive,
         )
     }

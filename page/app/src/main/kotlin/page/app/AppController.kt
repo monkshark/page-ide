@@ -441,6 +441,7 @@ internal class AppController(
     val stopActiveRun: () -> Unit = { dispatch(IdeEvent.Run.Stop) }
     val openRunDialog: () -> Unit = { dispatch(IdeEvent.Chrome.OpenRunDialog) }
     val openSettings: () -> Unit = { appState.settingsDialogOpen = true }
+    var onFocusActiveInAtlas: () -> Unit = {}
 
     private val shortcutDispatchController = ShortcutDispatchController(
         hasSearch = { focused().search != null },
@@ -485,6 +486,7 @@ internal class AppController(
         jumpProblemRelative = jumpProblemRelative,
         refreshTree = { workspaceState.treeRevision++ },
         closeSearch = { closeSearch(editorWorkspace.focusedPane) },
+        focusActiveInAtlas = { onFocusActiveInAtlas() },
     )
     val handleShortcut: (KeyEvent) -> Boolean = { event -> shortcutDispatchController.handle(event) }
 

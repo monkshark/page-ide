@@ -30,11 +30,13 @@ internal enum class ShortcutAction {
     JUMP_PROBLEM_PREV,
     REFRESH_TREE,
     CLOSE_SEARCH,
+    FOCUS_IN_ATLAS,
 }
 
 internal object ShortcutResolver {
     fun resolve(key: Key, ctrl: Boolean, alt: Boolean, shift: Boolean, hasSearch: Boolean): ShortcutAction {
         if (ctrl && alt && key == Key.T) return ShortcutAction.CYCLE_PALETTE
+        if (ctrl && alt && key == Key.A) return ShortcutAction.FOCUS_IN_ATLAS
         if (ctrl) {
             return when {
                 key == Key.O && shift -> ShortcutAction.OPEN_FOLDER

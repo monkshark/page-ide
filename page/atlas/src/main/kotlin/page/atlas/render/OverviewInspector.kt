@@ -34,9 +34,6 @@ import page.atlas.graph.moduleDependsOn
 import page.atlas.graph.modulePath
 import page.atlas.graph.moduleUsedBy
 
-private val OutColor = Color(0xFF6E8BFF)
-private val InColor = Color(0xFF4FD3C7)
-private val PathColor = Color(0xFFE7B45C)
 private const val FILE_LIMIT = 12
 private const val MODULE_LIMIT = 8
 
@@ -51,6 +48,7 @@ internal fun OverviewInspector(
     val dependsOn = remember(graph, module.id) { moduleDependsOn(graph, module.id) }
     val usedBy = remember(graph, module.id) { moduleUsedBy(graph, module.id) }
     val langLine = remember(module) { languageLine(module) }
+    val roles = atlasRoleColors()
 
     Column(
         modifier = modifier
@@ -82,8 +80,8 @@ internal fun OverviewInspector(
             modifier = Modifier.padding(horizontal = 12.dp),
         )
 
-        LinkSection("Depends on", dependsOn, OutColor, onSelectModule)
-        LinkSection("Used by", usedBy, InColor, onSelectModule)
+        LinkSection("Depends on", dependsOn, roles.dependency, onSelectModule)
+        LinkSection("Used by", usedBy, roles.usedBy, onSelectModule)
 
         if (module.files.isNotEmpty()) {
             SectionDivider()
@@ -127,6 +125,7 @@ internal fun OverviewPathPanel(
 ) {
     val path = remember(graph, from, to) { modulePath(graph, from, to) }
     val byId = remember(graph) { graph.nodes.associateBy { it.id } }
+    val roles = atlasRoleColors()
 
     Column(
         modifier = modifier
@@ -141,12 +140,12 @@ internal fun OverviewPathPanel(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 12.dp),
         ) {
-            Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(PathColor))
+            Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(roles.path))
             Text(
                 text = "  PATH",
                 fontSize = 9.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = PathColor,
+                color = roles.path,
             )
         }
         if (path == null) {

@@ -154,6 +154,7 @@ fun EditorPanel(
     onApplyRename: ((RenameWorkspaceEdit) -> Unit)? = null,
     onRequestReferences: ((line: Int, character: Int, symbolName: String) -> Unit)? = null,
     onShowCallGraph: ((line: Int, character: Int) -> Unit)? = null,
+    onShowInAtlas: (() -> Unit)? = null,
     onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
@@ -1312,6 +1313,10 @@ fun EditorPanel(
                     )
                 },
                 contextMenuActions = buildList {
+                    val showInAtlas = onShowInAtlas
+                    if (showInAtlas != null) {
+                        add(page.ui.EditorContextAction("Show in Atlas") { showInAtlas() })
+                    }
                     val callGraph = onShowCallGraph
                     if (callGraph != null) {
                         add(
