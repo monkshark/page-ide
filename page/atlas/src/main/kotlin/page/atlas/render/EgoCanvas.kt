@@ -43,8 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.nio.file.Path as FilePath
 import kotlin.math.hypot
+import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphSlice
 import page.ui.Glass
+
+private const val EGO_HUB_DEPENDENTS = 4
 
 @Composable
 fun EgoCanvas(
@@ -77,12 +80,13 @@ fun EgoCanvas(
         m
     }
 
-    val importTargets = remember(slice, focusId) { slice.edges.filter { it.from == focusId }.map { it.to }.toSet() }
-    val dependentSources = remember(slice, focusId) { slice.edges.filter { it.to == focusId }.map { it.from }.toSet() }
-    val dependentCount = dependentSources.size
-    val importCount = importTargets.size
-    val cycleCount = (importTargets intersect dependentSources).size
+    val importCount = remember(slice, focusId) { slice.edges.filter { it.from == focusId }.mapTo(HashSet()) { it.to }.size }
     val focusNode = remember(slice, focusId) { slice.nodes.firstOrNull { it.id == focusId } }
+    val impact = remember(slice, focusId) { GraphInsights.impact(slice, focusId) }
+    val directCount = impact.count { it.depth == 1 }
+    val transitiveCount = impact.size
+    val hubsAffected = impact.count { it.ownDependents >= EGO_HUB_DEPENDENTS }
+    val inCycle = remember(slice, focusId) { GraphInsights.cycles(slice.edges).any { focusId in it } }
 
     fun transformNow(): EgoTransform =
         egoTransform(model, canvasSize.width.toFloat(), canvasSize.height.toFloat(), view.pan, view.zoom)
@@ -202,12 +206,14 @@ fun EgoCanvas(
         }
 
         EgoHeaderChip(modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
-        EgoInfoCard(
+        EgoImpactCard(
             fileName = focusNode?.label ?: "—",
             path = focusNode?.path?.toString() ?: "",
-            dependents = dependentCount,
-            imports = importCount,
-            cycles = cycleCount,
+            direct = directCount,
+            transitive = transitiveCount,
+            hubsAffected = hubsAffected,
+            uses = importCount,
+            inCycle = inCycle,
             modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
         )
         EgoLegend(theme, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
@@ -257,29 +263,58 @@ private fun EgoHeaderChip(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EgoInfoCard(
+private fun EgoImpactCard(
     fileName: String,
     path: String,
-    dependents: Int,
-    imports: Int,
-    cycles: Int,
+    direct: Int,
+    transitive: Int,
+    hubsAffected: Int,
+    uses: Int,
+    inCycle: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val roles = atlasRoleColors()
     Column(
         modifier = modifier
-            .width(220.dp)
+            .width(240.dp)
             .background(Glass.colors.surfaceOverlay, RoundedCornerShape(10.dp))
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
+        Text(
+            "IF YOU CHANGE THIS — WHAT BREAKS?",
+            style = TextStyle(fontSize = 9.sp, color = Glass.colors.faint, fontWeight = FontWeight.SemiBold),
+        )
         Text(fileName, style = TextStyle(fontSize = 13.sp, color = Glass.colors.text, fontWeight = FontWeight.SemiBold))
         if (path.isNotEmpty()) {
             Text(path, style = TextStyle(fontSize = 9.sp, color = Glass.colors.faint), maxLines = 2)
         }
         Box(modifier = Modifier.padding(top = 6.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("$dependents dependents", style = TextStyle(fontSize = 12.sp, color = atlasRoleColors().usedBy, fontWeight = FontWeight.Medium))
-                Text("$imports imports · $cycles cycles", style = TextStyle(fontSize = 10.sp, color = Glass.colors.faint))
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (direct == 0) {
+                    Text("Nothing depends on this file", style = TextStyle(fontSize = 11.sp, color = Glass.colors.muted))
+                } else {
+                    Text(
+                        "$direct direct · $transitive total dependents",
+                        style = TextStyle(fontSize = 12.sp, color = roles.usedBy, fontWeight = FontWeight.Medium),
+                    )
+                }
+                if (hubsAffected > 0) {
+                    Text(
+                        "$hubsAffected hub${if (hubsAffected == 1) "" else "s"} in the blast radius",
+                        style = TextStyle(fontSize = 11.sp, color = roles.hub, fontWeight = FontWeight.Medium),
+                    )
+                }
+                if (inCycle) {
+                    Text(
+                        "⟳ part of a dependency cycle",
+                        style = TextStyle(fontSize = 11.sp, color = roles.cycle, fontWeight = FontWeight.Medium),
+                    )
+                }
+                Text(
+                    "uses $uses file${if (uses == 1) "" else "s"}",
+                    style = TextStyle(fontSize = 10.sp, color = Glass.colors.faint),
+                )
             }
         }
     }
