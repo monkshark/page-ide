@@ -181,6 +181,8 @@ fun AtlasContent(
     var tracePath by remember(slice) { mutableStateOf<List<String>>(emptyList()) }
     var traceMessage by remember { mutableStateOf<String?>(null) }
     var depFocused by remember { mutableStateOf(true) }
+    var graphEgo by remember { mutableStateOf(false) }
+    val egoView = remember { EgoViewState() }
     var insightFocusOverride by remember(activeFileId) { mutableStateOf<String?>(null) }
     LaunchedEffect(traceMessage) {
         if (traceMessage != null) {
@@ -312,8 +314,9 @@ fun AtlasContent(
                 ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
             }
             if (viewTab == AtlasViewTab.GRAPH) {
-                ModeChip("File", !projectMode) { onProjectModeChange(false) }
-                ModeChip("Project", projectMode) { onProjectModeChange(true) }
+                ModeChip("File", !projectMode && !graphEgo) { graphEgo = false; onProjectModeChange(false) }
+                ModeChip("Project", projectMode && !graphEgo) { graphEgo = false; onProjectModeChange(true) }
+                ModeChip("Ego", graphEgo) { graphEgo = true }
             }
         }
         Divider()
@@ -525,6 +528,28 @@ fun AtlasContent(
                     )
                 }
             }
+            }
+        } else if (graphEgo) {
+            val egoFocus = remember(slice, activeFileId, selectedId) {
+                listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (egoFocus != null) {
+                    EgoCanvas(
+                        slice = slice,
+                        focusId = egoFocus,
+                        onNodeClick = onNodeClick,
+                        view = egoView,
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Open a file to see its impact",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         } else {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
