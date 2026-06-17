@@ -166,7 +166,7 @@ fun AtlasContent(
         overviewSelection.drillPath.lastOrNull()?.let { FilePath.of(it) }
     }
     val moduleGraph = remember(slice, drillScope) { aggregateModules(slice, scopeRoot = drillScope) }
-    val overviewLayout = remember(moduleGraph) { forceLayout(moduleGraph) }
+    val overviewLayout = remember(moduleGraph) { layeredModuleLayout(moduleGraph) }
     LaunchedEffect(drillScope) { overviewView.fitted = false }
     val activeModuleId = remember(moduleGraph) {
         moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
