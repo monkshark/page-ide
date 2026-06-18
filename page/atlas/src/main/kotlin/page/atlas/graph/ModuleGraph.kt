@@ -195,6 +195,17 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
     return ModuleGraph(nodes, edges, droppedModules, droppedFiles)
 }
 
+fun drillPathInSlice(slice: GraphSlice, drillPath: List<String>): List<String> {
+    if (drillPath.isEmpty()) return drillPath
+    val dirs = slice.nodes.mapNotNull { node -> node.path?.let { it.parent ?: it } }
+    val out = ArrayList<String>(drillPath.size)
+    for (id in drillPath) {
+        val scope = runCatching { Path.of(id) }.getOrNull() ?: break
+        if (dirs.any { it.startsWith(scope) }) out.add(id) else break
+    }
+    return out
+}
+
 private class DirNode(val dir: Path) {
     val dirs = LinkedHashMap<String, DirNode>()
     val files = ArrayList<GraphNode>()

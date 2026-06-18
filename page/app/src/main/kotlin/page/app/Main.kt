@@ -283,6 +283,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
     val atlasMapView = remember { page.atlas.render.MapViewState() }
     val atlasView = remember { page.atlas.render.AtlasViewState() }
+    val atlasOverviewState = remember { page.atlas.render.OverviewViewState() }
     val sessionCoordinator = remember {
         SessionCoordinator(
             editorWorkspace = editorWorkspace,
@@ -290,6 +291,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             workspaceState = workspaceState,
             terminalManagerProvider = { currentTerminalManager },
             atlasMapView = atlasMapView,
+            atlasView = atlasView,
+            atlasOverviewState = atlasOverviewState,
         )
     }
 
@@ -746,6 +749,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasSlice = atlasSlice,
                     atlasMapView = atlasMapView,
                     atlasView = atlasView,
+                    atlasOverviewState = atlasOverviewState,
                     atlasLoadProgress = atlasLoadProgress,
                     atlasFileRole = atlasFileRole,
                     atlasProjectCycles = atlasProjectCycles,

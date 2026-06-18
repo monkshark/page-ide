@@ -55,6 +55,7 @@ import page.atlas.render.AtlasPanel
 import page.atlas.render.VcsMark
 import page.atlas.render.AtlasViewState
 import page.atlas.render.MapViewState
+import page.atlas.render.OverviewViewState
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -168,6 +169,7 @@ internal fun IdeMainLayout(
     atlasSlice: GraphSlice = GraphSlice.EMPTY,
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
+    atlasOverviewState: OverviewViewState = remember { OverviewViewState() },
     atlasLoadProgress: Float? = null,
     atlasFileRole: FileRole? = null,
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
@@ -539,6 +541,7 @@ internal fun IdeMainLayout(
                     onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
                     mapView = atlasMapView,
                     atlasView = atlasView,
+                    overviewState = atlasOverviewState,
                     loadProgress = atlasLoadProgress,
                     vcsMarks = atlasVcsMarks,
                     vcsEnabled = ui.atlasVcsOverlay,
@@ -787,6 +790,7 @@ internal fun IdeMainLayout(
                 onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
                 mapView = atlasMapView,
                 atlasView = atlasView,
+                overviewState = atlasOverviewState,
                 loadProgress = atlasLoadProgress,
                 vcsMarks = atlasVcsMarks,
                 vcsEnabled = ui.atlasVcsOverlay,
