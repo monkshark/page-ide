@@ -90,7 +90,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
     for (cut in frontier) {
         val moduleId = cut.node.dir.toString()
         val acc = accs.getOrPut(moduleId) { ModuleAcc(cut.node.dir, moduleLabel(cut.node.dir, root)) }
-        if (!cut.loose && cut.node.subtreeCount > 1) acc.splittable = true
+        if (cut.node.subtreeCount > 1 && (!cut.loose || cut.node.dirs.isNotEmpty())) acc.splittable = true
         val owned = if (cut.loose) cut.node.files else cut.subtreeFiles()
         for (node in owned) {
             fileModule[node.id] = moduleId

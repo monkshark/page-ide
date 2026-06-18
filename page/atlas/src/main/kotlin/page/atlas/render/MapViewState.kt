@@ -11,6 +11,7 @@ class MapViewState {
     var pan by mutableStateOf(Offset.Zero)
     var scale by mutableStateOf(0f)
     var fitted by mutableStateOf(false)
+    val savedViews = mutableStateMapOf<String, Pair<Offset, Float>>()
     val userOffsets = mutableStateMapOf<String, Offset>()
     val expandOrder = mutableStateListOf<String>()
     var expandedDirs by mutableStateOf<Set<String>?>(null)
@@ -27,6 +28,7 @@ class MapViewState {
         pan = Offset.Zero
         scale = 0f
         fitted = false
+        savedViews.clear()
         userOffsets.clear()
         expandOrder.clear()
         expandedDirs = null

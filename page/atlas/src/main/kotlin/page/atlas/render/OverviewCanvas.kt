@@ -1,6 +1,7 @@
 package page.atlas.render
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -22,20 +23,26 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import kotlin.math.hypot
@@ -97,6 +104,7 @@ private data class DrillTransition(
     val capBase: Offset,
     val capScale: Float,
     val capIndeg: Map<String, Int>,
+    val capOutdeg: Map<String, Int>,
     val capCycNodes: Set<String>,
     val capCycKeys: Set<Pair<String, String>>,
 )
@@ -106,6 +114,7 @@ internal data class DrilledModule(
     val isHub: Boolean,
     val inCycle: Boolean,
     val usedBy: Int,
+    val uses: Int,
     val aspect: Float,
 )
 
@@ -187,9 +196,12 @@ internal fun OverviewCanvas(
     onOpenFile: (java.nio.file.Path) -> Unit,
     onDrillFrom: (Rect, DrilledModule) -> Unit = { _, _ -> },
     drillingOutId: String? = null,
+    drillOutFromRect: Rect? = null,
     parentGraph: ModuleGraph? = null,
     parentLayout: ModuleLayerLayout? = null,
     onDrillingInChange: (Boolean) -> Unit = {},
+    drillOutMillis: Int = DRILL_TRANSITION_MS,
+    drillOutEasing: Easing = FastOutSlowInEasing,
 ) {
     val textMeasurer = rememberTextMeasurer(cacheSize = 256)
     val surface = MaterialTheme.colorScheme.surface
@@ -199,7 +211,6 @@ internal fun OverviewCanvas(
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val primary = MaterialTheme.colorScheme.primary
     val roles = atlasRoleColors()
-    val titleStyle = TextStyle(fontSize = 11.sp, color = onSurface)
     val bodyStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val bandStyle = TextStyle(fontSize = 9.sp, color = labelColor)
 
@@ -240,6 +251,11 @@ internal fun OverviewCanvas(
         parentGraph?.edges?.forEach { if (it.from != it.to) inn.merge(it.to, 1, Int::plus) }
         inn
     }
+    val parentOutdeg = remember(parentGraph) {
+        val out = HashMap<String, Int>()
+        parentGraph?.edges?.forEach { if (it.from != it.to) out.merge(it.from, 1, Int::plus) }
+        out
+    }
     val parentCycleKeys = remember(parentGraph) {
         if (parentGraph != null) mapCycleEdges(parentGraph.edges.map { MapEdge(it.from, it.to, it.weight) }) else emptySet()
     }
@@ -277,6 +293,24 @@ internal fun OverviewCanvas(
 
     fun fitTransform(): Pair<Offset, Float> = fitTransformFor(scene)
 
+    fun outTransformFor(s: OverviewCardScene): Pair<Offset, Float> {
+        val rect = drillOutFromRect
+        val box = drillingOutId?.let { s.boxes[it] }
+        if (rect != null && box != null && box.w > 0f) {
+            val sc = rect.width / box.w
+            return Offset(rect.left - box.x * sc, rect.top - box.y * sc) to sc
+        }
+        return fitTransformFor(s)
+    }
+
+    fun scopeKey(): String = selection.drillPath.joinToString(" ")
+
+    fun saveScopeView() {
+        if (scale > 0f) view.savedViews[scopeKey()] = pan to scale
+    }
+
+    fun savedOrFit(): Pair<Offset, Float> = view.savedViews[scopeKey()] ?: fitTransform()
+
     fun viewTransform(): Pair<Offset, Float> = if (scale > 0f) pan to scale else fitTransform()
 
     fun centerOf(id: String): Offset? = scene.boxes[id]?.let { Offset(it.centerX, it.centerY) }
@@ -305,7 +339,7 @@ internal fun OverviewCanvas(
             try {
                 anim.snapTo(0f)
                 anim.animateTo(1f, tween(DRILL_TRANSITION_MS, easing = FastOutSlowInEasing))
-                val (fp, fs) = fitTransform()
+                val (fp, fs) = savedOrFit()
                 pan = fp
                 scale = fs
                 fitted = true
@@ -315,7 +349,7 @@ internal fun OverviewCanvas(
             }
         } else if (depth != prevDrillDepth) {
             transition = null
-            val (fp, fs) = fitTransform()
+            val (fp, fs) = savedOrFit()
             pan = fp
             scale = fs
             fitted = true
@@ -325,12 +359,13 @@ internal fun OverviewCanvas(
 
     LaunchedEffect(drillingOutId, parentScene != null, canvasSize) {
         if (drillingOutId != null && parentScene != null && canvasSize.width > 0) {
-            val (pp, ps) = fitTransformFor(parentScene)
+            saveScopeView()
+            val (pp, ps) = outTransformFor(parentScene)
             pan = pp
             scale = ps
             fitted = true
             outAnim.snapTo(0f)
-            outAnim.animateTo(1f, tween(DRILL_TRANSITION_MS, easing = FastOutSlowInEasing))
+            outAnim.animateTo(1f, tween(drillOutMillis, easing = drillOutEasing))
         } else {
             outAnim.snapTo(0f)
         }
@@ -389,6 +424,7 @@ internal fun OverviewCanvas(
         drawBands: Boolean,
         exclude: String?,
         inDeg: Map<String, Int>,
+        outDeg: Map<String, Int>,
         cycNodes: Set<String>,
         cycKeys: Set<Pair<String, String>>,
     ) = with(scope) {
@@ -432,50 +468,33 @@ internal fun OverviewCanvas(
             if (node.id !in layerScene.visible) continue
             if (exclude != null && node.id == exclude) continue
             val b = layerScene.boxes[node.id] ?: continue
-            val left = lx(b.x)
-            val top = ly(b.y)
-            val w = b.w * s
-            val h = b.h * s
-            val isHub = (inDeg[node.id] ?: 0) >= HUB_MIN_DEPENDENTS
-            val inCyc = node.id in cycNodes
-            val topLeft = Offset(left, top)
-            val sz = Size(w, h)
-            val corner = CornerRadius(8f * s)
-            if (!node.external) {
-                drawRoundRect(color = surface.copy(alpha = alpha), topLeft = topLeft, size = sz, cornerRadius = corner)
-                drawRoundRect(color = cardFill.copy(alpha = alpha), topLeft = topLeft, size = sz, cornerRadius = corner)
-            }
-            val borderColor = when {
-                node.external -> roles.neutral.copy(alpha = 0.7f * alpha)
-                isHub -> roles.hub.copy(alpha = 0.55f * alpha)
-                inCyc -> roles.cycle.copy(alpha = 0.7f * alpha)
-                else -> outline.copy(alpha = 0.9f * alpha)
-            }
-            val borderStyle = if (node.external) {
-                Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)))
-            } else {
-                Stroke(width = 1.2f)
-            }
-            drawRoundRect(color = borderColor, topLeft = topLeft, size = sz, cornerRadius = corner, style = borderStyle)
-            var titleX = left + 14f
-            if (!node.external && isHub) {
-                drawCircle(color = roles.hub.copy(alpha = alpha), radius = 5f, center = Offset(left + 18f, top + 20f))
-                titleX = left + 34f
-            } else if (!node.external && inCyc) {
-                drawCircle(color = roles.cycle.copy(alpha = alpha), radius = 6f, center = Offset(left + 18f, top + 18f), style = Stroke(width = 2f))
-                titleX = left + 34f
-            }
-            if (w < 56f) continue
-            val short = node.label.substringAfterLast('/')
-            val titleMeasured = textMeasurer.measure(AnnotatedString(short), titleStyle)
-            drawText(titleMeasured, color = onSurface.copy(alpha = alpha), topLeft = Offset(titleX, top + 8f))
-            val files = node.fileCount
-            val faint = labelColor.copy(alpha = 0.7f * alpha)
-            when {
-                node.external -> drawText(textMeasurer.measure(AnnotatedString("external"), bodyStyle), color = faint, topLeft = Offset(left + 14f, top + h - 22f))
-                isHub -> drawText(textMeasurer.measure(AnnotatedString("$files files · used by ${inDeg[node.id] ?: 0}"), bodyStyle), color = roles.hub.copy(alpha = alpha), topLeft = Offset(left + 14f, top + h - 22f))
-                else -> drawText(textMeasurer.measure(AnnotatedString("$files files"), bodyStyle), color = faint, topLeft = Offset(left + 14f, top + h - 22f))
-            }
+            drawOverviewCard(
+                measurer = textMeasurer,
+                roles = roles,
+                surface = surface,
+                cardFill = cardFill,
+                outline = outline,
+                onSurface = onSurface,
+                labelColor = labelColor,
+                primary = primary,
+                left = lx(b.x),
+                top = ly(b.y),
+                w = b.w * s,
+                h = b.h * s,
+                s = s,
+                title = node.label.substringAfterLast('/'),
+                external = node.external,
+                isHub = (inDeg[node.id] ?: 0) >= HUB_MIN_DEPENDENTS,
+                inCycle = node.id in cycNodes,
+                selected = false,
+                pathEnd = false,
+                files = node.fileCount,
+                usedBy = inDeg[node.id] ?: 0,
+                uses = outDeg[node.id] ?: 0,
+                showStats = false,
+                alpha = alpha,
+                dim = false,
+            )
         }
     }
 
@@ -562,10 +581,12 @@ internal fun OverviewCanvas(
                                         isHub = (indeg[id] ?: 0) >= HUB_MIN_DEPENDENTS,
                                         inCycle = id in cycleNodes,
                                         usedBy = indeg[id] ?: 0,
+                                        uses = outdeg[id] ?: 0,
                                         aspect = box.h / box.w,
                                     ),
                                 )
-                                transition = DrillTransition(scene, graph, id, capBase, capScale, indeg, cycleNodes, cycleKeys)
+                                transition = DrillTransition(scene, graph, id, capBase, capScale, indeg, outdeg, cycleNodes, cycleKeys)
+                                saveScopeView()
                                 onSelectionChange(selection.drillInto(id))
                             }
                         } else if (node.files.size == 1) {
@@ -584,16 +605,16 @@ internal fun OverviewCanvas(
             val aC = smoothstep(p, 0.35f, 0.85f)
 
             if (scene.boxes.isNotEmpty()) {
-                val (childBase, childScale) = fitTransform()
+                val (childBase, childScale) = savedOrFit()
                 val enterX = maxOf(120f, size.width * 0.18f) * (1f - aC)
                 val enterY = maxOf(160f, size.height * 0.22f) * (1f - aC)
-                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(enterX, enterY), false, null, indeg, cycleNodes, cycleKeys)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(enterX, enterY), false, null, indeg, outdeg, cycleNodes, cycleKeys)
             }
             drawLayer(
                 this, activeTransition.oldScene, activeTransition.oldGraph,
                 activeTransition.capBase, activeTransition.capScale,
                 1f - aA, Offset.Zero, true, activeTransition.drilledId,
-                activeTransition.capIndeg, activeTransition.capCycNodes, activeTransition.capCycKeys,
+                activeTransition.capIndeg, activeTransition.capOutdeg, activeTransition.capCycNodes, activeTransition.capCycKeys,
             )
 
             val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
@@ -617,13 +638,13 @@ internal fun OverviewCanvas(
                 val (childBase, childScale) = fitTransform()
                 val exitX = maxOf(120f, size.width * 0.18f) * (1f - aC)
                 val exitY = maxOf(160f, size.height * 0.22f) * (1f - aC)
-                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(exitX, exitY), false, null, indeg, cycleNodes, cycleKeys)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(exitX, exitY), false, null, indeg, outdeg, cycleNodes, cycleKeys)
             }
-            val (pBase, pScale) = fitTransformFor(parentScene)
+            val (pBase, pScale) = outTransformFor(parentScene)
             drawLayer(
                 this, parentScene, parentGraph, pBase, pScale,
                 1f - aA, Offset.Zero, true, outId,
-                parentIndeg, parentCycleNodes, parentCycleKeys,
+                parentIndeg, parentOutdeg, parentCycleNodes, parentCycleKeys,
             )
             return@Canvas
         }
@@ -698,80 +719,39 @@ internal fun OverviewCanvas(
         for (node in graph.nodes) {
             if (node.id !in scene.visible) continue
             val b = scene.boxes[node.id] ?: continue
-            val left = base.x + b.x * s
-            val top = base.y + b.y * s
-            val w = b.w * s
-            val h = b.h * s
             val dimmed = highlighted != null && node.id !in highlighted
-            val dimAlpha = if (dimmed) 0.4f else 1f
             val active = node.kind == NodeKind.ACTIVE
             val selected = node.id == selectedId
             val isHub = (indeg[node.id] ?: 0) >= HUB_MIN_DEPENDENTS
             val inCycle = node.id in cycleNodes
             val pathEnd = pathIds != null && (node.id == pathIds.first() || node.id == pathIds.last())
-            val topLeft = Offset(left, top)
-            val size = Size(w, h)
-            val corner = CornerRadius(8f * s)
-
-            if (!node.external) {
-                val fill = when {
-                    selected || active -> primary.copy(alpha = 0.12f * dimAlpha)
-                    else -> cardFill.copy(alpha = (if (dimmed) 0.4f else 1f))
-                }
-                drawRoundRect(color = surface.copy(alpha = if (dimmed) 0.4f else 1f), topLeft = topLeft, size = size, cornerRadius = corner)
-                drawRoundRect(color = fill, topLeft = topLeft, size = size, cornerRadius = corner)
-            }
-
-            val borderColor = when {
-                node.external -> roles.neutral.copy(alpha = if (dimmed) 0.3f else 0.7f)
-                selected || active || pathEnd -> (if (pathEnd) roles.path else primary).copy(alpha = dimAlpha)
-                isHub -> roles.hub.copy(alpha = if (dimmed) 0.25f else 0.55f)
-                inCycle -> roles.cycle.copy(alpha = if (dimmed) 0.3f else 0.7f)
-                else -> outline.copy(alpha = if (dimmed) 0.4f else 0.9f)
-            }
-            val borderStyle = when {
-                node.external -> Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 3f)))
-                selected || active || pathEnd -> Stroke(width = 1.6f)
-                else -> Stroke(width = 1.2f)
-            }
-            drawRoundRect(color = borderColor, topLeft = topLeft, size = size, cornerRadius = corner, style = borderStyle)
-
-            var titleX = left + 14f
-            if (!node.external && isHub) {
-                drawCircle(color = roles.hub.copy(alpha = dimAlpha), radius = 5f, center = Offset(left + 18f, top + 20f))
-                titleX = left + 34f
-            } else if (!node.external && inCycle) {
-                drawCircle(
-                    color = roles.cycle.copy(alpha = dimAlpha),
-                    radius = 6f,
-                    center = Offset(left + 18f, top + 18f),
-                    style = Stroke(width = 2f),
-                )
-                titleX = left + 34f
-            }
-
-            if (w < 56f) continue
-            val short = node.label.substringAfterLast('/')
-            val titleMeasured = textMeasurer.measure(AnnotatedString(short), titleStyle)
-            drawText(
-                textLayoutResult = titleMeasured,
-                color = onSurface.copy(alpha = if (dimmed) 0.45f else 1f),
-                topLeft = Offset(titleX, top + 8f),
+            drawOverviewCard(
+                measurer = textMeasurer,
+                roles = roles,
+                surface = surface,
+                cardFill = cardFill,
+                outline = outline,
+                onSurface = onSurface,
+                labelColor = labelColor,
+                primary = primary,
+                left = base.x + b.x * s,
+                top = base.y + b.y * s,
+                w = b.w * s,
+                h = b.h * s,
+                s = s,
+                title = node.label.substringAfterLast('/'),
+                external = node.external,
+                isHub = isHub,
+                inCycle = inCycle,
+                selected = selected || active,
+                pathEnd = pathEnd,
+                files = node.fileCount,
+                usedBy = indeg[node.id] ?: 0,
+                uses = outdeg[node.id] ?: 0,
+                showStats = selected || node.id == focusId,
+                alpha = 1f,
+                dim = dimmed,
             )
-
-            val files = node.fileCount
-            val i = indeg[node.id] ?: 0
-            val o = outdeg[node.id] ?: 0
-            val faint = labelColor.copy(alpha = if (dimmed) 0.3f else 0.7f)
-            when {
-                node.external -> drawCardLine(textMeasurer, "external", bodyStyle, faint, left + 14f, top + h - 22f)
-                selected || node.id == focusId -> {
-                    drawCardLine(textMeasurer, "$files files", bodyStyle, faint, left + 14f, top + h - 38f)
-                    drawCardLine(textMeasurer, "used by $i · uses $o", bodyStyle, roles.dependency.copy(alpha = dimAlpha), left + 14f, top + h - 22f)
-                }
-                isHub -> drawCardLine(textMeasurer, "$files files · used by $i", bodyStyle, roles.hub.copy(alpha = dimAlpha), left + 14f, top + h - 22f)
-                else -> drawCardLine(textMeasurer, "$files files", bodyStyle, faint, left + 14f, top + h - 22f)
-            }
         }
 
         val legend = if (onPath) {
@@ -801,15 +781,163 @@ internal fun OverviewCanvas(
 private fun smoothstep(p: Float, a: Float, b: Float): Float =
     ((p - a) / (b - a)).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-private fun DrawScope.drawCardLine(
-    measurer: androidx.compose.ui.text.TextMeasurer,
-    text: String,
-    style: TextStyle,
-    color: Color,
-    x: Float,
-    y: Float,
+internal fun DrawScope.drawOverviewCard(
+    measurer: TextMeasurer,
+    roles: AtlasRoleColors,
+    surface: Color,
+    cardFill: Color,
+    outline: Color,
+    onSurface: Color,
+    labelColor: Color,
+    primary: Color,
+    left: Float,
+    top: Float,
+    w: Float,
+    h: Float,
+    s: Float,
+    title: String,
+    external: Boolean,
+    isHub: Boolean,
+    inCycle: Boolean,
+    selected: Boolean,
+    pathEnd: Boolean,
+    files: Int,
+    usedBy: Int,
+    uses: Int,
+    showStats: Boolean,
+    alpha: Float,
+    dim: Boolean,
 ) {
-    drawText(measurer.measure(AnnotatedString(text), style), color = color, topLeft = Offset(x, y))
+    val a = alpha * (if (dim) 0.4f else 1f)
+    if (a <= 0.01f || s <= 0f) return
+    val k = s
+    val corner = CornerRadius(8f * k)
+    val topLeft = Offset(left, top)
+    val sz = Size(w, h)
+
+    if (!external) {
+        drawRoundRect(color = surface.copy(alpha = a), topLeft = topLeft, size = sz, cornerRadius = corner)
+        val fillBase = if (selected) lerp(cardFill, primary, 0.12f) else cardFill
+        val brush = Brush.verticalGradient(
+            colors = listOf(lerp(fillBase, Color.White, 0.06f), lerp(fillBase, Color.Black, 0.04f)),
+            startY = top,
+            endY = top + h,
+        )
+        drawRoundRect(brush = brush, alpha = a, topLeft = topLeft, size = sz, cornerRadius = corner)
+    }
+
+    val borderColor: Color
+    val borderW: Float
+    val dashed: Boolean
+    when {
+        external -> { borderColor = roles.neutral.copy(alpha = 0.6f * a); borderW = 1f * k; dashed = true }
+        selected -> { borderColor = primary.copy(alpha = a); borderW = 1.6f * k; dashed = false }
+        pathEnd -> { borderColor = roles.path.copy(alpha = 0.7f * a); borderW = 1.4f * k; dashed = false }
+        isHub -> { borderColor = roles.hub.copy(alpha = 0.55f * a); borderW = 1.3f * k; dashed = false }
+        inCycle -> { borderColor = roles.cycle.copy(alpha = 0.7f * a); borderW = 1.3f * k; dashed = false }
+        else -> { borderColor = outline.copy(alpha = a); borderW = 1.2f * k; dashed = false }
+    }
+    val inset = borderW / 2f
+    val borderStyle = if (dashed) {
+        Stroke(width = borderW, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f * k, 3f * k)))
+    } else {
+        Stroke(width = borderW)
+    }
+    drawRoundRect(
+        color = borderColor,
+        topLeft = Offset(left + inset, top + inset),
+        size = Size(w - borderW, h - borderW),
+        cornerRadius = CornerRadius((8f * k - inset).coerceAtLeast(2f * k)),
+        style = borderStyle,
+    )
+
+    if (!external) {
+        val gx = left + w - 15f * k
+        val gy = top + 15f * k
+        val gr = 4.4f * k
+        when {
+            isHub -> drawCircle(color = roles.hub.copy(alpha = a), radius = gr, center = Offset(gx, gy))
+            inCycle -> drawCircle(color = roles.cycle.copy(alpha = a), radius = gr, center = Offset(gx, gy), style = Stroke(width = 1.8f * k))
+            pathEnd -> drawLine(
+                color = roles.path.copy(alpha = a),
+                start = Offset(gx - 4.5f * k, gy),
+                end = Offset(gx + 4.5f * k, gy),
+                strokeWidth = 2.4f * k,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
+
+    if (w < 56f) return
+
+    val fontK = s / density
+    val titleStyle = TextStyle(fontSize = (12f * fontK).sp, fontWeight = FontWeight.W600, color = onSurface)
+    val bodyStyle = TextStyle(fontSize = (9f * fontK).sp, color = labelColor)
+    val titleMax = (w - 39f * k).coerceAtLeast(1f)
+    val titleLayout = measurer.measure(
+        text = AnnotatedString(title),
+        style = titleStyle,
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        constraints = Constraints(maxWidth = titleMax.toInt()),
+    )
+    drawText(titleLayout, color = onSurface.copy(alpha = a), topLeft = Offset(left + 13f * k, top + 7f * k))
+
+    if (!external) {
+        val bandTop = top + 31f * k
+        val bandBot = top + h - 31f * k
+        if (bandBot - bandTop > 13f * k) {
+            val trackW = w - 24f * k
+            val bh = 3.6f * k
+            val gap = 6.5f * k
+            val barX = left + 13f * k
+            val cy = (bandTop + bandBot) / 2f
+            val trackColor = labelColor.copy(alpha = 0.16f * a)
+            fun bar(y: Float, ratio: Float, color: Color) {
+                drawRoundRect(color = trackColor, topLeft = Offset(barX, y), size = Size(trackW, bh), cornerRadius = CornerRadius(bh / 2f))
+                if (ratio > 0f) {
+                    val len = (trackW * ratio).coerceAtLeast(bh)
+                    drawRoundRect(color = color.copy(alpha = a), topLeft = Offset(barX, y), size = Size(len, bh), cornerRadius = CornerRadius(bh / 2f))
+                }
+            }
+            bar(cy - bh - gap / 2f, min(1f, usedBy / 12f), roles.usedBy)
+            bar(cy + gap / 2f, min(1f, uses / 12f), primary)
+        }
+    }
+
+    val faint = labelColor.copy(alpha = 0.7f * a)
+    fun drawSegs(segs: List<Pair<String, Color>>, baseY: Float) {
+        var x = left + 13f * k
+        for ((text, color) in segs) {
+            val l = measurer.measure(AnnotatedString(text), bodyStyle)
+            drawText(l, color = color, topLeft = Offset(x, baseY))
+            x += l.size.width
+        }
+    }
+    val line1Y = top + h - 16f * k
+    when {
+        external -> drawSegs(listOf("external" to roles.neutral.copy(alpha = a)), line1Y)
+        showStats -> {
+            drawSegs(listOf("$files files" to faint), top + h - 28f * k)
+            drawSegs(
+                listOf(
+                    "used by $usedBy" to roles.usedBy.copy(alpha = a),
+                    " · " to faint,
+                    "uses $uses" to primary.copy(alpha = a),
+                ),
+                line1Y,
+            )
+        }
+        isHub -> drawSegs(
+            listOf(
+                "$files files" to faint,
+                "  ·  " to faint,
+                "used by $usedBy" to roles.hub.copy(alpha = a),
+            ),
+            line1Y,
+        )
+        else -> drawSegs(listOf("$files files" to faint), line1Y)
+    }
 }
 
 private fun DrawScope.drawCardEdge(from: Offset, to: Offset, color: Color, stroke: Float, drawHead: Boolean, curve: Path, head: Path) {
