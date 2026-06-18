@@ -85,6 +85,7 @@ import page.atlas.graph.GraphQueries
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
+import page.atlas.graph.drillPathInSlice
 import page.atlas.interaction.OverviewSelection
 
 @Composable
@@ -101,6 +102,7 @@ fun AtlasPanel(
     onExpand: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
+    overviewState: OverviewViewState = remember { OverviewViewState() },
     loadProgress: Float? = null,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsEnabled: Boolean = true,
@@ -130,6 +132,7 @@ fun AtlasPanel(
             onExpand = onExpand,
             mapView = mapView,
             atlasView = atlasView,
+            overviewState = overviewState,
             loadProgress = loadProgress,
             vcsMarks = vcsMarks,
             vcsEnabled = vcsEnabled,
@@ -160,6 +163,7 @@ fun AtlasContent(
     onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
+    overviewState: OverviewViewState = remember { OverviewViewState() },
     loadProgress: Float? = null,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsEnabled: Boolean = true,
@@ -178,8 +182,15 @@ fun AtlasContent(
     val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
         filterForMap(slice, mapView.filter, mapView.pinnedIds)
     }
-    val overviewView = remember { MapViewState() }
-    var overviewSelection by remember(slice) { mutableStateOf(OverviewSelection.NONE) }
+    val overviewView = overviewState.camera
+    var overviewSelection by overviewState.selectionState
+    LaunchedEffect(slice) {
+        val path = overviewSelection.drillPath
+        if (path.isNotEmpty()) {
+            val valid = drillPathInSlice(slice, path)
+            if (valid.size != path.size) overviewSelection = OverviewSelection(drillPath = valid)
+        }
+    }
     var drillFrom by remember(slice) { mutableStateOf<Pair<String, Rect>?>(null) }
     var drillRects by remember(slice) { mutableStateOf<Map<String, Rect>>(emptyMap()) }
     var drilledInfo by remember(slice) { mutableStateOf<Map<String, DrilledModule>>(emptyMap()) }

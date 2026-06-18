@@ -11,6 +11,7 @@ import page.atlas.graph.GraphSlice
 import page.atlas.graph.MODULE_MAX
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
+import page.atlas.graph.drillPathInSlice
 
 class ModuleGraphTest {
 
@@ -203,6 +204,24 @@ class ModuleGraphTest {
         assertEquals(10, graph.droppedModules)
         assertEquals(10, graph.droppedFiles)
         assertEquals(total, graph.nodes.sumOf { it.fileCount } + graph.droppedFiles, "no files lost silently")
+    }
+
+    @Test
+    fun `drillPathInSlice keeps valid prefixes and trims missing folders`() {
+        val slice = GraphSlice(
+            listOf(node("ws/app/Main.kt"), node("ws/app/ui/U.kt"), node("ws/lib/L.kt")),
+            emptyList(),
+        )
+        assertEquals(emptyList(), drillPathInSlice(slice, emptyList()))
+        assertEquals(
+            listOf(id("ws/app"), id("ws/app/ui")),
+            drillPathInSlice(slice, listOf(id("ws/app"), id("ws/app/ui"))),
+        )
+        assertEquals(
+            listOf(id("ws/app")),
+            drillPathInSlice(slice, listOf(id("ws/app"), id("ws/app/missing"))),
+        )
+        assertEquals(emptyList(), drillPathInSlice(slice, listOf(id("ws/gone"))))
     }
 
     @Test
