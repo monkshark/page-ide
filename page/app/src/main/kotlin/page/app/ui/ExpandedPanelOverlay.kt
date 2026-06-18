@@ -1,7 +1,7 @@
 package page.app.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -69,17 +69,14 @@ internal fun ExpandedPanelOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
                 .fillMaxHeight(0.86f)
-                .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
-                    RoundedCornerShape(12.dp),
-                )
                 .clickable(
                     interactionSource = cardInteraction,
                     indication = null,
                 ) { },
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             color = MaterialTheme.colorScheme.background,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+            shadowElevation = 18.dp,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (title != null) {

@@ -97,6 +97,21 @@ class ModuleGraphTest {
     }
 
     @Test
+    fun `big folder split into a loose remainder stays splittable when it owns subdirs`() {
+        val nodes = ArrayList<GraphNode>()
+        nodes += node("ws/app/Main.kt")
+        nodes += node("ws/app/Boot.kt")
+        repeat(10) { nodes += node("ws/app/state/S$it.kt") }
+        repeat(10) { nodes += node("ws/app/ui/U$it.kt") }
+        repeat(5) { nodes += node("ws/lib/L$it.kt") }
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()))
+
+        val app = graph.nodes.first { it.label == "app" }
+        assertTrue(app.splittable, "app is a loose remainder but still owns subdirs state,ui")
+        assertEquals(2, app.fileCount, "loose remainder owns only its direct files")
+    }
+
+    @Test
     fun `scope into a flat folder yields one node per file`() {
         val nodes = ArrayList<GraphNode>()
         repeat(6) { nodes += node("ws/pkg/F$it.kt") }
