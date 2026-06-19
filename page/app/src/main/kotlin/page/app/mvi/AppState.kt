@@ -44,7 +44,7 @@ internal data class LayoutState(
     val atlasOpen: Boolean = false,
     val atlasWidth: Dp = 360.dp,
     val atlasProjectMode: Boolean = false,
-    val atlasViewTab: AtlasViewTab = AtlasViewTab.DEPENDENCY,
+    val atlasViewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     val atlasVcsOverlay: Boolean = true,
     val atlasFollowActive: Boolean = false,
     val expandedPanel: ExpandedPanel = ExpandedPanel.NONE,

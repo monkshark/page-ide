@@ -183,7 +183,7 @@ class SessionCoordinatorTest {
         layoutUiState.atlasViewTab = AtlasViewTab.CALLS
         SessionStore.save(ws, coordinator(ws, atlasView = view).snapshot())
 
-        layoutUiState.atlasViewTab = AtlasViewTab.GRAPH
+        layoutUiState.atlasViewTab = AtlasViewTab.RELATIONS
         val restored = AtlasViewState()
         runBlocking { coordinator(ws, atlasView = restored).restore(ws) }
 

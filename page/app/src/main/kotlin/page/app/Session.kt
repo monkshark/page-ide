@@ -87,7 +87,7 @@ data class SessionFile(
     val editorScrollByPath: Map<String, SessionScrollSnapshot> = emptyMap(),
     val atlasMap: SessionAtlasMap? = null,
     val atlasFollow: Boolean = false,
-    val atlasViewTab: String = "GRAPH",
+    val atlasViewTab: String = "RELATIONS",
 )
 
 internal fun restoreExpandedDirs(snapshot: List<String>): Set<Path> {

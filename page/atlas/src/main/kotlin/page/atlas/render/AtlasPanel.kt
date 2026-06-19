@@ -96,7 +96,7 @@ fun AtlasPanel(
     width: Dp,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
-    viewTab: AtlasViewTab = AtlasViewTab.GRAPH,
+    viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
@@ -155,7 +155,7 @@ fun AtlasContent(
     onClose: () -> Unit,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
-    viewTab: AtlasViewTab = AtlasViewTab.GRAPH,
+    viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     onViewTabChange: (AtlasViewTab) -> Unit = {},
     showExpand: Boolean = false,
     onExpand: () -> Unit = {},
@@ -179,9 +179,6 @@ fun AtlasContent(
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     LaunchedEffect(callsSlice, callsView.pendingFocusId) { callsView.onSliceChanged(callsSlice) }
     val selectedId = atlasView.selectedId
-    val mapSlice = remember(slice, mapView.filter, mapView.pinnedIds) {
-        filterForMap(slice, mapView.filter, mapView.pinnedIds)
-    }
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
     LaunchedEffect(slice) {
@@ -238,32 +235,19 @@ fun AtlasContent(
     val activeModuleId = remember(moduleGraph) {
         moduleGraph.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
     }
-    val effectiveMarks = if (vcsEnabled) vcsMarks else emptyMap()
-    val impacted = remember(slice, effectiveMarks) {
-        vcsImpacted(slice.edges, effectiveMarks.keys)
-    }
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchIndex by remember { mutableStateOf(-1) }
-    var tracePath by remember(slice) { mutableStateOf<List<String>>(emptyList()) }
-    var traceMessage by remember { mutableStateOf<String?>(null) }
-    var depFocused by remember { mutableStateOf(true) }
-    var graphEgo by remember { mutableStateOf(false) }
     val egoView = remember { EgoViewState() }
     var insightFocusOverride by remember(activeFileId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(traceMessage) {
-        if (traceMessage != null) {
-            delay(2500)
-            traceMessage = null
-        }
-    }
-    LaunchedEffect(selectedId) {
-        if (selectedId == null) tracePath = emptyList()
+    var relationsDefocused by remember(activeFileId) { mutableStateOf(false) }
+    val relationsFocus = remember(slice, activeFileId, selectedId, relationsDefocused) {
+        if (relationsDefocused) null
+        else listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
     }
     val searchSlice = when (viewTab) {
-        AtlasViewTab.OVERVIEW -> slice
-        AtlasViewTab.DEPENDENCY -> mapSlice
-        AtlasViewTab.GRAPH -> slice
+        AtlasViewTab.RELATIONS -> slice
+        AtlasViewTab.ANALYSIS -> slice
         AtlasViewTab.CALLS -> callsSlice
     }
     val searchMatches = remember(searchSlice, searchQuery) {
@@ -293,7 +277,12 @@ fun AtlasContent(
                     searchOpen = true
                     true
                 } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
-                    viewTab == AtlasViewTab.OVERVIEW &&
+                    viewTab == AtlasViewTab.RELATIONS && relationsFocus != null
+                ) {
+                    relationsDefocused = true
+                    true
+                } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
+                    viewTab == AtlasViewTab.RELATIONS &&
                     (overviewSelection.kind != OverviewSelection.Kind.NONE || overviewSelection.drillPath.isNotEmpty())
                 ) {
                     overviewSelection = when {
@@ -345,28 +334,12 @@ fun AtlasContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            ModeChip("Overview", viewTab == AtlasViewTab.OVERVIEW) { onViewTabChange(AtlasViewTab.OVERVIEW) }
-            ModeChip("Dependencies", viewTab == AtlasViewTab.DEPENDENCY) { onViewTabChange(AtlasViewTab.DEPENDENCY) }
-            ModeChip("Graph", viewTab == AtlasViewTab.GRAPH) { onViewTabChange(AtlasViewTab.GRAPH) }
+            ModeChip("Relations", viewTab == AtlasViewTab.RELATIONS) { onViewTabChange(AtlasViewTab.RELATIONS) }
+            ModeChip("Analysis", viewTab == AtlasViewTab.ANALYSIS) { onViewTabChange(AtlasViewTab.ANALYSIS) }
             if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
                 ModeChip("Calls", viewTab == AtlasViewTab.CALLS) { onViewTabChange(AtlasViewTab.CALLS) }
             }
             Box(modifier = Modifier.weight(1f))
-            if (vcsMarks.isNotEmpty()) {
-                ModeChip("Changes", vcsEnabled) { onVcsEnabledChange(!vcsEnabled) }
-            }
-            if (viewTab == AtlasViewTab.DEPENDENCY) {
-                ModeChip("Insight", depFocused) { depFocused = true }
-                ModeChip("Map", !depFocused) { depFocused = false }
-            }
-            if ((viewTab == AtlasViewTab.DEPENDENCY && !depFocused) || viewTab == AtlasViewTab.OVERVIEW) {
-                ModeChip("Follow", followActive) { onFollowActiveChange(!followActive) }
-            }
-            if (viewTab == AtlasViewTab.GRAPH) {
-                ModeChip("File", !projectMode && !graphEgo) { graphEgo = false; onProjectModeChange(false) }
-                ModeChip("Project", projectMode && !graphEgo) { graphEgo = false; onProjectModeChange(true) }
-                ModeChip("Ego", graphEgo) { graphEgo = true }
-            }
         }
         Divider()
         if (searchOpen) {
@@ -422,14 +395,22 @@ fun AtlasContent(
                 Text(
                     text = when {
                         progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
-                        projectMode || viewTab == AtlasViewTab.DEPENDENCY || viewTab == AtlasViewTab.OVERVIEW -> "No source files"
-                        else -> "No imports"
+                        else -> "No source files"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        } else if (viewTab == AtlasViewTab.OVERVIEW) {
+        } else if (viewTab == AtlasViewTab.RELATIONS && relationsFocus != null) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                EgoCanvas(
+                    slice = slice,
+                    focusId = relationsFocus,
+                    onNodeClick = onNodeClick,
+                    view = egoView,
+                )
+            }
+        } else if (viewTab == AtlasViewTab.RELATIONS) {
             var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }
             Box(
                 modifier = Modifier
@@ -549,132 +530,20 @@ fun AtlasContent(
                     )
                 }
             }
-        } else if (viewTab == AtlasViewTab.DEPENDENCY) {
-            if (depFocused) {
-                val insightFocus = remember(slice, activeFileId, selectedId, insightFocusOverride) {
-                    insightFocusOverride?.takeIf { id -> slice.nodes.any { it.id == id } }
-                        ?: listOf(activeFileId, selectedId)
-                            .firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
-                }
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    DependencyInsightPanel(
-                        slice = slice,
-                        focusId = insightFocus,
-                        onOpen = onNodeClick,
-                        onRefocus = { insightFocusOverride = it },
-                    )
-                }
-            } else {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                MapCanvas(
-                    slice = mapSlice,
-                    selectedId = selectedId,
-                    onSelect = { atlasView.selectedId = it },
-                    onNodeClick = onNodeClick,
-                    view = mapView,
-                    vcsMarks = effectiveMarks,
-                    vcsImpacted = impacted,
-                    activeId = activeFileId,
-                    tracePath = tracePath,
-                    onTracePath = { targetId ->
-                        val from = atlasView.selectedId
-                        if (from != null) {
-                            val found = GraphQueries.findPath(mapSlice.edges, from, targetId)
-                            if (found.isNullOrEmpty()) {
-                                tracePath = emptyList()
-                                traceMessage = "No dependency path found"
-                            } else {
-                                tracePath = listOf(from) + found.map { it.to }
-                            }
-                        }
-                    },
-                )
-                val drill = remember(mapSlice, selectedId) {
-                    mapDrilldown(mapSlice.nodes, mapSlice.edges, selectedId)
-                }
-                val impactEntries = remember(mapSlice, impacted) {
-                    vcsImpactEntries(mapSlice.nodes, impacted)
-                }
-                val sel = selectedId
-                if ((sel != null && drill.any) || impactEntries.isNotEmpty()) {
-                    val selectedIsFolder = remember(mapSlice, sel) {
-                        sel != null && mapSlice.nodes.any { it.id != sel && belongsTo(it.id, sel) }
-                    }
-                    MapDrilldownPanel(
-                        drill = if (sel != null) drill else MapDrilldown.EMPTY,
-                        showCounterparts = selectedIsFolder,
-                        onOpen = onNodeClick,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                        impacted = impactEntries,
-                    )
-                }
-                traceMessage?.let { msg ->
-                    Text(
-                        text = msg,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(12.dp)
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                RoundedCornerShape(10.dp),
-                            )
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            if (slice.nodes.size >= 300) {
-                Divider()
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Only the first 300 workspace files are analyzed",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            }
-        } else if (graphEgo) {
-            val egoFocus = remember(slice, activeFileId, selectedId) {
-                listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
-            }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (egoFocus != null) {
-                    EgoCanvas(
-                        slice = slice,
-                        focusId = egoFocus,
-                        onNodeClick = onNodeClick,
-                        view = egoView,
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "Open a file to see its impact",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
         } else {
+            val insightFocus = remember(slice, activeFileId, selectedId, insightFocusOverride) {
+                insightFocusOverride?.takeIf { id -> slice.nodes.any { it.id == id } }
+                    ?: listOf(activeFileId, selectedId)
+                        .firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
+            }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                AtlasCanvas(
+                DependencyInsightPanel(
                     slice = slice,
-                    projectMode = projectMode,
-                    selectedId = selectedId,
-                    onSelect = { atlasView.selectedId = it },
-                    onNodeClick = onNodeClick,
-                    view = atlasView,
-                    vcsMarks = effectiveMarks,
-                    vcsImpacted = impacted,
+                    focusId = insightFocus,
+                    onOpen = onNodeClick,
+                    onRefocus = { insightFocusOverride = it },
                 )
             }
-            Divider()
-            LegendRow()
         }
     }
 }
