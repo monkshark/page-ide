@@ -244,9 +244,9 @@ fun AtlasContent(
     var searchIndex by remember { mutableStateOf(-1) }
     val egoView = remember { EgoViewState() }
     var insightFocusOverride by remember(activeFileId) { mutableStateOf<String?>(null) }
-    var relationsDefocused by remember(activeFileId) { mutableStateOf(false) }
-    val relationsFocus = remember(slice, activeFileId, selectedId, relationsDefocused) {
-        if (relationsDefocused) null
+    var relationsFollow by remember { mutableStateOf(false) }
+    val relationsFocus = remember(slice, activeFileId, selectedId, relationsFollow) {
+        if (!relationsFollow) null
         else listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
     }
     val searchSlice = when (viewTab) {
@@ -283,7 +283,7 @@ fun AtlasContent(
                 } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
                     viewTab == AtlasViewTab.RELATIONS && relationsFocus != null
                 ) {
-                    relationsDefocused = true
+                    relationsFollow = false
                     true
                 } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
                     viewTab == AtlasViewTab.RELATIONS &&
@@ -344,6 +344,9 @@ fun AtlasContent(
                 ModeChip("Calls", viewTab == AtlasViewTab.CALLS) { onViewTabChange(AtlasViewTab.CALLS) }
             }
             Box(modifier = Modifier.weight(1f))
+            if (viewTab == AtlasViewTab.RELATIONS && activeFileId != null) {
+                ModeChip("Focus", relationsFollow) { relationsFollow = !relationsFollow }
+            }
         }
         Divider()
         if (searchOpen) {
