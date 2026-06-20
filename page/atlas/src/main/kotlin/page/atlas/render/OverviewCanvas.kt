@@ -608,7 +608,7 @@ internal fun OverviewCanvas(
                 val (childBase, childScale) = savedOrFit()
                 val enterX = maxOf(120f, size.width * 0.18f) * (1f - aC)
                 val enterY = maxOf(160f, size.height * 0.22f) * (1f - aC)
-                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(enterX, enterY), false, null, indeg, outdeg, cycleNodes, cycleKeys)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(enterX, enterY), true, null, indeg, outdeg, cycleNodes, cycleKeys)
             }
             drawLayer(
                 this, activeTransition.oldScene, activeTransition.oldGraph,
@@ -635,10 +635,10 @@ internal fun OverviewCanvas(
             val aA = smoothstep(q, 0f, 0.40f)
             val aC = smoothstep(q, 0.35f, 0.85f)
             if (scene.boxes.isNotEmpty()) {
-                val (childBase, childScale) = fitTransform()
+                val (childBase, childScale) = view.savedViews[scopeKey()] ?: viewTransform()
                 val exitX = maxOf(120f, size.width * 0.18f) * (1f - aC)
                 val exitY = maxOf(160f, size.height * 0.22f) * (1f - aC)
-                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(exitX, exitY), false, null, indeg, outdeg, cycleNodes, cycleKeys)
+                drawLayer(this, scene, graph, childBase, childScale, aC, Offset(exitX, exitY), true, null, indeg, outdeg, cycleNodes, cycleKeys)
             }
             val (pBase, pScale) = outTransformFor(parentScene)
             drawLayer(
@@ -646,6 +646,15 @@ internal fun OverviewCanvas(
                 1f - aA, Offset.Zero, true, outId,
                 parentIndeg, parentOutdeg, parentCycleNodes, parentCycleKeys,
             )
+
+            val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
+            val legend = "columns = dependency depth · size = files · red = hub · amber = cycle"
+            val legendY = if (parentScene.hiddenCount > 0) size.height - 38f else size.height - 22f
+            drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
+            if (parentScene.hiddenCount > 0) {
+                val footer = "Showing largest ${parentScene.visible.size} modules · ${parentScene.hiddenCount} smaller hidden"
+                drawText(textMeasurer.measure(AnnotatedString(footer), legendStyle), topLeft = Offset(14f, size.height - 22f))
+            }
             return@Canvas
         }
 
@@ -763,11 +772,7 @@ internal fun OverviewCanvas(
             "columns = dependency depth · size = files · red = hub · amber = cycle"
         }
         val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
-        val legendY = when {
-            selection.drillPath.isEmpty() -> 12f
-            scene.hiddenCount > 0 -> size.height - 38f
-            else -> size.height - 22f
-        }
+        val legendY = if (scene.hiddenCount > 0) size.height - 38f else size.height - 22f
         drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
 
         if (scene.hiddenCount > 0) {

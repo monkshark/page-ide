@@ -95,19 +95,19 @@ class ReducerTest {
     }
 
     @Test
-    fun `focus in atlas expands on dependency tab`() {
+    fun `focus in atlas expands on relations tab`() {
         val s = AppState().copy(
-            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.GRAPH),
+            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.ANALYSIS),
         )
         val focused = reduce(s, IdeEvent.Panel.FocusInAtlas)
         assertEquals(ExpandedPanel.ATLAS, focused.layout.expandedPanel)
-        assertEquals(AtlasViewTab.DEPENDENCY, focused.layout.atlasViewTab)
+        assertEquals(AtlasViewTab.RELATIONS, focused.layout.atlasViewTab)
     }
 
     @Test
     fun `show atlas calls expands on calls tab`() {
         val s = AppState().copy(
-            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.DEPENDENCY),
+            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.RELATIONS),
         )
         val shown = reduce(s, IdeEvent.Panel.ShowAtlasCalls)
         assertEquals(ExpandedPanel.ATLAS, shown.layout.expandedPanel)
@@ -144,13 +144,13 @@ class ReducerTest {
     }
 
     @Test
-    fun `atlas view tab defaults to dependency and change replaces value`() {
+    fun `atlas view tab defaults to relations and change replaces value`() {
         val s = AppState()
-        assertEquals(AtlasViewTab.DEPENDENCY, s.layout.atlasViewTab)
-        val graph = reduce(s, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.GRAPH))
-        assertEquals(AtlasViewTab.GRAPH, graph.layout.atlasViewTab)
-        val back = reduce(graph, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.DEPENDENCY))
-        assertEquals(AtlasViewTab.DEPENDENCY, back.layout.atlasViewTab)
+        assertEquals(AtlasViewTab.RELATIONS, s.layout.atlasViewTab)
+        val analysis = reduce(s, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.ANALYSIS))
+        assertEquals(AtlasViewTab.ANALYSIS, analysis.layout.atlasViewTab)
+        val back = reduce(analysis, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.RELATIONS))
+        assertEquals(AtlasViewTab.RELATIONS, back.layout.atlasViewTab)
     }
 
     @Test
