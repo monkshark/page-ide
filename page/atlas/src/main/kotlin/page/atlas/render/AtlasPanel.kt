@@ -200,6 +200,10 @@ fun AtlasContent(
         if (drillingIn || drillOutTo != null) return
         val depth = overviewSelection.drillPath.size
         if (target < 0 || target >= depth) return
+        if (overviewView.scale > 0f) {
+            overviewView.savedViews[overviewSelection.drillPath.joinToString(" ")] =
+                overviewView.pan to overviewView.scale
+        }
         val hops = depth - target
         drillStepMillis = (DRILL_OUT_TOTAL_MS / hops).coerceAtLeast(1)
         drillOutFrom = depth
