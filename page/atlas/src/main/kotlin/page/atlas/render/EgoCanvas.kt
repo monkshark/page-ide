@@ -91,6 +91,34 @@ fun EgoCanvas(
         ) {
             if (data.focus == null || layout.focusRect == Rect.Zero) return@Canvas
 
+            if (layout.vertical) {
+                val inBoxes = layout.cards.filter { it.side < 0 }
+                val outBoxes = layout.cards.filter { it.side > 0 }
+                if (inBoxes.isNotEmpty()) {
+                    drawSpineRail(24f, inBoxes.first().rect.top, layout.focusRect.top, AtlasInk.incoming)
+                }
+                if (outBoxes.isNotEmpty()) {
+                    drawSpineRail(24f, layout.focusRect.bottom, outBoxes.last().rect.bottom, AtlasInk.outgoing)
+                }
+                for (box in layout.cards) {
+                    drawSpineCard(box, measurer, labelStyle, subStyle, moreStyle, hubStyle, view.selectedId)
+                }
+                drawFocusCard(layout.focusRect, data, measurer, titleStyle, focusSubStyle, chipStyle, countStyle)
+                if (data.leftTotal > 0) {
+                    drawText(
+                        measurer.measure(AnnotatedString("↓ IMPORTED BY · ${data.leftTotal}"), headStyle.copy(color = AtlasInk.incoming)),
+                        topLeft = Offset(24f, layout.inHeaderY),
+                    )
+                }
+                if (data.rightTotal > 0) {
+                    drawText(
+                        measurer.measure(AnnotatedString("↓ IMPORTS · ${data.rightTotal}"), headStyle.copy(color = AtlasInk.outgoing)),
+                        topLeft = Offset(24f, layout.outHeaderY),
+                    )
+                }
+                return@Canvas
+            }
+
             for (box in layout.cards) {
                 if (box.card.node == null) continue
                 val color = if (box.side < 0) AtlasInk.incoming else AtlasInk.outgoing
@@ -117,6 +145,17 @@ fun EgoCanvas(
             }
         }
     }
+}
+
+private fun DrawScope.drawSpineRail(x: Float, top: Float, bottom: Float, color: Color) {
+    if (bottom - top < 8f) return
+    drawLine(
+        color = color.copy(alpha = 0.5f),
+        start = Offset(x, top + 4f),
+        end = Offset(x, bottom - 4f),
+        strokeWidth = 1.6f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 6f)),
+    )
 }
 
 private fun DrawScope.drawSpineConnector(start: Offset, end: Offset, color: Color) {
@@ -244,7 +283,13 @@ private data class SpineData(
     val rightTotal: Int,
 )
 
-private data class SpineLayout(val focusRect: Rect, val cards: List<SpineBox>)
+private data class SpineLayout(
+    val focusRect: Rect,
+    val cards: List<SpineBox>,
+    val vertical: Boolean = false,
+    val inHeaderY: Float = 0f,
+    val outHeaderY: Float = 0f,
+)
 
 private fun buildSpine(slice: GraphSlice, focusId: String): SpineData {
     val focus = slice.nodes.firstOrNull { it.id == focusId }
@@ -269,8 +314,49 @@ private fun buildSpine(slice: GraphSlice, focusId: String): SpineData {
     return SpineData(focus, left, right, leftTotal, rightTotal)
 }
 
+private const val SPINE_NARROW = 460f
+
 private fun spineLayout(data: SpineData, w: Float, h: Float): SpineLayout {
     if (w <= 0f || h <= 0f || data.focus == null) return SpineLayout(Rect.Zero, emptyList())
+    return if (w < SPINE_NARROW) verticalSpine(data, w, h) else horizontalSpine(data, w, h)
+}
+
+private fun verticalSpine(data: SpineData, w: Float, h: Float): SpineLayout {
+    val cardX = 40f
+    val cardW = (w - cardX - 16f).coerceAtLeast(140f)
+    val cardH = 42f
+    val gap = 10f
+    val focusH = 84f
+    val secGap = 24f
+    val perSlot = cardH + gap
+    val fixed = secGap + focusH + secGap + 44f
+    val slots = ((h - fixed) / perSlot).toInt().coerceAtLeast(2)
+    val perSide = (slots / 2).coerceAtLeast(1)
+
+    fun column(cards: List<SpineCard>, total: Int, side: Int, startY: Float): Pair<List<SpineBox>, Float> {
+        val shown = cards.take(perSide)
+        val overflow = total - shown.size
+        val count = shown.size + if (overflow > 0) 1 else 0
+        val out = ArrayList<SpineBox>(count)
+        var y = startY
+        for (i in 0 until count) {
+            val card = if (i < shown.size) shown[i] else SpineCard(null, false, overflow)
+            out += SpineBox(card, Rect(Offset(cardX, y), Size(cardW, cardH)), side)
+            y += cardH + gap
+        }
+        return out to (y - gap)
+    }
+
+    val inHeaderY = 8f
+    val (inBoxes, inBottom) = column(data.left, data.leftTotal, -1, inHeaderY + secGap)
+    val focusTop = if (inBoxes.isEmpty()) inHeaderY + secGap else inBottom + 12f
+    val focusRect = Rect(Offset(16f, focusTop), Size(w - 32f, focusH))
+    val outHeaderY = focusTop + focusH + 14f
+    val (outBoxes, _) = column(data.right, data.rightTotal, 1, outHeaderY + secGap)
+    return SpineLayout(focusRect, inBoxes + outBoxes, vertical = true, inHeaderY = inHeaderY, outHeaderY = outHeaderY)
+}
+
+private fun horizontalSpine(data: SpineData, w: Float, h: Float): SpineLayout {
     val cardW = 168f
     val cardH = 46f
     val focusW = 180f
