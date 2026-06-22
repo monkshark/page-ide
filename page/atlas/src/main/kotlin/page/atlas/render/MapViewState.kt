@@ -7,6 +7,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 
+data class MapFilterState(
+    val focusDir: String? = null,
+    val hiddenDirs: Set<String> = emptySet(),
+    val mutedDirs: Set<String> = emptySet(),
+) {
+    val active: Boolean get() = focusDir != null || hiddenDirs.isNotEmpty() || mutedDirs.isNotEmpty()
+}
+
 class MapViewState {
     var pan by mutableStateOf(Offset.Zero)
     var scale by mutableStateOf(0f)

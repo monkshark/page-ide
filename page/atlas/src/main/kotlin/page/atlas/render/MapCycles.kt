@@ -1,5 +1,11 @@
 package page.atlas.render
 
+data class MapEdge(
+    val from: String,
+    val to: String,
+    val weight: Int,
+)
+
 fun mapCycleEdges(edges: List<MapEdge>): Set<Pair<String, String>> {
     val nodes = LinkedHashSet<String>()
     val adj = HashMap<String, MutableList<String>>()
