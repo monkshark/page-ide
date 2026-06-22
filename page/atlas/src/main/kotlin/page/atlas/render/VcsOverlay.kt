@@ -1,8 +1,21 @@
 package page.atlas.render
 
 import androidx.compose.ui.graphics.Color
+import java.nio.file.Path
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
+
+data class DrillEntry(
+    val id: String,
+    val label: String,
+    val path: Path?,
+    val counterparts: List<String>,
+)
+
+internal fun belongsTo(id: String, ancestorId: String): Boolean =
+    id == ancestorId ||
+        (id.length > ancestorId.length && id.startsWith(ancestorId) &&
+            (id[ancestorId.length] == '\\' || id[ancestorId.length] == '/'))
 
 enum class VcsMark { MODIFIED, ADDED, DELETED }
 

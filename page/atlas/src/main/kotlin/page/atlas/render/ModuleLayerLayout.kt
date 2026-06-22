@@ -5,6 +5,8 @@ import page.atlas.graph.ModuleLayer
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.classifyModuleLayers
 
+data class FLPoint(val x: Double, val y: Double)
+
 data class ModuleLayerLayout(
     val positions: Map<String, FLPoint>,
     val layerOf: Map<String, ModuleLayer>,
