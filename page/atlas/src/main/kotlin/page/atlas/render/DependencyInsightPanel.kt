@@ -33,6 +33,7 @@ import page.atlas.graph.CycleGroup
 import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.HubFile
+import page.atlas.graph.ImpactedFile
 import page.ui.EditorFontFamily
 
 private const val HUB_MIN_DEPENDENTS = 8
@@ -56,15 +57,19 @@ fun DependencyInsightPanel(
     val hubs = remember(slice) {
         GraphInsights.hubs(slice).filter { it.dependents >= HUB_MIN_DEPENDENTS }
     }
-    val direct = impact.count { it.depth == 1 }
-    val indirect = impact.size - direct
+    val focusLabel = remember(slice, focusId) {
+        focusId?.let { id -> slice.nodes.firstOrNull { it.id == id }?.label }
+    }
+    val ranked = remember(impact) {
+        impact.sortedWith(compareBy({ it.depth }, { it.node.label.lowercase() }))
+    }
 
     Box(modifier.fillMaxSize().background(AtlasInk.canvas)) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(20.dp)) {
             val wide = maxWidth >= 560.dp
             if (wide) {
                 Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                    ImpactColumn(impact.size, direct, indirect, focusId != null, Modifier.weight(1f))
+                    ImpactColumn(ranked, focusLabel, onRefocus, onOpen, Modifier.weight(1f))
                     ProblemsColumn(cycleGroups, hubs, onRefocus, onOpen, Modifier.weight(1f))
                 }
             } else {
@@ -72,7 +77,7 @@ fun DependencyInsightPanel(
                     Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(28.dp),
                 ) {
-                    ImpactColumn(impact.size, direct, indirect, focusId != null, Modifier.fillMaxWidth())
+                    ImpactColumn(ranked, focusLabel, onRefocus, onOpen, Modifier.fillMaxWidth())
                     ProblemsColumn(cycleGroups, hubs, onRefocus, onOpen, Modifier.fillMaxWidth())
                 }
             }
@@ -81,17 +86,30 @@ fun DependencyInsightPanel(
 }
 
 @Composable
-private fun ImpactColumn(total: Int, direct: Int, indirect: Int, hasFocus: Boolean, modifier: Modifier) {
+private fun ImpactColumn(
+    impact: List<ImpactedFile>,
+    focusLabel: String?,
+    onRefocus: (String) -> Unit,
+    onOpen: (FilePath) -> Unit,
+    modifier: Modifier,
+) {
+    val direct = impact.count { it.depth == 1 }
+    val indirect = impact.size - direct
     Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        SectionLabel("IMPACT OF A CHANGE")
-        if (!hasFocus) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SectionLabel("IMPACT OF A CHANGE")
+            if (focusLabel != null) {
+                Text(ellipsizeMiddle(focusLabel, 44), style = mono(13.sp, AtlasInk.bright, FontWeight.Medium))
+            }
+        }
+        if (focusLabel == null) {
             Text(
                 "Open a file to measure its blast radius",
                 style = mono(13.sp, AtlasInk.dim),
             )
         } else {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(total.toString(), style = mono(48.sp, AtlasInk.bright, FontWeight.SemiBold))
+                Text(impact.size.toString(), style = mono(48.sp, AtlasInk.bright, FontWeight.SemiBold))
                 Text(
                     "files would change",
                     style = mono(13.sp, AtlasInk.dim),
@@ -102,9 +120,49 @@ private fun ImpactColumn(total: Int, direct: Int, indirect: Int, hasFocus: Boole
                 StatBox(direct, "DIRECT", AtlasInk.bright, Modifier.weight(1f))
                 StatBox(indirect, "INDIRECT", AtlasInk.label, Modifier.weight(1f))
             }
+            if (impact.isNotEmpty()) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (entry in impact) {
+                        ImpactRow(entry, onRefocus, onOpen)
+                    }
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun ImpactRow(entry: ImpactedFile, onRefocus: (String) -> Unit, onOpen: (FilePath) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(AtlasInk.boxFill, RoundedCornerShape(11.dp))
+            .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(11.dp))
+            .pointerInput(entry.node.id) {
+                detectTapGestures(
+                    onTap = { onRefocus(entry.node.id) },
+                    onDoubleTap = { entry.node.path?.let(onOpen) },
+                )
+            }
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            ellipsizeMiddle(entry.node.label, 34),
+            style = mono(11.5.sp, AtlasInk.label),
+            maxLines = 1,
+            modifier = Modifier.weight(1f),
+        )
+        Text(impactDepthLabel(entry.depth), style = mono(9.sp, AtlasInk.sub), letterSpacing = 1f)
+    }
+}
+
+private fun impactDepthLabel(depth: Int): String =
+    if (depth <= 1) "DIRECT" else "$depth HOPS"
 
 @Composable
 private fun StatBox(value: Int, label: String, valueColor: Color, modifier: Modifier) {
