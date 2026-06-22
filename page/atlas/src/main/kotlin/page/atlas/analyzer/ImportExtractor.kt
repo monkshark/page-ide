@@ -47,6 +47,7 @@ object ImportExtractor {
         val declTypes: Set<String>,
         val packageType: String?,
         val factory: () -> TSLanguage,
+        val softImportTypes: Set<String> = emptySet(),
     ) {
         JAVA(
             setOf("import_declaration"),
@@ -81,13 +82,21 @@ object ImportExtractor {
             null,
             ::TreeSitterPython,
         ),
-        JS(setOf("import_statement"), setOf("class_heritage"), emptySet(), null, ::TreeSitterJavascript),
+        JS(
+            setOf("import_statement"),
+            setOf("class_heritage"),
+            emptySet(),
+            null,
+            ::TreeSitterJavascript,
+            setOf("call_expression", "export_statement"),
+        ),
         TS(
             setOf("import_statement"),
             setOf("extends_clause", "implements_clause", "extends_type_clause"),
             emptySet(),
             null,
             ::TreeSitterTypescript,
+            setOf("call_expression", "export_statement"),
         ),
         GO(setOf("import_spec"), emptySet(), emptySet(), null, ::TreeSitterGo),
         RUST(setOf("use_declaration"), emptySet(), emptySet(), null, ::TreeSitterRust),
@@ -206,6 +215,9 @@ object ImportExtractor {
             imports += type to nodeText(node, text, byteToChar)
             return
         }
+        if (type in lang.softImportTypes) {
+            softImportSnippet(node, type, text, byteToChar)?.let { imports += type to it }
+        }
         if (type in lang.relationTypes) {
             relations += type to nodeText(node, text, byteToChar)
         }
@@ -215,6 +227,29 @@ object ImportExtractor {
             } while (c.gotoNextSibling())
             c.gotoParent()
         }
+    }
+
+    private val FROM_KEYWORD = Regex("\\bfrom\\b")
+
+    private val EXPORT_KEYWORDS = setOf("export", "type", "typeof")
+
+    private fun softImportSnippet(node: TSNode, type: String, text: String, byteToChar: IntArray): String? = when (type) {
+        "call_expression" -> {
+            val fn = node.getChildByFieldName("function")
+            if (fn == null || fn.isNull) {
+                null
+            } else {
+                val fnType = fn.type ?: ""
+                val isImportCall =
+                    fnType == "import" || (fnType == "identifier" && nodeText(fn, text, byteToChar) == "require")
+                if (isImportCall) nodeText(node, text, byteToChar) else null
+            }
+        }
+        "export_statement" -> {
+            val snippet = nodeText(node, text, byteToChar)
+            if (FROM_KEYWORD.containsMatchIn(snippet)) snippet else null
+        }
+        else -> null
     }
 
     private fun nodeText(node: TSNode, text: String, byteToChar: IntArray): String {
@@ -249,7 +284,11 @@ object ImportExtractor {
         Lang.JAVA -> parseJava(snippet)
         Lang.KOTLIN -> parseKotlin(snippet)
         Lang.PYTHON -> if (type == "import_from_statement") parsePythonFrom(snippet) else parsePythonImport(snippet)
-        Lang.JS, Lang.TS -> parseQuoted(snippet, pathStyle = true)
+        Lang.JS, Lang.TS -> when (type) {
+            "call_expression" -> parseJsCall(snippet)
+            "export_statement" -> parseJsExportFrom(snippet)
+            else -> parseQuoted(snippet, pathStyle = true)
+        }
         Lang.GO -> parseQuoted(snippet, pathStyle = false)
         Lang.RUST -> parseRust(snippet)
         Lang.DART -> parseDart(snippet)
@@ -377,6 +416,25 @@ object ImportExtractor {
         if (target.isEmpty()) return emptyList()
         val relative = pathStyle && (target.startsWith("./") || target.startsWith("../"))
         val symbols = if (pathStyle) jsSymbols(snippet) else emptyList()
+        return listOf(RawImport(target, relative, symbols))
+    }
+
+    private fun parseJsCall(snippet: String): List<RawImport> {
+        val target = unquote(snippet) ?: return emptyList()
+        if (target.isEmpty()) return emptyList()
+        val relative = target.startsWith("./") || target.startsWith("../")
+        return listOf(RawImport(target, relative))
+    }
+
+    private fun parseJsExportFrom(snippet: String): List<RawImport> {
+        val from = FROM_KEYWORD.find(snippet) ?: return emptyList()
+        val target = unquote(snippet.substring(from.range.last + 1)) ?: return emptyList()
+        if (target.isEmpty()) return emptyList()
+        val relative = target.startsWith("./") || target.startsWith("../")
+        val symbols = snippet.substring(0, from.range.first)
+            .split(',', '{', '}')
+            .mapNotNull { localName(it.trim()) }
+            .filter { it !in EXPORT_KEYWORDS }
         return listOf(RawImport(target, relative, symbols))
     }
 
