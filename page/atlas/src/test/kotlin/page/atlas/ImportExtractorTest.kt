@@ -111,6 +111,62 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `javascript commonjs require calls`() {
+        val text = """
+            const a = require('./a');
+            const b = require('pkg');
+            require('./side-effect');
+            const ok = helper('not-a-require');
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("app.js"), text)
+        assertEquals(
+            listOf(
+                RawImport("./a", true),
+                RawImport("pkg", false),
+                RawImport("./side-effect", true),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `javascript dynamic import calls including chained`() {
+        val text = """
+            const m = import('./m');
+            import('pkg').then((x) => x);
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("app.mjs"), text)
+        assertEquals(
+            listOf(
+                RawImport("./m", true),
+                RawImport("pkg", false),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `typescript re-export from forwards target and symbols`() {
+        val text = """
+            export { a, b } from './ab';
+            export * from './all';
+            export * as ns from './ns';
+            export type { T } from './t';
+            export const local = 1;
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("index.ts"), text)
+        assertEquals(
+            listOf(
+                RawImport("./ab", true, listOf("a", "b")),
+                RawImport("./all", true),
+                RawImport("./ns", true, listOf("ns")),
+                RawImport("./t", true, listOf("T")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
     fun `go grouped imports`() {
         val text = """
             package main
