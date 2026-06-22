@@ -224,12 +224,8 @@ object ImportResolver {
         val target = raw.target
         if (target.startsWith("dart:")) return null
         if (target.startsWith("package:")) {
-            val rest = target.removePrefix("package:").substringAfter('/', "")
-            if (rest.isEmpty()) return null
             index.refreshIfStale()
-            val active = normalized(activeFile)
-            val candidates = index.files().filter { normalized(it).endsWith("/lib/$rest") }
-            return candidates.maxByOrNull { commonPrefixLength(normalized(it), active) }
+            return PubspecResolver.resolve(target, index)
         }
         val parent = activeFile.parent ?: return null
         return parent.resolve(target).normalize().takeIf { Files.isRegularFile(it) }

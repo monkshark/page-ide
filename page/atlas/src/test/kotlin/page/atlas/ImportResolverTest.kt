@@ -180,6 +180,7 @@ class ImportResolverTest {
 
     @Test
     fun `dart package import resolves into lib directory`(@TempDir root: Path) {
+        Files.writeString(root.resolve("pubspec.yaml"), "name: my_app\n")
         val target = root.resolve("lib/widgets/button.dart")
         Files.createDirectories(target.parent)
         Files.writeString(target, "class Button {}")
