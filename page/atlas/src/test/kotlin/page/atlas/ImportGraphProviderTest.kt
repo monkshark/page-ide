@@ -41,6 +41,7 @@ class ImportGraphProviderTest {
 
     @Test
     fun `dart slice resolves package imports and promotes snake case extends`(@TempDir root: Path) {
+        Files.writeString(root.resolve("pubspec.yaml"), "name: flutter_app\n")
         val basePage = root.resolve("lib/pages/base_page.dart")
         Files.createDirectories(basePage.parent)
         Files.writeString(basePage, "class BasePage {}\n\nmixin Trackable {}")
