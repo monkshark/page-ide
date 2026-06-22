@@ -77,14 +77,14 @@ object ImportResolver {
     }
 
     private fun resolveJsRelative(raw: RawImport, activeFile: Path): Path? {
-        if (!raw.relative) return null
+        if (!raw.relative) return TsConfigResolver.resolve(activeFile, raw.target)
         val parent = activeFile.parent ?: return null
         val base = parent.resolve(raw.target).normalize()
         val name = base.fileName?.toString() ?: return null
         val probes = buildList {
             add(base)
-            for (suffix in listOf(".ts", ".tsx", ".js", ".jsx")) add(base.resolveSibling(name + suffix))
-            for (idx in listOf("index.ts", "index.tsx", "index.js", "index.jsx")) add(base.resolve(idx))
+            for (suffix in listOf(".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs")) add(base.resolveSibling(name + suffix))
+            for (idx in listOf("index.ts", "index.tsx", "index.js", "index.jsx", "index.mjs")) add(base.resolve(idx))
         }
         return probes.firstOrNull { Files.isRegularFile(it) }
     }
