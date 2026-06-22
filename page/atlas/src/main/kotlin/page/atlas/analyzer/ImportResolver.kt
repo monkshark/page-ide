@@ -69,7 +69,7 @@ object ImportResolver {
                 if (raw.relative) resolvePythonRelative(raw, activeFile)
                 else resolveDotted(raw, activeFile, index, listOf("py", "pyi"), declIndex)
             "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"), declIndex)
-            "go" -> resolveGo(raw, index)
+            "go" -> resolveGo(raw, activeFile, index)
             "rs" -> resolveRust(raw, index)
             "dart" -> resolveDart(raw, activeFile, index)
             else -> null
@@ -137,8 +137,9 @@ object ImportResolver {
         return probes.firstOrNull { Files.isRegularFile(it) }
     }
 
-    private fun resolveGo(raw: RawImport, index: WorkspaceIndex): Path? {
+    private fun resolveGo(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
         index.refreshIfStale()
+        GoModResolver.resolve(activeFile, raw.target, index)?.let { return it }
         val segment = raw.target.substringAfterLast('/')
         if (segment.isEmpty()) return null
         return index.files().firstOrNull { file ->
