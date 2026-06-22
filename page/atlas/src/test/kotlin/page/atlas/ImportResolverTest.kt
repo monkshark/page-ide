@@ -133,6 +133,52 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `rust super import resolves against parent module not crate root`(@TempDir root: Path) {
+        val target = root.resolve("src/a/foo.rs")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "pub struct Bar;")
+        Files.writeString(root.resolve("src/foo.rs"), "pub struct Bar;")
+        val active = root.resolve("src/a/b.rs")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("super::foo::Bar", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `rust self import resolves to submodule in current module dir`(@TempDir root: Path) {
+        val target = root.resolve("src/a/b/helper.rs")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "pub fn h() {}")
+        val active = root.resolve("src/a/b.rs")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("self::helper", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `rust nested super walks up two modules`(@TempDir root: Path) {
+        val target = root.resolve("src/a/x.rs")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "pub struct X;")
+        val active = root.resolve("src/a/b/c.rs")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("super::super::x::X", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `rust self import from mod file resolves sibling submodule`(@TempDir root: Path) {
+        val target = root.resolve("src/a/widget.rs")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "pub struct W;")
+        val active = root.resolve("src/a/mod.rs")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("self::widget", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
     fun `dart package import resolves into lib directory`(@TempDir root: Path) {
         val target = root.resolve("lib/widgets/button.dart")
         Files.createDirectories(target.parent)

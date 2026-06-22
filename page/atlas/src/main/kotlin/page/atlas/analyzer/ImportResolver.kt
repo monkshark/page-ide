@@ -70,7 +70,7 @@ object ImportResolver {
                 else resolvePythonAbsolute(raw, activeFile, index)
             "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"), declIndex)
             "go" -> resolveGo(raw, activeFile, index)
-            "rs" -> resolveRust(raw, index)
+            "rs" -> resolveRust(raw, activeFile, index)
             "dart" -> resolveDart(raw, activeFile, index)
             else -> null
         }
@@ -166,12 +166,21 @@ object ImportResolver {
         }
     }
 
-    private fun resolveRust(raw: RawImport, index: WorkspaceIndex): Path? {
+    private fun resolveRust(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
         if (!raw.relative) return null
         index.refreshIfStale()
-        val segments = raw.target.split("::").filter { it.isNotEmpty() }.drop(1)
-        for (depth in segments.size - 1 downTo 1) {
-            val rel = segments.take(depth).joinToString("/")
+        val segments = raw.target.split("::").filter { it.isNotEmpty() }
+        if (segments.isEmpty()) return null
+        return when (segments.first()) {
+            "crate" -> resolveRustCrate(segments.drop(1), index)
+            "self", "super" -> resolveRustRelative(segments, activeFile, index)
+            else -> null
+        }
+    }
+
+    private fun resolveRustCrate(rest: List<String>, index: WorkspaceIndex): Path? {
+        for (depth in rest.size downTo 1) {
+            val rel = rest.take(depth).joinToString("/")
             val hit = index.files().firstOrNull { file ->
                 val s = normalized(file)
                 s.endsWith("src/$rel.rs") || s.endsWith("src/$rel/mod.rs")
@@ -179,6 +188,36 @@ object ImportResolver {
             if (hit != null) return hit
         }
         return null
+    }
+
+    private fun resolveRustRelative(segments: List<String>, activeFile: Path, index: WorkspaceIndex): Path? {
+        var dir = rustModuleDir(activeFile) ?: return null
+        var i = 0
+        while (i < segments.size && (segments[i] == "self" || segments[i] == "super")) {
+            if (segments[i] == "super") dir = dir.parent ?: return null
+            i++
+        }
+        val rest = segments.drop(i)
+        if (rest.isEmpty()) return null
+        val base = normalized(dir.normalize())
+        for (depth in rest.size downTo 1) {
+            val rel = rest.take(depth).joinToString("/")
+            val hit = index.files().firstOrNull { file ->
+                val s = normalized(file)
+                s == "$base/$rel.rs" || s == "$base/$rel/mod.rs"
+            }
+            if (hit != null) return hit
+        }
+        return null
+    }
+
+    private fun rustModuleDir(activeFile: Path): Path? {
+        val parent = activeFile.parent ?: return null
+        val name = activeFile.fileName?.toString()?.removeSuffix(".rs") ?: return null
+        return when (name) {
+            "mod", "lib", "main" -> parent
+            else -> parent.resolve(name)
+        }
     }
 
     private fun resolveDart(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
