@@ -67,7 +67,7 @@ object ImportResolver {
             "js", "jsx", "mjs", "cjs", "ts", "tsx" -> resolveJsRelative(raw, activeFile)
             "py", "pyi" ->
                 if (raw.relative) resolvePythonRelative(raw, activeFile)
-                else resolveDotted(raw, activeFile, index, listOf("py", "pyi"), declIndex)
+                else resolvePythonAbsolute(raw, activeFile, index)
             "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"), declIndex)
             "go" -> resolveGo(raw, activeFile, index)
             "rs" -> resolveRust(raw, index)
@@ -135,6 +135,25 @@ object ImportResolver {
             base.resolve("__init__.py"),
         )
         return probes.firstOrNull { Files.isRegularFile(it) }
+    }
+
+    private fun resolvePythonAbsolute(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
+        index.refreshIfStale()
+        val segments = raw.target.split('.').filter { it.isNotEmpty() }
+        if (segments.isEmpty()) return null
+        val active = normalized(activeFile)
+        for (depth in segments.size downTo 1) {
+            val rel = segments.take(depth).joinToString("/")
+            val candidates = index.files().filter { file ->
+                val s = normalized(file)
+                s.endsWith("/$rel.py") || s.endsWith("/$rel.pyi") ||
+                    s.endsWith("/$rel/__init__.py") || s.endsWith("/$rel/__init__.pyi")
+            }
+            if (candidates.isNotEmpty()) {
+                return candidates.maxByOrNull { commonPrefixLength(normalized(it), active) }
+            }
+        }
+        return null
     }
 
     private fun resolveGo(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {

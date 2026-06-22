@@ -64,6 +64,50 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `python absolute module import resolves to module file`(@TempDir root: Path) {
+        val target = root.resolve("app/services/auth.py")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "")
+        val active = root.resolve("app/main.py")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("app.services.auth", false), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `python package import resolves to init file`(@TempDir root: Path) {
+        val target = root.resolve("app/services/__init__.py")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "")
+        val active = root.resolve("app/main.py")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("app.services", false), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `python from-package import resolves to init file`(@TempDir root: Path) {
+        val target = root.resolve("app/services/__init__.py")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "")
+        Files.writeString(root.resolve("app/services/auth.py"), "")
+        val active = root.resolve("app/main.py")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(
+            RawImport("app.services", false, listOf("auth")), active, WorkspaceIndex(root),
+        )
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `python stdlib import stays external`(@TempDir root: Path) {
+        val active = root.resolve("app/main.py")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        assertNull(ImportResolver.resolve(RawImport("os.path", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
     fun `go import resolves to first file in package directory`(@TempDir root: Path) {
         val target = root.resolve("pkg/util/a.go")
         Files.createDirectories(target.parent)
