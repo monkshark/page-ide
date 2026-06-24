@@ -337,6 +337,38 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `ruby require and require_relative distinguish relative`() {
+        val text = """
+            require 'json'
+            require_relative '../lib/helper'
+            require_relative 'models/user'
+            load 'config.rb'
+            puts 'not a require'
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("service.rb"), text)
+        assertEquals(
+            listOf(
+                RawImport("json", false),
+                RawImport("../lib/helper", true),
+                RawImport("models/user", true),
+                RawImport("config.rb", false),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `ruby superclass relation`() {
+        val text = """
+            class Service < Base
+              include Comparable
+            end
+        """.trimIndent()
+        val relations = ImportExtractor.analyze(Path.of("service.rb"), text).relations
+        assertEquals(listOf(RawRelation("Base", EdgeKind.EXTENDS)), relations)
+    }
+
+    @Test
     fun `unsupported extension returns empty`() {
         assertTrue(ImportExtractor.extract(Path.of("notes.txt"), "import x").isEmpty())
         assertTrue(ImportExtractor.supports(Path.of("a.kt")))
