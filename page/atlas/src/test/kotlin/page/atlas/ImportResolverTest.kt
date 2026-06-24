@@ -215,6 +215,36 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `c quoted include resolves relative to file`(@TempDir root: Path) {
+        val target = root.resolve("src/util/helper.h")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "")
+        val active = root.resolve("src/main.c")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("util/helper.h", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `cpp angle include resolves to project header by path`(@TempDir root: Path) {
+        val target = root.resolve("include/app/widget.h")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "")
+        val active = root.resolve("src/button.cpp")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("app/widget.h", false), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `c system include stays external`(@TempDir root: Path) {
+        val active = root.resolve("main.c")
+        Files.writeString(active, "")
+        assertNull(ImportResolver.resolve(RawImport("stdio.h", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
     fun `unresolved import returns null`(@TempDir root: Path) {
         val active = root.resolve("Main.kt")
         Files.writeString(active, "package main")

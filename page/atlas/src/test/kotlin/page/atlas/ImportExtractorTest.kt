@@ -6,6 +6,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import page.atlas.analyzer.ImportExtractor
 import page.atlas.analyzer.RawImport
+import page.atlas.analyzer.RawRelation
+import page.atlas.graph.EdgeKind
 
 class ImportExtractorTest {
 
@@ -229,6 +231,49 @@ class ImportExtractorTest {
                 RawImport("src/api.dart", true),
             ),
             imports,
+        )
+    }
+
+    @Test
+    fun `c includes distinguish quoted and system`() {
+        val text = """
+            #include "util/helper.h"
+            #include <stdio.h>
+            #include "../common.h"
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("main.c"), text)
+        assertEquals(
+            listOf(
+                RawImport("util/helper.h", true),
+                RawImport("stdio.h", false),
+                RawImport("../common.h", true),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `cpp includes and base classes`() {
+        val text = """
+            #include "widget.h"
+            #include <vector>
+
+            class Button : public Widget, private Clickable {};
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("button.cpp"), text)
+        assertEquals(
+            listOf(
+                RawImport("widget.h", true),
+                RawImport("vector", false),
+            ),
+            analysis.imports,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("Widget", EdgeKind.EXTENDS),
+                RawRelation("Clickable", EdgeKind.EXTENDS),
+            ),
+            analysis.relations,
         )
     }
 
