@@ -123,9 +123,10 @@ internal fun InstallGuideDialog(
         if (installJob != null) return@LaunchedEffect
         val re = registryEntry
         if (re != null) {
-            installProgress = re.progress ?: LspInstaller.Progress.Downloading(0, -1)
-            if (re.progress is LspInstaller.Progress.CommandOutput) {
-                outputLines = (outputLines + re.progress.line).takeLast(2000)
+            val reProgress = re.progress
+            installProgress = reProgress ?: LspInstaller.Progress.Downloading(0, -1)
+            if (reProgress is LspInstaller.Progress.CommandOutput) {
+                outputLines = (outputLines + reProgress.line).takeLast(2000)
             }
         } else if (installProgress != null &&
             installProgress !is LspInstaller.Progress.Done &&

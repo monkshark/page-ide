@@ -33,8 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import page.app.InstallProgressRegistry
-import page.app.PubSyncRegistry
 import page.app.dartSiblingLspStatus
 import page.app.lspStatusLineText
 import page.app.state.EditorWorkspaceState
@@ -45,6 +43,8 @@ import page.editor.TextBuffer
 import page.language.LspController
 import page.language.LspRouter
 import page.lsp.DiagnosticSeverity
+import page.runtime.InstallProgressRegistry
+import page.runtime.PubSyncRegistry
 import page.ui.CompactDropdown
 import page.ui.Glass
 

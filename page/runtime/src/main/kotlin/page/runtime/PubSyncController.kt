@@ -1,15 +1,10 @@
-package page.app
+package page.runtime
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import page.runtime.DartSdkInstaller
-import page.runtime.FlutterProjectDetector
-import page.runtime.FlutterSdkInstaller
-import page.runtime.PubDependencySync
-import page.runtime.RunEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -31,7 +26,7 @@ object PubSyncRegistry {
     }
 }
 
-internal class PubSyncController(
+class PubSyncController(
     private val scope: CoroutineScope,
     private val workspaceRoot: () -> Path?,
     private val emitFailureOutput: (List<RunEvent>) -> Unit,
