@@ -19,6 +19,8 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-go:0.25.0")
     implementation("io.github.bonede:tree-sitter-rust:0.24.0")
     implementation("io.github.bonede:tree-sitter-dart:master-a")
+    implementation("io.github.bonede:tree-sitter-c:0.24.1")
+    implementation("io.github.bonede:tree-sitter-cpp:0.23.4")
     testImplementation(kotlin("test"))
 }
 

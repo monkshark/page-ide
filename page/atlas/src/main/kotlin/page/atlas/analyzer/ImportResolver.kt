@@ -51,6 +51,7 @@ class WorkspaceIndex(private val root: Path) {
         val SKIP_DIRS = setOf(".git", "build", "out", "node_modules", "target", ".gradle")
         val SOURCE_EXTS = setOf(
             "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
+            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx",
         )
     }
 }
@@ -72,6 +73,7 @@ object ImportResolver {
             "go" -> resolveGo(raw, activeFile, index)
             "rs" -> resolveRust(raw, activeFile, index)
             "dart" -> resolveDart(raw, activeFile, index)
+            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx" -> resolveC(raw, activeFile, index)
             else -> null
         }
     }
@@ -229,6 +231,21 @@ object ImportResolver {
         }
         val parent = activeFile.parent ?: return null
         return parent.resolve(target).normalize().takeIf { Files.isRegularFile(it) }
+    }
+
+    private fun resolveC(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
+        val rel = raw.target.replace('\\', '/')
+        if (rel.isEmpty()) return null
+        activeFile.parent?.resolve(rel)?.normalize()?.let { if (Files.isRegularFile(it)) return it }
+        index.refreshIfStale()
+        val active = normalized(activeFile)
+        index.files().filter { normalized(it).endsWith("/$rel") }
+            .maxByOrNull { commonPrefixLength(normalized(it), active) }
+            ?.let { return it }
+        val base = rel.substringAfterLast('/')
+        if (base == rel) return null
+        return index.files().filter { it.fileName.toString() == base }
+            .maxByOrNull { commonPrefixLength(normalized(it), active) }
     }
 
     private fun normalized(path: Path): String = path.toString().replace('\\', '/')

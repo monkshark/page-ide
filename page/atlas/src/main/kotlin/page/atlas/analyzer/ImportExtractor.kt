@@ -5,6 +5,8 @@ import org.treesitter.TSLanguage
 import org.treesitter.TSNode
 import org.treesitter.TSParser
 import org.treesitter.TSTreeCursor
+import org.treesitter.TreeSitterC
+import org.treesitter.TreeSitterCpp
 import org.treesitter.TreeSitterDart
 import org.treesitter.TreeSitterGo
 import org.treesitter.TreeSitterJava
@@ -107,6 +109,14 @@ object ImportExtractor {
             null,
             ::TreeSitterDart,
         ),
+        C(setOf("preproc_include"), emptySet(), emptySet(), null, ::TreeSitterC),
+        CPP(
+            setOf("preproc_include"),
+            setOf("base_class_clause"),
+            emptySet(),
+            null,
+            ::TreeSitterCpp,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -124,6 +134,14 @@ object ImportExtractor {
         "go" to Lang.GO,
         "rs" to Lang.RUST,
         "dart" to Lang.DART,
+        "c" to Lang.C,
+        "h" to Lang.CPP,
+        "hpp" to Lang.CPP,
+        "hh" to Lang.CPP,
+        "hxx" to Lang.CPP,
+        "cpp" to Lang.CPP,
+        "cc" to Lang.CPP,
+        "cxx" to Lang.CPP,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -292,6 +310,7 @@ object ImportExtractor {
         Lang.GO -> parseQuoted(snippet, pathStyle = false)
         Lang.RUST -> parseRust(snippet)
         Lang.DART -> parseDart(snippet)
+        Lang.C, Lang.CPP -> parseInclude(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -301,7 +320,8 @@ object ImportExtractor {
         Lang.JS -> typeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.TS -> parseTsRelation(type, snippet)
         Lang.DART -> parseDartRelation(type, snippet)
-        Lang.GO, Lang.RUST -> emptyList()
+        Lang.CPP -> parseCppRelation(snippet)
+        Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
     private fun parseJavaRelation(type: String, snippet: String): List<RawRelation> = when (type) {
@@ -488,6 +508,33 @@ object ImportExtractor {
         val relative = body == "crate" || body == "super" || body == "self" ||
             body.startsWith("crate::") || body.startsWith("super::") || body.startsWith("self::")
         return listOf(RawImport(body, relative))
+    }
+
+    private fun parseInclude(snippet: String): List<RawImport> {
+        unquote(snippet)?.let { return if (it.isEmpty()) emptyList() else listOf(RawImport(it, true)) }
+        val lt = snippet.indexOf('<')
+        val gt = snippet.indexOf('>', lt + 1)
+        if (lt < 0 || gt <= lt) return emptyList()
+        val target = snippet.substring(lt + 1, gt).trim()
+        return if (target.isEmpty()) emptyList() else listOf(RawImport(target, false))
+    }
+
+    private val CPP_ACCESS = setOf("public", "private", "protected", "virtual")
+
+    private fun parseCppRelation(snippet: String): List<RawRelation> {
+        val body = snippet.trim().removePrefix(":").trim()
+        return splitTopLevel(body).mapNotNull { part ->
+            val name = part.trim().split(Regex("\\s+"))
+                .filter { it.isNotBlank() && it !in CPP_ACCESS }
+                .lastOrNull()
+                ?.substringBefore('<')
+                ?.trim()
+                ?: return@mapNotNull null
+            name.takeIf {
+                it.isNotEmpty() && (it.first().isJavaIdentifierStart() || it.startsWith("::")) &&
+                    it.all { c -> c.isJavaIdentifierPart() || c == ':' }
+            }?.let { RawRelation(it, EdgeKind.EXTENDS) }
+        }
     }
 
     private fun unquote(snippet: String): String? {
