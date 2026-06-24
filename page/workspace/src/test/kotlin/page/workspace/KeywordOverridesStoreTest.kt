@@ -1,7 +1,6 @@
-package page.app
+package page.workspace
 
 import page.runtime.*
-import page.workspace.*
 
 import androidx.compose.ui.graphics.Color
 import java.nio.file.Files

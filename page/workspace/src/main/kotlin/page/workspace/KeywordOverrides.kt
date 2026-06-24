@@ -1,7 +1,6 @@
-package page.app
+package page.workspace
 
 import page.runtime.*
-import page.workspace.*
 
 import androidx.compose.ui.graphics.Color
 import com.google.gson.reflect.TypeToken
@@ -40,7 +39,7 @@ object KeywordOverridesStore {
     }
 }
 
-internal fun parseHexColor(hex: String): Color? {
+fun parseHexColor(hex: String): Color? {
     val s = hex.trim().removePrefix("#")
     if (s.length != 6 && s.length != 8) return null
     return runCatching {
