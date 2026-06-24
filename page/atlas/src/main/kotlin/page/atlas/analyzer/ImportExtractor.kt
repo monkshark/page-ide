@@ -12,6 +12,7 @@ import org.treesitter.TreeSitterGo
 import org.treesitter.TreeSitterJava
 import org.treesitter.TreeSitterJavascript
 import org.treesitter.TreeSitterKotlin
+import org.treesitter.TreeSitterPhp
 import org.treesitter.TreeSitterPython
 import org.treesitter.TreeSitterRuby
 import org.treesitter.TreeSitterRust
@@ -143,6 +144,24 @@ object ImportExtractor {
             ::TreeSitterRuby,
             setOf("call"),
         ),
+        PHP(
+            setOf(
+                "namespace_use_declaration",
+                "require_expression",
+                "require_once_expression",
+                "include_expression",
+                "include_once_expression",
+            ),
+            setOf("base_clause", "class_interface_clause"),
+            setOf(
+                "class_declaration",
+                "interface_declaration",
+                "trait_declaration",
+                "function_definition",
+            ),
+            "namespace_definition",
+            ::TreeSitterPhp,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -171,6 +190,7 @@ object ImportExtractor {
         "scala" to Lang.SCALA,
         "sc" to Lang.SCALA,
         "rb" to Lang.RUBY,
+        "php" to Lang.PHP,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -184,7 +204,7 @@ object ImportExtractor {
 
     private val DECL_KEYWORDS = setOf(
         "class", "interface", "object", "fun", "val", "var", "typealias", "record", "enum", "annotation",
-        "trait", "def", "type",
+        "trait", "def", "type", "function",
     )
 
     fun supports(path: Path): Boolean = extOf(path) in langs
@@ -227,7 +247,8 @@ object ImportExtractor {
     }
 
     private fun parsePackage(snippet: String): String =
-        snippet.trim().removePrefix("package").trim().removeSuffix(";").substringBefore('\n').trim()
+        snippet.trim().removePrefix("package").removePrefix("namespace").trim()
+            .removeSuffix(";").substringBefore('\n').trim().replace('\\', '.')
 
     private fun declaredName(snippet: String): String? {
         val header = snippet.substringBefore('{').substringBefore('=').replace("@interface", " interface ")
@@ -356,6 +377,7 @@ object ImportExtractor {
         Lang.C, Lang.CPP -> parseInclude(snippet)
         Lang.SCALA -> parseScala(snippet)
         Lang.RUBY -> parseRubyRequire(snippet)
+        Lang.PHP -> if (type == "namespace_use_declaration") parsePhpUse(snippet) else parsePhpRequire(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -368,6 +390,7 @@ object ImportExtractor {
         Lang.CPP -> parseCppRelation(snippet)
         Lang.SCALA -> parseScalaRelation(snippet)
         Lang.RUBY -> typeNames(snippet.trim().removePrefix("<")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        Lang.PHP -> parsePhpRelation(type, snippet)
         Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
@@ -573,6 +596,66 @@ object ImportExtractor {
             target.startsWith("./") || target.startsWith("../")
         return listOf(RawImport(target, relative))
     }
+
+    private fun parsePhpUse(snippet: String): List<RawImport> {
+        var body = snippet.trim().removePrefix("use").trim().removeSuffix(";").trim()
+        body = stripPhpUseKind(body)
+        if (body.isEmpty()) return emptyList()
+        val brace = body.indexOf('{')
+        if (brace >= 0) {
+            val prefix = body.substring(0, brace).trim().trim('\\')
+            if (prefix.isEmpty()) return emptyList()
+            val inside = body.substring(brace + 1).substringBefore('}')
+            return inside.split(',').mapNotNull { raw ->
+                val item = stripPhpUseKind(raw.trim())
+                if (item.isEmpty()) null else phpUseImport("$prefix\\$item")
+            }
+        }
+        return listOfNotNull(phpUseImport(body))
+    }
+
+    private fun stripPhpUseKind(clause: String): String = when {
+        clause.startsWith("function ") -> clause.removePrefix("function").trim()
+        clause.startsWith("const ") -> clause.removePrefix("const").trim()
+        else -> clause
+    }
+
+    private fun phpUseImport(clause: String): RawImport? {
+        val path: String
+        val alias: String?
+        if (" as " in clause) {
+            path = clause.substringBeforeLast(" as ").trim()
+            alias = clause.substringAfterLast(" as ").trim()
+        } else {
+            path = clause.trim()
+            alias = null
+        }
+        val dotted = path.trim('\\').replace('\\', '.')
+        if (dotted.isEmpty()) return null
+        val symbol = alias ?: dotted.substringAfterLast('.')
+        return RawImport(dotted, false, listOfNotNull(localName(symbol)))
+    }
+
+    private fun parsePhpRequire(snippet: String): List<RawImport> {
+        val target = unquote(snippet) ?: return emptyList()
+        return if (target.isEmpty()) emptyList() else listOf(RawImport(target, true))
+    }
+
+    private fun parsePhpRelation(type: String, snippet: String): List<RawRelation> = when (type) {
+        "base_clause" ->
+            phpTypeNames(snippet.trim().removePrefix("extends")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        "class_interface_clause" ->
+            phpTypeNames(snippet.trim().removePrefix("implements")).map { RawRelation(it, EdgeKind.IMPLEMENTS) }
+        else -> emptyList()
+    }
+
+    private fun phpTypeNames(body: String): List<String> =
+        splitTopLevel(body.replace('\\', '.')).mapNotNull { part ->
+            val name = part.trim().trim('.').substringBefore('<').substringBefore('(').trim()
+            name.takeIf {
+                it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() || c == '.' }
+            }
+        }
 
     private fun parseScala(snippet: String): List<RawImport> {
         val body = snippet.trim().removePrefix("import").trim()

@@ -305,6 +305,47 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `php use resolves via declaration index across namespace`(@TempDir root: Path) {
+        val model = root.resolve("src/Models/User.php")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "<?php\nnamespace App\\Models;\n\nclass User {}\nclass Account {}")
+        val active = root.resolve("src/Http/Controller.php")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "<?php\nnamespace App\\Http;")
+        val index = WorkspaceIndex(root)
+        val decls = declIndex(root)
+        assertEquals(
+            model,
+            ImportResolver.resolve(RawImport("App.Models.User", false), active, index, decls),
+        )
+        assertEquals(
+            model,
+            ImportResolver.resolve(RawImport("App.Models.Account", false), active, index, decls),
+        )
+    }
+
+    @Test
+    fun `php require resolves relative to file directory`(@TempDir root: Path) {
+        val target = root.resolve("app/config.php")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "<?php")
+        val active = root.resolve("app/index.php")
+        Files.writeString(active, "<?php")
+        val resolved = ImportResolver.resolve(RawImport("config.php", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `php vendor use stays external`(@TempDir root: Path) {
+        val active = root.resolve("src/index.php")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "<?php")
+        assertNull(
+            ImportResolver.resolve(RawImport("Psr.Log.LoggerInterface", false), active, WorkspaceIndex(root), declIndex(root)),
+        )
+    }
+
+    @Test
     fun `unresolved import returns null`(@TempDir root: Path) {
         val active = root.resolve("Main.kt")
         Files.writeString(active, "package main")
