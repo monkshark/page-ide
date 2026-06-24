@@ -369,6 +369,84 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `php use imports including group rename and function`() {
+        val text = """
+            <?php
+            namespace App;
+
+            use App\Support\Helper;
+            use App\Support\{Logger, Cache};
+            use App\Contracts\Repo as Repository;
+            use function App\Support\helper_fn;
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("User.php"), text)
+        assertEquals(
+            listOf(
+                RawImport("App.Support.Helper", false, listOf("Helper")),
+                RawImport("App.Support.Logger", false, listOf("Logger")),
+                RawImport("App.Support.Cache", false, listOf("Cache")),
+                RawImport("App.Contracts.Repo", false, listOf("Repository")),
+                RawImport("App.Support.helper_fn", false, listOf("helper_fn")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `php require and include carry file paths`() {
+        val text = """
+            <?php
+            require 'config.php';
+            require_once __DIR__ . '/bootstrap.php';
+            include 'partial.php';
+            include_once "lib/util.php";
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("index.php"), text)
+        assertEquals(
+            listOf(
+                RawImport("config.php", true),
+                RawImport("/bootstrap.php", true),
+                RawImport("partial.php", true),
+                RawImport("lib/util.php", true),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `php top-level declarations and base types`() {
+        val text = """
+            <?php
+            namespace App\Models;
+
+            use App\Support\Helper;
+
+            class User extends Model implements Arrayable, JsonSerializable {}
+
+            interface Arrayable extends Countable {}
+
+            trait HasTimestamps {}
+
+            function topLevelFn() {}
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("User.php"), text)
+        assertEquals("App.Models", analysis.declarations.packageName)
+        assertEquals(
+            listOf("User", "Arrayable", "HasTimestamps", "topLevelFn"),
+            analysis.declarations.symbols,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("Model", EdgeKind.EXTENDS),
+                RawRelation("Arrayable", EdgeKind.IMPLEMENTS),
+                RawRelation("JsonSerializable", EdgeKind.IMPLEMENTS),
+                RawRelation("Countable", EdgeKind.EXTENDS),
+            ),
+            analysis.relations,
+        )
+    }
+
+    @Test
     fun `unsupported extension returns empty`() {
         assertTrue(ImportExtractor.extract(Path.of("notes.txt"), "import x").isEmpty())
         assertTrue(ImportExtractor.supports(Path.of("a.kt")))

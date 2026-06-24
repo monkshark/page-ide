@@ -51,7 +51,7 @@ class WorkspaceIndex(private val root: Path) {
         val SKIP_DIRS = setOf(".git", "build", "out", "node_modules", "target", ".gradle")
         val SOURCE_EXTS = setOf(
             "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
-            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc", "rb",
+            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc", "rb", "php",
         )
     }
 }
@@ -76,6 +76,7 @@ object ImportResolver {
             "dart" -> resolveDart(raw, activeFile, index)
             "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx" -> resolveC(raw, activeFile, index)
             "rb" -> resolveRuby(raw, activeFile, index)
+            "php" -> resolvePhp(raw, activeFile, index, declIndex)
             else -> null
         }
     }
@@ -260,6 +261,35 @@ object ImportResolver {
         index.refreshIfStale()
         val active = normalized(activeFile)
         return index.files().filter { normalized(it).endsWith("/$rel") }
+            .maxByOrNull { commonPrefixLength(normalized(it), active) }
+    }
+
+    private fun resolvePhp(
+        raw: RawImport,
+        activeFile: Path,
+        index: WorkspaceIndex,
+        declIndex: DeclarationIndex?,
+    ): Path? {
+        if (raw.target.isEmpty()) return null
+        return if (raw.relative || raw.target.endsWith(".php") || raw.target.contains('/')) {
+            resolvePhpPath(raw, activeFile, index)
+        } else {
+            resolveDotted(raw, activeFile, index, listOf("php"), declIndex)
+        }
+    }
+
+    private fun resolvePhpPath(raw: RawImport, activeFile: Path, index: WorkspaceIndex): Path? {
+        val rel = raw.target.replace('\\', '/').removePrefix("./").trimStart('/')
+        if (rel.isEmpty()) return null
+        activeFile.parent?.resolve(rel)?.normalize()?.let { if (Files.isRegularFile(it)) return it }
+        index.refreshIfStale()
+        val active = normalized(activeFile)
+        index.files().filter { normalized(it).endsWith("/$rel") }
+            .maxByOrNull { commonPrefixLength(normalized(it), active) }
+            ?.let { return it }
+        val base = rel.substringAfterLast('/')
+        if (base == rel) return null
+        return index.files().filter { it.fileName.toString() == base }
             .maxByOrNull { commonPrefixLength(normalized(it), active) }
     }
 
