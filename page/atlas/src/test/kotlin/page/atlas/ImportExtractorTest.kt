@@ -27,7 +27,7 @@ class ImportExtractorTest {
             listOf(
                 RawImport("java.util.List", false, listOf("List")),
                 RawImport("java.lang.Math.max", false, listOf("max")),
-                RawImport("com.example.util", false),
+                RawImport("com.example.util", false, wildcard = true),
             ),
             imports,
         )
@@ -49,7 +49,7 @@ class ImportExtractorTest {
             listOf(
                 RawImport("foo.bar.Baz", false, listOf("Baz")),
                 RawImport("foo.qux.Quux", false, listOf("Q")),
-                RawImport("foo.all", false),
+                RawImport("foo.all", false, wildcard = true),
             ),
             imports,
         )
@@ -293,7 +293,7 @@ class ImportExtractorTest {
                 RawImport("scala.collection.mutable.ListBuffer", false, listOf("ListBuffer")),
                 RawImport("com.example.util.Helper", false, listOf("Helper")),
                 RawImport("com.example.util.Logger", false, listOf("Logger")),
-                RawImport("com.example.misc", false),
+                RawImport("com.example.misc", false, wildcard = true),
                 RawImport("com.example.alias.Foo", false, listOf("Bar")),
             ),
             imports,

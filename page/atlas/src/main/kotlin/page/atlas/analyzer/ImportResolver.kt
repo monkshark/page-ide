@@ -58,6 +58,23 @@ class WorkspaceIndex(private val root: Path) {
 
 object ImportResolver {
 
+    fun resolveAll(
+        raw: RawImport,
+        activeFile: Path,
+        index: WorkspaceIndex,
+        declIndex: DeclarationIndex? = null,
+    ): List<Path> {
+        if (raw.wildcard && declIndex != null) {
+            declIndex.refreshIfStale()
+            val members = declIndex.filesInPackage(raw.target)
+            if (members.isNotEmpty()) {
+                val self = activeFile.toAbsolutePath().normalize()
+                return members.filter { it != self }
+            }
+        }
+        return listOfNotNull(resolve(raw, activeFile, index, declIndex))
+    }
+
     fun resolve(
         raw: RawImport,
         activeFile: Path,

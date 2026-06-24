@@ -24,6 +24,7 @@ data class RawImport(
     val target: String,
     val relative: Boolean,
     val symbols: List<String> = emptyList(),
+    val wildcard: Boolean = false,
 )
 
 data class RawRelation(val typeName: String, val kind: EdgeKind)
@@ -464,19 +465,22 @@ object ImportExtractor {
     private fun parseJava(snippet: String): List<RawImport> {
         var body = snippet.trim().removePrefix("import").trim().removeSuffix(";").trim()
         if (body.startsWith("static ")) body = body.removePrefix("static").trim()
+        val wildcard = body.endsWith(".*")
         val target = body.removeSuffix(".*").removeSuffix(".")
         return if (target.isEmpty()) emptyList()
-        else listOf(RawImport(target, false, dottedSymbols(body, target)))
+        else listOf(RawImport(target, false, dottedSymbols(body, target), wildcard))
     }
 
     private fun parseKotlin(snippet: String): List<RawImport> {
         val body = snippet.trim().removePrefix("import").trim()
-        val target = body.substringBefore(" as ").trim().removeSuffix(".*").removeSuffix(".")
+        val beforeAs = body.substringBefore(" as ").trim()
+        val wildcard = beforeAs.endsWith(".*")
+        val target = beforeAs.removeSuffix(".*").removeSuffix(".")
         if (target.isEmpty()) return emptyList()
         val symbols =
             if (" as " in body) listOfNotNull(localName(body.substringAfterLast(" as ").trim()))
             else dottedSymbols(body, target)
-        return listOf(RawImport(target, false, symbols))
+        return listOf(RawImport(target, false, symbols, wildcard))
     }
 
     private fun dottedSymbols(body: String, target: String): List<String> =
@@ -673,7 +677,7 @@ object ImportExtractor {
                 val item = raw.trim()
                 when {
                     item.isEmpty() -> null
-                    item == "_" || item == "*" -> RawImport(prefix, false)
+                    item == "_" || item == "*" -> RawImport(prefix, false, wildcard = true)
                     " => " in item -> {
                         val orig = item.substringBefore(" => ").trim()
                         val local = localName(item.substringAfter(" => ").trim())
@@ -686,7 +690,7 @@ object ImportExtractor {
         }
         if (clause.endsWith("._") || clause.endsWith(".*")) {
             val prefix = clause.dropLast(2).trimEnd('.')
-            return if (prefix.isEmpty()) emptyList() else listOf(RawImport(prefix, false))
+            return if (prefix.isEmpty()) emptyList() else listOf(RawImport(prefix, false, wildcard = true))
         }
         return listOf(RawImport(clause, false, dottedSymbols(clause, clause)))
     }

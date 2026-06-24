@@ -40,16 +40,32 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
-                val resolved = ImportResolver.resolve(raw, file, index, declarations)
-                val id = resolved?.let(::nodeId) ?: raw.target
-                if (id == fileId) continue
-                val node = nodes[id] ?: addNode(nodes, queue, id, raw, resolved) ?: continue
-                edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
-                imported += raw to node
+                val targets = ImportResolver.resolveAll(raw, file, index, declarations)
+                if (targets.isEmpty()) {
+                    linkImport(fileId, raw, null, nodes, queue, edges, imported)
+                } else {
+                    for (target in targets) linkImport(fileId, raw, target, nodes, queue, edges, imported)
+                }
             }
             applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue)
         }
         return GraphSlice(nodes.values.toList(), edges.values.toList())
+    }
+
+    private fun linkImport(
+        fileId: String,
+        raw: RawImport,
+        resolved: Path?,
+        nodes: LinkedHashMap<String, GraphNode>,
+        queue: ArrayDeque<Pair<Path, String?>>,
+        edges: LinkedHashMap<Pair<String, String>, GraphEdge>,
+        imported: MutableList<Pair<RawImport, GraphNode>>,
+    ) {
+        val id = resolved?.let(::nodeId) ?: raw.target
+        if (id == fileId) return
+        val node = nodes[id] ?: addNode(nodes, queue, id, raw, resolved) ?: return
+        edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
+        imported += raw to node
     }
 
     override fun nodesForProject(activePath: Path?, activeText: String?): GraphSlice =
@@ -81,12 +97,13 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
-                val resolvedImport = ImportResolver.resolve(raw, file, index, declarations) ?: continue
-                val id = nodeId(resolvedImport)
-                if (id == fileId) continue
-                val node = nodes[id] ?: continue
-                edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
-                imported += raw to node
+                for (resolvedImport in ImportResolver.resolveAll(raw, file, index, declarations)) {
+                    val id = nodeId(resolvedImport)
+                    if (id == fileId) continue
+                    val node = nodes[id] ?: continue
+                    edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
+                    imported += raw to node
+                }
             }
             applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue)
         }

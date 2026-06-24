@@ -322,6 +322,42 @@ class ImportGraphProviderTest {
     }
 
     @Test
+    fun `wildcard import links to every file in the package`(@TempDir root: Path) {
+        val slice = root.resolve("src/g/Slice.kt")
+        Files.createDirectories(slice.parent)
+        Files.writeString(slice, "package g\n\nclass GraphSlice")
+        val node = root.resolve("src/g/Node.kt")
+        Files.writeString(node, "package g\n\nclass GraphNode")
+        val active = root.resolve("src/app/Main.kt")
+        Files.createDirectories(active.parent)
+        val text = "package app\n\nimport g.*"
+        Files.writeString(active, text)
+        val result = ImportGraphProvider(root).nodesForFile(active, text)
+        val workspace = result.nodes.filter { it.kind == NodeKind.WORKSPACE_FILE }
+        assertEquals(2, workspace.size)
+        assertEquals(
+            setOf(slice.toAbsolutePath().normalize(), node.toAbsolutePath().normalize()),
+            workspace.mapNotNull { it.path }.toSet(),
+        )
+        assertEquals(2, result.edges.size)
+    }
+
+    @Test
+    fun `wildcard import raises dependent count of each package member`(@TempDir root: Path) {
+        val a = root.resolve("g/A.kt")
+        Files.createDirectories(a.parent)
+        Files.writeString(a, "package g\n\nclass A")
+        val b = root.resolve("g/B.kt")
+        Files.writeString(b, "package g\n\nclass B")
+        val importer = root.resolve("app/Main.kt")
+        Files.createDirectories(importer.parent)
+        Files.writeString(importer, "package app\n\nimport g.*")
+        val provider = ImportGraphProvider(root)
+        assertEquals(1, provider.dependentCountOf(a))
+        assertEquals(1, provider.dependentCountOf(b))
+    }
+
+    @Test
     fun `extends outranks implements and import on the same edge`(@TempDir root: Path) {
         val base = root.resolve("src/sample/Base.kt")
         Files.createDirectories(base.parent)
