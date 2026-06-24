@@ -346,6 +346,54 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `kotlin wildcard import resolves to every file in the package`(@TempDir root: Path) {
+        val model = root.resolve("src/g/Model.kt")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "package g\n\nclass GraphSlice\nclass GraphNode")
+        val util = root.resolve("src/g/Util.kt")
+        Files.writeString(util, "package g\n\nobject Util")
+        val other = root.resolve("src/h/Other.kt")
+        Files.createDirectories(other.parent)
+        Files.writeString(other, "package h\n\nclass Other")
+        val active = root.resolve("src/app/Main.kt")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "package app")
+        val resolved = ImportResolver.resolveAll(
+            RawImport("g", false, wildcard = true), active, WorkspaceIndex(root), declIndex(root),
+        )
+        assertEquals(
+            setOf(model.toAbsolutePath().normalize(), util.toAbsolutePath().normalize()),
+            resolved.toSet(),
+        )
+    }
+
+    @Test
+    fun `wildcard import excludes the active file from its own package`(@TempDir root: Path) {
+        val a = root.resolve("src/g/A.kt")
+        Files.createDirectories(a.parent)
+        Files.writeString(a, "package g\n\nclass A")
+        val active = root.resolve("src/g/B.kt")
+        Files.writeString(active, "package g\n\nclass B")
+        val resolved = ImportResolver.resolveAll(
+            RawImport("g", false, wildcard = true), active, WorkspaceIndex(root), declIndex(root),
+        )
+        assertEquals(listOf(a.toAbsolutePath().normalize()), resolved)
+    }
+
+    @Test
+    fun `non-wildcard import resolves to a single file via resolveAll`(@TempDir root: Path) {
+        val target = root.resolve("src/com/example/util/Helper.kt")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "package com.example.util")
+        val active = root.resolve("src/com/example/Main.kt")
+        Files.writeString(active.also { Files.createDirectories(it.parent) }, "package com.example")
+        val resolved = ImportResolver.resolveAll(
+            RawImport("com.example.util.Helper", false), active, WorkspaceIndex(root),
+        )
+        assertEquals(listOf(target), resolved)
+    }
+
+    @Test
     fun `unresolved import returns null`(@TempDir root: Path) {
         val active = root.resolve("Main.kt")
         Files.writeString(active, "package main")
