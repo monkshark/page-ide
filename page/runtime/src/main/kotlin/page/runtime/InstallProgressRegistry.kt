@@ -1,11 +1,10 @@
-package page.app
+package page.runtime
 
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import kotlinx.coroutines.Job
-import page.runtime.LspInstaller
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

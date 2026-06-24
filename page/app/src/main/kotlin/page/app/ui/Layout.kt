@@ -62,6 +62,7 @@ import page.app.state.WorkspaceState
 import page.language.LspRouter
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
+import page.runtime.InstallProgressRegistry
 import page.runtime.LspInstallers
 import page.runtime.RunConfigsState
 import page.runtime.TerminalManager
