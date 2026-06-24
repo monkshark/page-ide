@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-06-23T07:02:14.200Z",
+  "updatedAt": "2026-06-24T06:59:10.957Z",
   "owner": "rust-lang",
   "repo": "rust-analyzer",
   "releases": [
     {
       "tag": "nightly",
-      "publishedAt": "2026-06-23T01:24:17Z"
+      "publishedAt": "2026-06-24T01:22:21Z"
     },
     {
       "tag": "2026-06-22",
