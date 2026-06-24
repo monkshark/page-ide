@@ -13,6 +13,7 @@ import org.treesitter.TreeSitterJava
 import org.treesitter.TreeSitterJavascript
 import org.treesitter.TreeSitterKotlin
 import org.treesitter.TreeSitterPython
+import org.treesitter.TreeSitterRuby
 import org.treesitter.TreeSitterRust
 import org.treesitter.TreeSitterScala
 import org.treesitter.TreeSitterTypescript
@@ -134,6 +135,14 @@ object ImportExtractor {
             "package_clause",
             ::TreeSitterScala,
         ),
+        RUBY(
+            emptySet(),
+            setOf("superclass"),
+            emptySet(),
+            null,
+            ::TreeSitterRuby,
+            setOf("call"),
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -161,6 +170,7 @@ object ImportExtractor {
         "cxx" to Lang.CPP,
         "scala" to Lang.SCALA,
         "sc" to Lang.SCALA,
+        "rb" to Lang.RUBY,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -287,8 +297,21 @@ object ImportExtractor {
             val snippet = nodeText(node, text, byteToChar)
             if (FROM_KEYWORD.containsMatchIn(snippet)) snippet else null
         }
+        "call" -> {
+            val method = node.getChildByFieldName("method")
+            val receiver = node.getChildByFieldName("receiver")
+            if (method == null || method.isNull || (receiver != null && !receiver.isNull)) {
+                null
+            } else if (nodeText(method, text, byteToChar) in RUBY_REQUIRE) {
+                nodeText(node, text, byteToChar)
+            } else {
+                null
+            }
+        }
         else -> null
     }
+
+    private val RUBY_REQUIRE = setOf("require", "require_relative", "load")
 
     private fun nodeText(node: TSNode, text: String, byteToChar: IntArray): String {
         val start = byteToChar[node.startByte.coerceIn(0, byteToChar.lastIndex)]
@@ -332,6 +355,7 @@ object ImportExtractor {
         Lang.DART -> parseDart(snippet)
         Lang.C, Lang.CPP -> parseInclude(snippet)
         Lang.SCALA -> parseScala(snippet)
+        Lang.RUBY -> parseRubyRequire(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -343,6 +367,7 @@ object ImportExtractor {
         Lang.DART -> parseDartRelation(type, snippet)
         Lang.CPP -> parseCppRelation(snippet)
         Lang.SCALA -> parseScalaRelation(snippet)
+        Lang.RUBY -> typeNames(snippet.trim().removePrefix("<")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
@@ -539,6 +564,14 @@ object ImportExtractor {
         if (lt < 0 || gt <= lt) return emptyList()
         val target = snippet.substring(lt + 1, gt).trim()
         return if (target.isEmpty()) emptyList() else listOf(RawImport(target, false))
+    }
+
+    private fun parseRubyRequire(snippet: String): List<RawImport> {
+        val target = unquote(snippet) ?: return emptyList()
+        if (target.isEmpty()) return emptyList()
+        val relative = snippet.trimStart().startsWith("require_relative") ||
+            target.startsWith("./") || target.startsWith("../")
+        return listOf(RawImport(target, relative))
     }
 
     private fun parseScala(snippet: String): List<RawImport> {
