@@ -278,6 +278,65 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `scala imports including selectors wildcard and rename`() {
+        val text = """
+            package com.example.app
+
+            import scala.collection.mutable.ListBuffer
+            import com.example.util.{Helper, Logger}
+            import com.example.misc._
+            import com.example.alias.{Foo => Bar}
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("Service.scala"), text)
+        assertEquals(
+            listOf(
+                RawImport("scala.collection.mutable.ListBuffer", false, listOf("ListBuffer")),
+                RawImport("com.example.util.Helper", false, listOf("Helper")),
+                RawImport("com.example.util.Logger", false, listOf("Logger")),
+                RawImport("com.example.misc", false),
+                RawImport("com.example.alias.Foo", false, listOf("Bar")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `scala top-level declarations and base types`() {
+        val text = """
+            package com.example.app
+
+            import foo.Bar
+
+            class Service(val name: String) extends Base with Mixin
+
+            object Service
+
+            trait Repo
+
+            case class User(id: Int)
+
+            val topLevelVal = 1
+
+            def topLevelFun(): Int = 2
+
+            type Ids = List[Int]
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("Service.scala"), text)
+        assertEquals("com.example.app", analysis.declarations.packageName)
+        assertEquals(
+            listOf("Service", "Service", "Repo", "User", "topLevelVal", "topLevelFun", "Ids"),
+            analysis.declarations.symbols,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("Base", EdgeKind.EXTENDS),
+                RawRelation("Mixin", EdgeKind.IMPLEMENTS),
+            ),
+            analysis.relations,
+        )
+    }
+
+    @Test
     fun `unsupported extension returns empty`() {
         assertTrue(ImportExtractor.extract(Path.of("notes.txt"), "import x").isEmpty())
         assertTrue(ImportExtractor.supports(Path.of("a.kt")))

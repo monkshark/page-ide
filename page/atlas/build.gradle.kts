@@ -21,6 +21,7 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-dart:master-a")
     implementation("io.github.bonede:tree-sitter-c:0.24.1")
     implementation("io.github.bonede:tree-sitter-cpp:0.23.4")
+    implementation("io.github.bonede:tree-sitter-scala:0.24.0")
     testImplementation(kotlin("test"))
 }
 

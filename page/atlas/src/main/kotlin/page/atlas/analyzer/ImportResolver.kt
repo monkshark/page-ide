@@ -51,7 +51,7 @@ class WorkspaceIndex(private val root: Path) {
         val SKIP_DIRS = setOf(".git", "build", "out", "node_modules", "target", ".gradle")
         val SOURCE_EXTS = setOf(
             "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
-            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx",
+            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc",
         )
     }
 }
@@ -70,6 +70,7 @@ object ImportResolver {
                 if (raw.relative) resolvePythonRelative(raw, activeFile)
                 else resolvePythonAbsolute(raw, activeFile, index)
             "java", "kt", "kts" -> resolveDotted(raw, activeFile, index, listOf("java", "kt", "kts"), declIndex)
+            "scala", "sc" -> resolveDotted(raw, activeFile, index, listOf("scala", "sc"), declIndex)
             "go" -> resolveGo(raw, activeFile, index)
             "rs" -> resolveRust(raw, activeFile, index)
             "dart" -> resolveDart(raw, activeFile, index)

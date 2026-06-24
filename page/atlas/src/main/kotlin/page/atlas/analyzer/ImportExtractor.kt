@@ -14,6 +14,7 @@ import org.treesitter.TreeSitterJavascript
 import org.treesitter.TreeSitterKotlin
 import org.treesitter.TreeSitterPython
 import org.treesitter.TreeSitterRust
+import org.treesitter.TreeSitterScala
 import org.treesitter.TreeSitterTypescript
 import page.atlas.graph.EdgeKind
 
@@ -117,6 +118,22 @@ object ImportExtractor {
             null,
             ::TreeSitterCpp,
         ),
+        SCALA(
+            setOf("import_declaration"),
+            setOf("extends_clause"),
+            setOf(
+                "class_definition",
+                "object_definition",
+                "trait_definition",
+                "function_definition",
+                "val_definition",
+                "var_definition",
+                "type_definition",
+                "enum_definition",
+            ),
+            "package_clause",
+            ::TreeSitterScala,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -142,6 +159,8 @@ object ImportExtractor {
         "cpp" to Lang.CPP,
         "cc" to Lang.CPP,
         "cxx" to Lang.CPP,
+        "scala" to Lang.SCALA,
+        "sc" to Lang.SCALA,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -150,11 +169,12 @@ object ImportExtractor {
         "public", "private", "protected", "internal", "abstract", "final", "sealed", "open", "data",
         "inline", "value", "companion", "external", "override", "lateinit", "const", "suspend", "operator",
         "infix", "tailrec", "static", "native", "synchronized", "transient", "volatile", "strictfp",
-        "default", "expect", "actual",
+        "default", "expect", "actual", "case", "lazy", "implicit",
     )
 
     private val DECL_KEYWORDS = setOf(
         "class", "interface", "object", "fun", "val", "var", "typealias", "record", "enum", "annotation",
+        "trait", "def", "type",
     )
 
     fun supports(path: Path): Boolean = extOf(path) in langs
@@ -311,6 +331,7 @@ object ImportExtractor {
         Lang.RUST -> parseRust(snippet)
         Lang.DART -> parseDart(snippet)
         Lang.C, Lang.CPP -> parseInclude(snippet)
+        Lang.SCALA -> parseScala(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -321,6 +342,7 @@ object ImportExtractor {
         Lang.TS -> parseTsRelation(type, snippet)
         Lang.DART -> parseDartRelation(type, snippet)
         Lang.CPP -> parseCppRelation(snippet)
+        Lang.SCALA -> parseScalaRelation(snippet)
         Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
@@ -517,6 +539,75 @@ object ImportExtractor {
         if (lt < 0 || gt <= lt) return emptyList()
         val target = snippet.substring(lt + 1, gt).trim()
         return if (target.isEmpty()) emptyList() else listOf(RawImport(target, false))
+    }
+
+    private fun parseScala(snippet: String): List<RawImport> {
+        val body = snippet.trim().removePrefix("import").trim()
+        return splitScalaClauses(body).flatMap { parseScalaClause(it.trim()) }
+    }
+
+    private fun parseScalaClause(clause: String): List<RawImport> {
+        if (clause.isEmpty()) return emptyList()
+        val brace = clause.indexOf('{')
+        if (brace >= 0) {
+            val prefix = clause.substring(0, brace).trim().trimEnd('.')
+            val inside = clause.substring(brace + 1).substringBefore('}')
+            if (prefix.isEmpty()) return emptyList()
+            return inside.split(',').mapNotNull { raw ->
+                val item = raw.trim()
+                when {
+                    item.isEmpty() -> null
+                    item == "_" || item == "*" -> RawImport(prefix, false)
+                    " => " in item -> {
+                        val orig = item.substringBefore(" => ").trim()
+                        val local = localName(item.substringAfter(" => ").trim())
+                        if (orig.isEmpty() || local == null) null
+                        else RawImport("$prefix.$orig", false, listOf(local))
+                    }
+                    else -> RawImport("$prefix.$item", false, listOfNotNull(localName(item)))
+                }
+            }
+        }
+        if (clause.endsWith("._") || clause.endsWith(".*")) {
+            val prefix = clause.dropLast(2).trimEnd('.')
+            return if (prefix.isEmpty()) emptyList() else listOf(RawImport(prefix, false))
+        }
+        return listOf(RawImport(clause, false, dottedSymbols(clause, clause)))
+    }
+
+    private fun splitScalaClauses(body: String): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var depth = 0
+        for (ch in body) when (ch) {
+            '{', '[', '(' -> { depth++; current.append(ch) }
+            '}', ']', ')' -> { depth--; current.append(ch) }
+            ',' -> if (depth <= 0) { parts.add(current.toString()); current.clear() } else current.append(ch)
+            else -> current.append(ch)
+        }
+        parts.add(current.toString())
+        return parts
+    }
+
+    private fun parseScalaRelation(snippet: String): List<RawRelation> {
+        val body = snippet.trim().removePrefix("extends").trim()
+        if (body.isEmpty()) return emptyList()
+        val groups = body.split(" with ")
+        val result = mutableListOf<RawRelation>()
+        splitTopLevel(groups.first()).mapNotNull { scalaTypeName(it) }
+            .forEach { result += RawRelation(it, EdgeKind.EXTENDS) }
+        groups.drop(1).forEach { group ->
+            splitTopLevel(group).mapNotNull { scalaTypeName(it) }
+                .forEach { result += RawRelation(it, EdgeKind.IMPLEMENTS) }
+        }
+        return result
+    }
+
+    private fun scalaTypeName(part: String): String? {
+        val name = part.trim().substringBefore('[').substringBefore('(').trim()
+        return name.takeIf {
+            it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() || c == '.' }
+        }
     }
 
     private val CPP_ACCESS = setOf("public", "private", "protected", "virtual")

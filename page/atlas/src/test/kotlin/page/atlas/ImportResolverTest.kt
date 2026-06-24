@@ -245,6 +245,35 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `scala import resolves via declaration index for multi-symbol file`(@TempDir root: Path) {
+        val model = root.resolve("src/com/example/util/Helpers.scala")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "package com.example.util\n\nclass Helper\nclass Logger")
+        val active = root.resolve("src/com/example/app/Service.scala")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "package com.example.app")
+        val index = WorkspaceIndex(root)
+        val decls = declIndex(root)
+        assertEquals(
+            model,
+            ImportResolver.resolve(RawImport("com.example.util.Helper", false), active, index, decls),
+        )
+        assertEquals(
+            model,
+            ImportResolver.resolve(RawImport("com.example.util.Logger", false), active, index, decls),
+        )
+    }
+
+    @Test
+    fun `scala external import stays external`(@TempDir root: Path) {
+        val active = root.resolve("Main.scala")
+        Files.writeString(active, "package app")
+        assertNull(
+            ImportResolver.resolve(RawImport("scala.collection.mutable.ListBuffer", false), active, WorkspaceIndex(root)),
+        )
+    }
+
+    @Test
     fun `unresolved import returns null`(@TempDir root: Path) {
         val active = root.resolve("Main.kt")
         Files.writeString(active, "package main")
