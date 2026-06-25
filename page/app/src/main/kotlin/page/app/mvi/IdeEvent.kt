@@ -3,7 +3,7 @@ package page.app.mvi
 import androidx.compose.ui.unit.Dp
 import page.app.CreateEntryDialogState
 import page.app.DeleteEntryDialogState
-import page.app.EditorScrollSnapshot
+import page.workspace.EditorScrollSnapshot
 import page.app.FileOpConfirmState
 import page.app.PageSettings
 import page.app.PaneSide

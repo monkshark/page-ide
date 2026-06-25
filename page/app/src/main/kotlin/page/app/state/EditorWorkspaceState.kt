@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.TextFieldValue
 import page.app.EditorPaneState
-import page.app.EditorScrollSnapshot
+import page.workspace.EditorScrollSnapshot
 import page.app.PaneSide
 import page.app.mvi.IdeStore
 import page.editor.EditSnapshot

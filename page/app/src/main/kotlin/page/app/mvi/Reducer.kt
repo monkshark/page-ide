@@ -1,7 +1,7 @@
 package page.app.mvi
 
 import androidx.compose.ui.unit.dp
-import page.app.EditorScrollMemory
+import page.workspace.EditorScrollMemory
 import page.app.PaneSide
 import page.atlas.render.AtlasViewTab
 import page.ui.GlassPalette

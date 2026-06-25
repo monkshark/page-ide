@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import page.app.EditorPaneState
-import page.app.EditorScrollMemory
+import page.workspace.EditorScrollMemory
 import page.app.PaneSide
 import page.app.PendingClose
 import page.app.UnsavedChangesDialog

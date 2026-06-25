@@ -67,6 +67,7 @@ import page.runtime.LspInstallers
 import page.runtime.RunConfigsState
 import page.runtime.TerminalManager
 import page.ui.Glass
+import page.workspace.EditorScrollSnapshot
 import page.ui.GlassPalette
 import page.ui.GlassSurface
 import page.ui.GlassSurfaceLevel

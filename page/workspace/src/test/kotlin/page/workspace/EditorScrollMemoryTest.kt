@@ -1,7 +1,4 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
