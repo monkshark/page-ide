@@ -1,7 +1,4 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import java.nio.file.Files
 import java.nio.file.Path

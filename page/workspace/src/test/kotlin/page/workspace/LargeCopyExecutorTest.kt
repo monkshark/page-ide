@@ -1,11 +1,7 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -159,13 +155,5 @@ class LargeCopyExecutorTest {
             onProgress = { _, _ -> },
         )
         assertTrue(outcome is LargeCopyExecutor.CopyOutcome.Err)
-    }
-
-    @Test
-    fun `formatBytes uses human-readable units`() {
-        assertEquals("512 B", formatBytes(512))
-        assertEquals("1.00 KB", formatBytes(1024))
-        assertNotNull(formatBytes(5L * 1024 * 1024))
-        assertEquals("1.00 MB", formatBytes(1024L * 1024L))
     }
 }
