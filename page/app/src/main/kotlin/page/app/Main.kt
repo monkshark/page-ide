@@ -115,6 +115,7 @@ import page.lsp.pickSingleOtherReference
 import page.perf.PerfRegistry
 import page.perf.StartupKind
 import page.perf.StartupPhases
+import page.perf.UiFreezeWatchdog
 import page.ui.CompactDropdown
 import page.ui.CompactMenuItem
 import page.ui.Glass

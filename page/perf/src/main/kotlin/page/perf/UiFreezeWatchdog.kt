@@ -1,4 +1,4 @@
-package page.app
+package page.perf
 
 import java.awt.EventQueue
 import java.util.concurrent.CountDownLatch
