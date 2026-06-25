@@ -4,13 +4,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import page.app.LargeCopyExecutor
 import page.language.LspController
 import page.app.utils.isKotlinSource
 import page.workspace.FileOpHistory
 import page.workspace.FileTreeActions
 import page.workspace.FileTreeClipboard
 import page.workspace.FolderPackageRename
+import page.workspace.LargeCopyExecutor
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean

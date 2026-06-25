@@ -1,18 +1,15 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import page.lsp.CompletionItem
 import page.lsp.CompletionItemKind
 import page.lsp.CompletionList
 
-internal data class CommentKeywordContext(
+data class CommentKeywordContext(
     val anchor: Int,
     val needsLeadingSpace: Boolean,
 )
 
-internal object CommentKeywordCompletion {
+object CommentKeywordCompletion {
 
     val DISMISS_ITEM: CompletionItem = CompletionItem(
         label = "",
