@@ -1,18 +1,15 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import page.editor.Token
 import page.editor.TokenKind
 
-internal data class KdocContinuationResult(
+data class KdocContinuationResult(
     val insertText: String,
     val caretOffsetWithinInsert: Int,
     val consumeAfterCaret: Int = 0,
 )
 
-internal object KdocContinuation {
+object KdocContinuation {
 
     fun compute(text: String, caret: Int, tokens: List<Token>): KdocContinuationResult? {
         if (caret < 0 || caret > text.length) return null
