@@ -4,7 +4,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import page.app.CreateEntryDialogState
 import page.app.DeleteEntryDialogState
-import page.app.EditorScrollSnapshot
+import page.workspace.EditorScrollSnapshot
 import page.app.FileOpConfirmState
 import page.app.PaneSide
 import page.app.PendingClose

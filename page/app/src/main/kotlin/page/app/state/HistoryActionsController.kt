@@ -1,8 +1,8 @@
 package page.app.state
 
-import page.app.HistoryFile
-import page.app.HistoryStore
-import page.app.pushMru
+import page.workspace.HistoryFile
+import page.workspace.HistoryStore
+import page.workspace.pushMru
 import java.nio.file.Path
 
 internal class HistoryActionsController(

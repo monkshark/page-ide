@@ -16,6 +16,7 @@ import page.atlas.render.OverviewViewState
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.runtime.TerminalManager
+import page.workspace.EditorScrollSnapshot
 import java.nio.file.Path
 
 internal class SessionCoordinator(

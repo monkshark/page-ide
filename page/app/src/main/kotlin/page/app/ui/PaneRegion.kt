@@ -27,6 +27,7 @@ import page.editor.SyntaxLexers
 import page.language.LspController
 import page.language.LspRouter
 import page.lsp.RenameWorkspaceEdit
+import page.workspace.EditorScrollSnapshot
 import java.nio.file.Path
 
 @Composable
