@@ -1,7 +1,4 @@
-package page.app
-
-import page.runtime.*
-import page.workspace.*
+package page.workspace
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
