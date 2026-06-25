@@ -1,7 +1,6 @@
-package page.app
+package page.workspace
 
 import page.runtime.*
-import page.workspace.*
 
 import com.google.gson.reflect.TypeToken
 import java.nio.file.Path
@@ -29,7 +28,7 @@ object HistoryStore {
     }
 }
 
-internal fun pushMru(list: List<String>, value: String, max: Int): List<String> {
+fun pushMru(list: List<String>, value: String, max: Int): List<String> {
     if (value.isBlank()) return list
     val filtered = list.filterNot { it == value }
     val next = listOf(value) + filtered

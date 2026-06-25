@@ -6,7 +6,6 @@ import androidx.compose.runtime.setValue
 import page.app.AppSettings
 import page.app.DropResultToastState
 import page.app.FileOpConfirmState
-import page.app.HistoryFile
 import page.app.PageSettings
 import page.app.PendingClose
 import page.app.ReferencesQueryState
@@ -15,6 +14,7 @@ import page.editor.IndexedFile
 import page.lsp.CodeActionEntry
 import page.runtime.RunConfigsState
 import page.ui.GlassPalette
+import page.workspace.HistoryFile
 import page.workspace.WorkspaceFile
 
 internal class IdeAppState(private val store: IdeStore = IdeStore()) {
