@@ -373,7 +373,7 @@ fun AtlasContent(
             if (callsSlice.nodes.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "Right-click a symbol and choose Show Call Graph in Atlas",
+                        text = "No call relationships found.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
