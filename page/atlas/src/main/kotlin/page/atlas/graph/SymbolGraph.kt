@@ -13,7 +13,21 @@ data class SymbolSpec(
 )
 
 fun symbolNodeId(symbol: SymbolSpec): String =
-    "${symbol.uri}#${symbol.name}@${symbol.line}"
+    "${canonicalSymbolUri(symbol.uri)}#${symbol.name}@${symbol.line}"
+
+private val WINDOWS_DRIVE = Regex("^(file:///)([A-Za-z])(:)")
+
+fun canonicalSymbolUri(uri: String): String = try {
+    val parsed = URI(uri)
+    if (parsed.scheme.equals("file", ignoreCase = true)) {
+        val normalized = Path.of(parsed).toAbsolutePath().normalize().toUri().toString()
+        WINDOWS_DRIVE.replace(normalized) { m -> m.groupValues[1] + m.groupValues[2].lowercase() + m.groupValues[3] }
+    } else {
+        parsed.normalize().toString()
+    }
+} catch (e: Exception) {
+    uri
+}
 
 interface CallHierarchySource {
     fun incoming(symbol: SymbolSpec): List<SymbolSpec>
