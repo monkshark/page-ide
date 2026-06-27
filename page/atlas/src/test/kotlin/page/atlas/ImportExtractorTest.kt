@@ -4,6 +4,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import page.atlas.analyzer.CallSite
 import page.atlas.analyzer.ImportExtractor
 import page.atlas.analyzer.RawImport
 import page.atlas.analyzer.RawRelation
@@ -571,5 +572,42 @@ class ImportExtractorTest {
         val decls = ImportExtractor.analyze(Path.of("app.js"), "class Foo {}").declarations
         assertEquals("", decls.packageName)
         assertEquals(emptyList(), decls.symbols)
+    }
+
+    @Test
+    fun `kotlin call sites attribute callee names to the enclosing top-level declaration`() {
+        val text = "package p\n\nfun a() {\n    b()\n    C.d()\n    x.y.z()\n}\n"
+        val calls = ImportExtractor.analyze(Path.of("A.kt"), text).calls
+        assertEquals(
+            listOf(
+                CallSite("a", "b", 3),
+                CallSite("a", "d", 4),
+                CallSite("a", "z", 5),
+            ),
+            calls,
+        )
+    }
+
+    @Test
+    fun `kotlin calls inside a member are attributed to the top-level type`() {
+        val text = "package p\n\nclass K {\n    fun m() {\n        b()\n    }\n}\n"
+        val calls = ImportExtractor.analyze(Path.of("K.kt"), text).calls
+        assertEquals(listOf(CallSite("K", "b", 4)), calls)
+    }
+
+    @Test
+    fun `java call sites use the method name and the top-level type as caller`() {
+        val text = "package m;\n\nclass T {\n    void m() {\n        helper();\n        a.b.c();\n    }\n}\n"
+        val calls = ImportExtractor.analyze(Path.of("T.java"), text).calls
+        assertEquals(
+            listOf(CallSite("T", "helper", 4), CallSite("T", "c", 5)),
+            calls,
+        )
+    }
+
+    @Test
+    fun `languages without call extraction carry no call sites`() {
+        val calls = ImportExtractor.analyze(Path.of("app.js"), "function a(){ b() }").calls
+        assertEquals(emptyList(), calls)
     }
 }

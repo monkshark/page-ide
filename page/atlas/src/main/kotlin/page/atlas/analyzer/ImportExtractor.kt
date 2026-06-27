@@ -41,10 +41,13 @@ data class FileDeclarations(
     }
 }
 
+data class CallSite(val callerName: String, val calleeName: String, val line: Int)
+
 data class FileAnalysis(
     val imports: List<RawImport>,
     val relations: List<RawRelation>,
     val declarations: FileDeclarations = FileDeclarations.EMPTY,
+    val calls: List<CallSite> = emptyList(),
 ) {
     companion object {
         val EMPTY = FileAnalysis(emptyList(), emptyList())
@@ -60,6 +63,7 @@ object ImportExtractor {
         val packageType: String?,
         val factory: () -> TSLanguage,
         val softImportTypes: Set<String> = emptySet(),
+        val callTypes: Set<String> = emptySet(),
     ) {
         JAVA(
             setOf("import_declaration"),
@@ -73,6 +77,7 @@ object ImportExtractor {
             ),
             "package_declaration",
             ::TreeSitterJava,
+            callTypes = setOf("method_invocation"),
         ),
         KOTLIN(
             setOf("import_header"),
@@ -86,6 +91,7 @@ object ImportExtractor {
             ),
             "package_header",
             ::TreeSitterKotlin,
+            callTypes = setOf("call_expression"),
         ),
         PYTHON(
             setOf("import_statement", "import_from_statement"),
@@ -231,7 +237,77 @@ object ImportExtractor {
             imports.flatMap { (type, snippet) -> parse(lang, type, snippet) },
             relations.flatMap { (type, snippet) -> parseRelation(lang, type, snippet) },
             collectDeclarations(tree.rootNode, lang, text, byteToChar),
+            collectCalls(tree.rootNode, lang, text, byteToChar),
         )
+    }
+
+    private fun collectCalls(root: TSNode, lang: Lang, text: String, byteToChar: IntArray): List<CallSite> {
+        if (lang.callTypes.isEmpty()) return emptyList()
+        val out = mutableListOf<CallSite>()
+        val cursor = TSTreeCursor(root)
+        if (cursor.gotoFirstChild()) {
+            do {
+                val node = cursor.currentNode()
+                if ((node.type ?: "") in lang.declTypes) {
+                    declaredName(nodeText(node, text, byteToChar))?.let { caller ->
+                        collectCallsIn(cursor, caller, lang, text, byteToChar, out)
+                    }
+                }
+            } while (cursor.gotoNextSibling())
+        }
+        return out
+    }
+
+    private fun collectCallsIn(
+        c: TSTreeCursor,
+        caller: String,
+        lang: Lang,
+        text: String,
+        byteToChar: IntArray,
+        out: MutableList<CallSite>,
+    ) {
+        val node = c.currentNode()
+        if ((node.type ?: "") in lang.callTypes) {
+            calleeName(node, lang, text, byteToChar)?.let { out += CallSite(caller, it, node.startPoint.row) }
+        }
+        if (c.gotoFirstChild()) {
+            do {
+                collectCallsIn(c, caller, lang, text, byteToChar, out)
+            } while (c.gotoNextSibling())
+            c.gotoParent()
+        }
+    }
+
+    private fun calleeName(node: TSNode, lang: Lang, text: String, byteToChar: IntArray): String? = when (lang) {
+        Lang.KOTLIN -> kotlinCallee(node, text, byteToChar)
+        Lang.JAVA -> javaCallee(node, text, byteToChar)
+        else -> null
+    }
+
+    private fun kotlinCallee(node: TSNode, text: String, byteToChar: IntArray): String? {
+        val callee = children(node).firstOrNull { (it.type ?: "") != "call_suffix" } ?: return null
+        val raw = when (callee.type) {
+            "simple_identifier" -> nodeText(callee, text, byteToChar)
+            "navigation_expression" -> {
+                val suffix = children(callee).lastOrNull { (it.type ?: "") == "navigation_suffix" } ?: return null
+                children(suffix).firstOrNull { (it.type ?: "") == "simple_identifier" }
+                    ?.let { nodeText(it, text, byteToChar) }
+            }
+            else -> null
+        } ?: return null
+        return sanitizeIdent(raw)
+    }
+
+    private fun javaCallee(node: TSNode, text: String, byteToChar: IntArray): String? {
+        val name = node.getChildByFieldName("name")
+        if (name == null || name.isNull) return null
+        return sanitizeIdent(nodeText(name, text, byteToChar))
+    }
+
+    private fun children(node: TSNode): List<TSNode> = (0 until node.childCount).map { node.getChild(it) }
+
+    private fun sanitizeIdent(s: String): String? = s.takeIf {
+        it.isNotEmpty() && it.first().isJavaIdentifierStart() && it.all { c -> c.isJavaIdentifierPart() }
     }
 
     private fun collectDeclarations(root: TSNode, lang: Lang, text: String, byteToChar: IntArray): FileDeclarations {
