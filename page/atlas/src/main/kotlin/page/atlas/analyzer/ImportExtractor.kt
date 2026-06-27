@@ -29,7 +29,13 @@ data class RawImport(
 
 data class RawRelation(val typeName: String, val kind: EdgeKind)
 
-data class FileDeclarations(val packageName: String, val symbols: List<String>) {
+data class SymbolDecl(val name: String, val line: Int)
+
+data class FileDeclarations(
+    val packageName: String,
+    val symbols: List<String>,
+    val locations: List<SymbolDecl> = emptyList(),
+) {
     companion object {
         val EMPTY = FileDeclarations("", emptyList())
     }
@@ -233,6 +239,7 @@ object ImportExtractor {
         val cursor = TSTreeCursor(root)
         var packageName = ""
         val symbols = mutableListOf<String>()
+        val locations = mutableListOf<SymbolDecl>()
         if (cursor.gotoFirstChild()) {
             do {
                 val node = cursor.currentNode()
@@ -240,11 +247,14 @@ object ImportExtractor {
                 when {
                     type == lang.packageType -> packageName = parsePackage(nodeText(node, text, byteToChar))
                     type in lang.declTypes ->
-                        declaredName(nodeText(node, text, byteToChar))?.let { symbols += it }
+                        declaredName(nodeText(node, text, byteToChar))?.let {
+                            symbols += it
+                            locations += SymbolDecl(it, node.startPoint.row)
+                        }
                 }
             } while (cursor.gotoNextSibling())
         }
-        return FileDeclarations(packageName, symbols)
+        return FileDeclarations(packageName, symbols, locations)
     }
 
     private fun parsePackage(snippet: String): String =

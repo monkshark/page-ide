@@ -7,6 +7,7 @@ import kotlin.test.assertTrue
 import page.atlas.analyzer.ImportExtractor
 import page.atlas.analyzer.RawImport
 import page.atlas.analyzer.RawRelation
+import page.atlas.analyzer.SymbolDecl
 import page.atlas.graph.EdgeKind
 
 class ImportExtractorTest {
@@ -492,6 +493,27 @@ class ImportExtractorTest {
                 "Marker", "Ids", "buildSlice", "weight", "MAX",
             ),
             decls.symbols,
+        )
+    }
+
+    @Test
+    fun `kotlin declarations carry top-level line numbers`() {
+        val text = "package p\n\nclass A\n\nfun b() {}\n\nobject C\n"
+        val decls = ImportExtractor.analyze(Path.of("A.kt"), text).declarations
+        assertEquals(listOf("A", "b", "C"), decls.symbols)
+        assertEquals(
+            listOf(SymbolDecl("A", 2), SymbolDecl("b", 4), SymbolDecl("C", 6)),
+            decls.locations,
+        )
+    }
+
+    @Test
+    fun `java declarations carry top-level line numbers`() {
+        val text = "package m;\n\nclass Point {}\n\ninterface Shape {}\n"
+        val decls = ImportExtractor.analyze(Path.of("Point.java"), text).declarations
+        assertEquals(
+            listOf(SymbolDecl("Point", 2), SymbolDecl("Shape", 4)),
+            decls.locations,
         )
     }
 
