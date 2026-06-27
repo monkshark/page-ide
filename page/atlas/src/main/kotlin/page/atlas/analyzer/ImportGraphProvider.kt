@@ -16,6 +16,10 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     private val index = WorkspaceIndex(root)
     private val cache = HashMap<String, CachedAnalysis>()
     private val declarations = DeclarationIndex(index) { cachedAnalysis(it) }
+
+    val staticCalls: StaticCallHierarchySource by lazy {
+        StaticCallHierarchySource(index) { cachedAnalysis(it) }
+    }
     private var digestRevision = Long.MIN_VALUE
     private var cachedDigest: DependencyDigest = DependencyDigest.EMPTY
 

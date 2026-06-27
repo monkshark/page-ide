@@ -222,6 +222,11 @@ object ImportExtractor {
 
     fun supports(path: Path): Boolean = extOf(path) in langs
 
+    fun supportsStaticCalls(path: Path): Boolean {
+        val lang = langs[extOf(path)] ?: return false
+        return lang.callTypes.isNotEmpty() && lang.declTypes.isNotEmpty()
+    }
+
     fun extract(path: Path, text: String): List<RawImport> = analyze(path, text).imports
 
     fun analyze(path: Path, text: String): FileAnalysis {

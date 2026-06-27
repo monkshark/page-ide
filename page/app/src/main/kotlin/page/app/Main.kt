@@ -520,30 +520,39 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     var atlasCallsSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     var atlasCallsSession by remember { mutableStateOf<page.atlas.graph.SymbolGraphSession?>(null) }
     val atlasCallsMutex = remember { Mutex() }
+    fun staticCallGraph(path: java.nio.file.Path, line: Int): Pair<page.atlas.graph.SymbolGraphSession, GraphSlice>? {
+        val source = atlasProvider?.staticCalls ?: return null
+        val root = source.rootAt(path, line) ?: return null
+        val session = page.atlas.graph.SymbolGraphSession(source)
+        return session to session.start(root)
+    }
     val showCallGraph: (java.nio.file.Path, Int, Int) -> Unit = { path, line, character ->
-        val ctrl = currentLspRouter.controllerFor(path)
-        if (ctrl != null) appScope.launch {
+        appScope.launch {
             val started = withContext(Dispatchers.IO) {
                 atlasCallsMutex.withLock {
                     runCatching {
-                        val item = ctrl.prepareCallHierarchy(path, line, character)
-                            .get(10, java.util.concurrent.TimeUnit.SECONDS)
-                            .firstOrNull() ?: return@runCatching null
-                        val session = page.atlas.graph.SymbolGraphSession(LspCallHierarchySource(ctrl))
-                        session to session.start(item.toSymbolSpec())
+                        val ctrl = currentLspRouter.controllerFor(path)
+                        val lsp = if (ctrl != null && ctrl.supportsCallHierarchy) {
+                            ctrl.prepareCallHierarchy(path, line, character)
+                                .get(10, java.util.concurrent.TimeUnit.SECONDS)
+                                .firstOrNull()
+                                ?.let { item ->
+                                    val session = page.atlas.graph.SymbolGraphSession(LspCallHierarchySource(ctrl))
+                                    session to session.start(item.toSymbolSpec())
+                                }
+                        } else null
+                        lsp ?: staticCallGraph(path, line)
                     }.getOrElse { t ->
                         println("[atlas] call graph failed: ${t::class.simpleName}: ${t.message}")
-                        null
+                        runCatching { staticCallGraph(path, line) }.getOrNull()
                     }
                 }
             }
-            if (started != null) {
-                val (session, slice) = started
-                atlasCallsSession = session
-                atlasCallsView.pendingFocusId = session.rootId
-                atlasCallsSlice = slice
-                onIdeEvent(IdeEvent.Panel.ShowAtlasCalls)
-            }
+            val session = started?.first
+            atlasCallsSession = session
+            if (session != null) atlasCallsView.pendingFocusId = session.rootId
+            atlasCallsSlice = started?.second ?: GraphSlice.EMPTY
+            onIdeEvent(IdeEvent.Panel.ShowAtlasCalls)
         }
     }
     val onAtlasCallsExpand: (String) -> Unit = { nodeId ->

@@ -176,7 +176,7 @@ internal fun PaneRegion(
                         { line, ch, sym -> onRequestReferences(p, line, ch, sym) }
                     },
                     onShowCallGraph = active?.path
-                        ?.takeIf { activeCtrl?.supportsCallHierarchy == true }
+                        ?.takeIf { activeCtrl?.supportsCallHierarchy == true || ImportExtractor.supportsStaticCalls(it) }
                         ?.let { p -> { line, ch -> onShowCallGraph(p, line, ch) } },
                     onShowInAtlas = active?.path
                         ?.takeIf { ImportExtractor.supports(it) }
