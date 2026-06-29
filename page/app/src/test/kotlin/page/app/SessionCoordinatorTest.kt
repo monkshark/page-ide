@@ -180,7 +180,7 @@ class SessionCoordinatorTest {
         view.yaw = 1.1f
         view.pitch = 0.3f
         view.zoomUser = 2f
-        layoutUiState.atlasViewTab = AtlasViewTab.CALLS
+        layoutUiState.atlasViewTab = AtlasViewTab.ANALYSIS
         SessionStore.save(ws, coordinator(ws, atlasView = view).snapshot())
 
         layoutUiState.atlasViewTab = AtlasViewTab.RELATIONS
@@ -190,7 +190,7 @@ class SessionCoordinatorTest {
         assertEquals(1.1f, restored.yaw)
         assertEquals(0.3f, restored.pitch)
         assertEquals(2f, restored.zoomUser)
-        assertEquals(AtlasViewTab.CALLS, layoutUiState.atlasViewTab)
+        assertEquals(AtlasViewTab.ANALYSIS, layoutUiState.atlasViewTab)
     }
 
     @Test

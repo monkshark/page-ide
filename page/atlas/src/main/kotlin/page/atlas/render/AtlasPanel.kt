@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,7 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,7 +67,6 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,66 +86,6 @@ import page.atlas.graph.drillPathInSlice
 import page.atlas.interaction.OverviewSelection
 
 @Composable
-fun AtlasPanel(
-    slice: GraphSlice,
-    onNodeClick: (FilePath) -> Unit,
-    onClose: () -> Unit,
-    width: Dp,
-    projectMode: Boolean = false,
-    onProjectModeChange: (Boolean) -> Unit = {},
-    viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
-    onViewTabChange: (AtlasViewTab) -> Unit = {},
-    showExpand: Boolean = false,
-    onExpand: () -> Unit = {},
-    mapView: MapViewState = remember { MapViewState() },
-    atlasView: AtlasViewState = remember { AtlasViewState() },
-    overviewState: OverviewViewState = remember { OverviewViewState() },
-    loadProgress: Float? = null,
-    vcsMarks: Map<String, VcsMark> = emptyMap(),
-    vcsEnabled: Boolean = true,
-    onVcsEnabledChange: (Boolean) -> Unit = {},
-    activeFileId: String? = null,
-    followActive: Boolean = false,
-    onFollowActiveChange: (Boolean) -> Unit = {},
-    callsSlice: GraphSlice = GraphSlice.EMPTY,
-    callsView: AtlasViewState = remember { AtlasViewState() },
-    onCallsExpand: (String) -> Unit = {},
-    onCallsOpen: (String) -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.width(width).fillMaxHeight(),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        AtlasContent(
-            slice = slice,
-            onNodeClick = onNodeClick,
-            onClose = onClose,
-            projectMode = projectMode,
-            onProjectModeChange = onProjectModeChange,
-            viewTab = viewTab,
-            onViewTabChange = onViewTabChange,
-            showExpand = showExpand,
-            onExpand = onExpand,
-            mapView = mapView,
-            atlasView = atlasView,
-            overviewState = overviewState,
-            loadProgress = loadProgress,
-            vcsMarks = vcsMarks,
-            vcsEnabled = vcsEnabled,
-            onVcsEnabledChange = onVcsEnabledChange,
-            activeFileId = activeFileId,
-            followActive = followActive,
-            onFollowActiveChange = onFollowActiveChange,
-            callsSlice = callsSlice,
-            callsView = callsView,
-            onCallsExpand = onCallsExpand,
-            onCallsOpen = onCallsOpen,
-        )
-    }
-}
-
-@Composable
 fun AtlasContent(
     slice: GraphSlice,
     onNodeClick: (FilePath) -> Unit,
@@ -157,10 +94,6 @@ fun AtlasContent(
     onProjectModeChange: (Boolean) -> Unit = {},
     viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     onViewTabChange: (AtlasViewTab) -> Unit = {},
-    showExpand: Boolean = false,
-    onExpand: () -> Unit = {},
-    showDock: Boolean = false,
-    onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     overviewState: OverviewViewState = remember { OverviewViewState() },
@@ -171,13 +104,8 @@ fun AtlasContent(
     activeFileId: String? = null,
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
-    callsSlice: GraphSlice = GraphSlice.EMPTY,
-    callsView: AtlasViewState = remember { AtlasViewState() },
-    onCallsExpand: (String) -> Unit = {},
-    onCallsOpen: (String) -> Unit = {},
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
-    LaunchedEffect(callsSlice, callsView.pendingFocusId) { callsView.onSliceChanged(callsSlice) }
     val selectedId = atlasView.selectedId
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
@@ -249,11 +177,7 @@ fun AtlasContent(
         if (!relationsFollow) null
         else listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
     }
-    val searchSlice = when (viewTab) {
-        AtlasViewTab.RELATIONS -> slice
-        AtlasViewTab.ANALYSIS -> slice
-        AtlasViewTab.CALLS -> callsSlice
-    }
+    val searchSlice = slice
     val searchMatches = remember(searchSlice, searchQuery) {
         atlasSearchMatches(searchSlice.nodes, searchQuery)
     }
@@ -262,14 +186,9 @@ fun AtlasContent(
         if (searchMatches.isEmpty()) return
         searchIndex = (searchIndex + delta).mod(searchMatches.size)
         val node = searchMatches[searchIndex]
-        if (viewTab == AtlasViewTab.CALLS) {
-            callsView.selectedId = node.id
-            callsView.pendingFocusId = node.id
-        } else {
-            atlasView.selectedId = node.id
-            atlasView.pendingFocusId = node.id
-            mapView.focusCenterId = node.id
-        }
+        atlasView.selectedId = node.id
+        atlasView.pendingFocusId = node.id
+        mapView.focusCenterId = node.id
     }
     Column(
         modifier = Modifier
@@ -325,8 +244,6 @@ fun AtlasContent(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Box(modifier = Modifier.weight(1f))
-            if (showExpand) HeaderAction("Expand", onClick = onExpand)
-            if (showDock) HeaderAction("Dock", onClick = onDock)
             HeaderAction("Close", accent = true, onClick = onClose)
         }
         Divider()
@@ -340,9 +257,6 @@ fun AtlasContent(
         ) {
             ModeChip("Relations", viewTab == AtlasViewTab.RELATIONS) { onViewTabChange(AtlasViewTab.RELATIONS) }
             ModeChip("Analysis", viewTab == AtlasViewTab.ANALYSIS) { onViewTabChange(AtlasViewTab.ANALYSIS) }
-            if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
-                ModeChip("Calls", viewTab == AtlasViewTab.CALLS) { onViewTabChange(AtlasViewTab.CALLS) }
-            }
             Box(modifier = Modifier.weight(1f))
             if (viewTab == AtlasViewTab.RELATIONS && activeFileId != null) {
                 ModeChip("Focus", relationsFollow) { relationsFollow = !relationsFollow }
@@ -369,28 +283,7 @@ fun AtlasContent(
             )
             Divider()
         }
-        if (viewTab == AtlasViewTab.CALLS) {
-            if (callsSlice.nodes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No call relationships found.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                CallsView(
-                    slice = callsSlice,
-                    focusId = callsView.selectedId,
-                    onSelect = { id ->
-                        callsView.selectedId = id
-                        onCallsExpand(id)
-                    },
-                    onOpen = onCallsOpen,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-            }
-        } else if (slice.nodes.isEmpty()) {
+        if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
                 Text(
@@ -705,7 +598,7 @@ private fun DrilledCard(
 }
 
 @Composable
-private fun HeaderAction(label: String, accent: Boolean = false, onClick: () -> Unit) {
+internal fun HeaderAction(label: String, accent: Boolean = false, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val tint = if (accent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
@@ -752,7 +645,7 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Divider() {
+internal fun Divider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
