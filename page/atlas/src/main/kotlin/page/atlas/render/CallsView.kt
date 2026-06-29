@@ -44,7 +44,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -220,6 +220,22 @@ private fun EgoBand(focus: GraphNode, neighborhood: Neighborhood, onSelect: (Str
     val layout = remember(canvasSize, neighborhood) {
         buildCallsBand(canvasSize.width.toFloat(), canvasSize.height.toFloat(), neighborhood)
     }
+    val cardLabels = remember(neighborhood, measurer) {
+        (neighborhood.incoming + neighborhood.outgoing).associate { n ->
+            n.node.id to measurer.measure(AnnotatedString(ellipsize(n.node.label, 11)), cardStyle)
+        }
+    }
+    val focusLabel = remember(focus, measurer) {
+        measurer.measure(AnnotatedString(ellipsize(focus.label, 9)), focusStyle)
+    }
+    val overflowLabels = remember(neighborhood, measurer) {
+        val inOverflow = neighborhood.incomingTotal - minOf(neighborhood.incoming.size, CALLS_BAND_MAX_PER_SIDE)
+        val outOverflow = neighborhood.outgoingTotal - minOf(neighborhood.outgoing.size, CALLS_BAND_MAX_PER_SIDE)
+        buildMap {
+            if (inOverflow > 0) put(-1, measurer.measure(AnnotatedString("+$inOverflow"), moreStyle))
+            if (outOverflow > 0) put(1, measurer.measure(AnnotatedString("+$outOverflow"), moreStyle))
+        }
+    }
     Box(Modifier.fillMaxWidth().height(156.dp).padding(horizontal = 12.dp, vertical = 6.dp)) {
         Canvas(
             modifier = Modifier
@@ -255,8 +271,10 @@ private fun EgoBand(focus: GraphNode, neighborhood: Neighborhood, onSelect: (Str
             }
             if (hasCaller) drawBandArrow(fLeft, AtlasInk.incoming)
 
-            for (card in layout.cards) drawBandCard(card, measurer, cardStyle, moreStyle)
-            drawBandFocus(layout.focus, focus, neighborhood.inCycle, measurer, focusStyle)
+            for (card in layout.cards) {
+                drawBandCard(card, cardLabels[card.node?.id], overflowLabels[card.side])
+            }
+            drawBandFocus(layout.focus, neighborhood.inCycle, focusLabel)
         }
     }
 }
@@ -426,11 +444,10 @@ private fun DrawScope.drawBandArrow(tip: Offset, color: Color) {
     drawPath(head, color.copy(alpha = 0.85f))
 }
 
-private fun DrawScope.drawBandCard(card: CallsBandCard, measurer: TextMeasurer, textStyle: TextStyle, moreStyle: TextStyle) {
+private fun DrawScope.drawBandCard(card: CallsBandCard, label: TextLayoutResult?, overflow: TextLayoutResult?) {
     val rect = card.rect
     val corner = CornerRadius(7f, 7f)
-    val node = card.node
-    if (node == null) {
+    if (card.node == null) {
         drawRoundRect(
             color = AtlasInk.nodeStroke.copy(alpha = 0.5f),
             topLeft = rect.topLeft,
@@ -438,8 +455,9 @@ private fun DrawScope.drawBandCard(card: CallsBandCard, measurer: TextMeasurer, 
             cornerRadius = corner,
             style = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 3f))),
         )
-        val more = measurer.measure(AnnotatedString("+${card.overflow}"), moreStyle)
-        drawText(more, topLeft = Offset(rect.center.x - more.size.width / 2f, rect.center.y - more.size.height / 2f))
+        if (overflow != null) {
+            drawText(overflow, topLeft = Offset(rect.center.x - overflow.size.width / 2f, rect.center.y - overflow.size.height / 2f))
+        }
         return
     }
     drawRoundRect(AtlasInk.nodeFill, topLeft = rect.topLeft, size = rect.size, cornerRadius = corner)
@@ -447,11 +465,12 @@ private fun DrawScope.drawBandCard(card: CallsBandCard, measurer: TextMeasurer, 
     val accent = if (card.side < 0) AtlasInk.incoming else AtlasInk.outgoing
     val barX = if (card.side < 0) rect.left else rect.right - 3f
     drawRoundRect(accent, topLeft = Offset(barX, rect.top + 3f), size = Size(3f, rect.height - 6f), cornerRadius = CornerRadius(1.5f, 1.5f))
-    val label = measurer.measure(AnnotatedString(ellipsize(node.label, 11)), textStyle)
-    drawText(label, topLeft = Offset(rect.left + 10f, rect.center.y - label.size.height / 2f))
+    if (label != null) {
+        drawText(label, topLeft = Offset(rect.left + 10f, rect.center.y - label.size.height / 2f))
+    }
 }
 
-private fun DrawScope.drawBandFocus(rect: Rect, focus: GraphNode, inCycle: Boolean, measurer: TextMeasurer, style: TextStyle) {
+private fun DrawScope.drawBandFocus(rect: Rect, inCycle: Boolean, label: TextLayoutResult) {
     if (inCycle) {
         drawRoundRect(
             color = AtlasInk.cycle.copy(alpha = 0.35f),
@@ -463,7 +482,6 @@ private fun DrawScope.drawBandFocus(rect: Rect, focus: GraphNode, inCycle: Boole
     }
     drawRoundRect(AtlasInk.focusTop, topLeft = rect.topLeft, size = rect.size, cornerRadius = CornerRadius(10f, 10f))
     drawRoundRect(AtlasInk.focusStroke, topLeft = rect.topLeft, size = rect.size, cornerRadius = CornerRadius(10f, 10f), style = Stroke(1.5f))
-    val label = measurer.measure(AnnotatedString(ellipsize(focus.label, 9)), style)
     drawText(label, topLeft = Offset(rect.center.x - label.size.width / 2f, rect.center.y - label.size.height / 2f))
 }
 
