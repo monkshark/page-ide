@@ -379,6 +379,13 @@ fun buildCallsBand(
     val cy = height / 2f
     val focusRect = Rect(Offset(cx - focusW / 2f, cy - focusH / 2f), Size(focusW, focusH))
 
+    val contentW = sideW * 2f + focusW + 2f * 56f
+    val clusterW = minOf(width - 2f * pad, contentW)
+    val clusterLeft = ((width - clusterW) / 2f).coerceAtLeast(pad)
+    val effSideW = minOf(sideW, (clusterW - focusW) / 2f - 12f).coerceAtLeast(40f)
+    val leftX = clusterLeft
+    val rightX = clusterLeft + clusterW - effSideW
+
     fun column(list: List<Neighbor>, total: Int, side: Int): List<CallsBandCard> {
         val shown = list.take(maxPerSide)
         val overflow = total - shown.size
@@ -386,9 +393,9 @@ fun buildCallsBand(
         if (count == 0) return emptyList()
         val totalH = count * cardH + (count - 1) * gap
         val top = cy - totalH / 2f
-        val x = if (side < 0) pad else width - pad - sideW
+        val x = if (side < 0) leftX else rightX
         return (0 until count).map { i ->
-            val rect = Rect(Offset(x, top + i * (cardH + gap)), Size(sideW, cardH))
+            val rect = Rect(Offset(x, top + i * (cardH + gap)), Size(effSideW, cardH))
             val node = shown.getOrNull(i)?.node
             CallsBandCard(node, rect, side, if (node == null) overflow else 0)
         }

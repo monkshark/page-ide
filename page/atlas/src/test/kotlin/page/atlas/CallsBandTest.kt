@@ -70,6 +70,21 @@ class CallsBandTest {
     }
 
     @Test
+    fun `wide band centers the cluster around the focus instead of pinning to edges`() {
+        val band = buildCallsBand(720f, 156f, neighborhood(incoming = 2, outgoing = 2))
+        val cx = band.focus.center.x
+        assertEquals(360f, cx, "focus stays centered at half width")
+
+        val callers = band.cards.filter { it.side < 0 }
+        val callees = band.cards.filter { it.side > 0 }
+        val leftGap = band.focus.left - callers.first().rect.right
+        val rightGap = callees.first().rect.left - band.focus.right
+        assertEquals(leftGap, rightGap, 0.5f, "cluster is symmetric around the focus")
+        assertTrue(callers.first().rect.left > 16f, "caller cluster is pulled in from the left edge")
+        assertTrue(callees.first().rect.right < 704f, "callee cluster is pulled in from the right edge")
+    }
+
+    @Test
     fun `zero size yields an empty band`() {
         assertEquals(CallsBand.EMPTY, buildCallsBand(0f, 0f, neighborhood(incoming = 3, outgoing = 3)))
     }
