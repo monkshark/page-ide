@@ -421,14 +421,13 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     var atlasLoadProgress by remember { mutableStateOf<Float?>(null) }
-    val atlasOpen = layoutUiState.atlasOpen
     val atlasProjectMode = layoutUiState.atlasProjectMode
     val atlasViewTab = layoutUiState.atlasViewTab
     val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
-    LaunchedEffect(atlasOpen, atlasExpanded, atlasProjectMode, atlasViewTab, atlasProvider, focusedActivePath, focusedActiveText) {
+    LaunchedEffect(atlasExpanded, atlasProjectMode, atlasViewTab, atlasProvider, focusedActivePath, focusedActiveText) {
         val projectScope = atlasViewTab == page.atlas.render.AtlasViewTab.RELATIONS ||
             atlasViewTab == page.atlas.render.AtlasViewTab.ANALYSIS
-        if ((!atlasOpen && !atlasExpanded) || atlasProvider == null ||
+        if (!atlasExpanded || atlasProvider == null ||
             (!projectScope && !atlasProjectMode && focusedActivePath == null)
         ) {
             atlasSlice = GraphSlice.EMPTY
@@ -462,8 +461,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
     val vcsProvider = remember(rootDir) { rootDir?.let { page.git.GitStatusProvider(it) } }
     var atlasVcsMarks by remember { mutableStateOf<Map<String, page.atlas.render.VcsMark>>(emptyMap()) }
-    LaunchedEffect(vcsProvider, atlasOpen, atlasExpanded, atlasSlice) {
-        if ((!atlasOpen && !atlasExpanded) || vcsProvider == null || atlasSlice.nodes.isEmpty()) {
+    LaunchedEffect(vcsProvider, atlasExpanded, atlasSlice) {
+        if (!atlasExpanded || vcsProvider == null || atlasSlice.nodes.isEmpty()) {
             atlasVcsMarks = emptyMap()
             return@LaunchedEffect
         }
@@ -495,8 +494,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     val atlasActiveId = remember(focusedActivePath) {
         focusedActivePath?.toAbsolutePath()?.normalize()?.toString()
     }
-    LaunchedEffect(layoutUiState.atlasFollowActive, atlasOpen, atlasExpanded, atlasActiveId) {
-        if (!layoutUiState.atlasFollowActive || (!atlasOpen && !atlasExpanded)) return@LaunchedEffect
+    LaunchedEffect(layoutUiState.atlasFollowActive, atlasExpanded, atlasActiveId) {
+        if (!layoutUiState.atlasFollowActive || !atlasExpanded) return@LaunchedEffect
         val id = atlasActiveId ?: return@LaunchedEffect
         atlasMapView.focusCenterId = id
     }

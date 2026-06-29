@@ -79,19 +79,11 @@ class ReducerTest {
     }
 
     @Test
-    fun `dock atlas opens docked panel and collapses expanded`() {
-        val s = reduce(AppState(), IdeEvent.Panel.ToggleAtlas)
-        val docked = reduce(s, IdeEvent.Panel.DockAtlas)
-        assertTrue(docked.layout.atlasOpen)
-        assertEquals(ExpandedPanel.NONE, docked.layout.expandedPanel)
-    }
-
-    @Test
-    fun `close atlas clears docked and expanded`() {
-        val expanded = reduce(AppState(), IdeEvent.Panel.ToggleAtlas)
-        val closed = reduce(expanded, IdeEvent.Panel.CloseAtlas)
+    fun `close atlas closes the call graph dock`() {
+        val open = reduce(AppState(), IdeEvent.Panel.ShowAtlasCalls)
+        assertTrue(open.layout.atlasOpen)
+        val closed = reduce(open, IdeEvent.Panel.CloseAtlas)
         assertFalse(closed.layout.atlasOpen)
-        assertEquals(ExpandedPanel.NONE, closed.layout.expandedPanel)
     }
 
     @Test
@@ -105,13 +97,13 @@ class ReducerTest {
     }
 
     @Test
-    fun `show atlas calls expands on calls tab`() {
+    fun `show atlas calls opens the dock and leaves atlas collapsed`() {
         val s = AppState().copy(
-            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.RELATIONS),
+            layout = AppState().layout.copy(atlasOpen = false, expandedPanel = ExpandedPanel.ATLAS),
         )
         val shown = reduce(s, IdeEvent.Panel.ShowAtlasCalls)
-        assertEquals(ExpandedPanel.ATLAS, shown.layout.expandedPanel)
-        assertEquals(AtlasViewTab.CALLS, shown.layout.atlasViewTab)
+        assertTrue(shown.layout.atlasOpen)
+        assertEquals(ExpandedPanel.NONE, shown.layout.expandedPanel)
     }
 
     @Test
@@ -155,7 +147,7 @@ class ReducerTest {
 
     @Test
     fun `expand panel to atlas closes dock and collapse resets`() {
-        val s = reduce(AppState(), IdeEvent.Panel.DockAtlas)
+        val s = reduce(AppState(), IdeEvent.Panel.ShowAtlasCalls)
         assertTrue(s.layout.atlasOpen)
         val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS))
         assertEquals(ExpandedPanel.ATLAS, expanded.layout.expandedPanel)
