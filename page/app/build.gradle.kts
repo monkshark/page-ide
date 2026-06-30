@@ -28,7 +28,7 @@ tasks.test {
     useJUnitPlatform()
 }
 
-val klsVersion = "1.3.13-page-1"
+val klsVersion = "1.3.13-page-3"
 val klsDownloadUrl = "https://github.com/Monkshark/kotlin-language-server/releases/download/$klsVersion/server.zip"
 val klsLocalZip: String? = (findProperty("page.lsp.kotlin.localZip") as? String)
     ?: System.getenv("PAGE_LSP_KOTLIN_LOCAL_ZIP")
