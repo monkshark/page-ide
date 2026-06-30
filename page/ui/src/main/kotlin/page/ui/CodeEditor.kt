@@ -74,11 +74,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.OffsetMapping
@@ -116,7 +114,6 @@ fun CodeEditor(
     selectionColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
     contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
     decorations: List<EditorDecoration> = emptyList(),
-    onTextLayout: (TextLayoutResult) -> Unit = {},
     onPreviewKeyEvent: (KeyEvent) -> Boolean = { false },
     onPointerPress: ((transformedOffset: Int) -> Boolean)? = null,
     onCtrlPress: ((originalOffset: Int) -> Boolean)? = null,
@@ -158,11 +155,10 @@ fun CodeEditor(
     val displayText = transformed.text
     val mapping = transformed.offsetMapping
 
+    val lineCache = remember(measurer) { LineLayoutCache(measurer) }
     val layout = remember(displayText, textStyle, density.density, density.fontScale) {
-        measurer.measure(text = displayText, style = textStyle, softWrap = false)
+        lineCache.layout(displayText, textStyle)
     }
-
-    LaunchedEffect(layout) { onTextLayout(layout) }
 
     LaunchedEffect(focusRequester) {
         runCatching { focusRequester.requestFocus() }
@@ -507,7 +503,7 @@ fun CodeEditor(
                 val transStart = latestMapping.originalToTransformed(sel.min)
                 val transEnd = latestMapping.originalToTransformed(sel.max)
                 if (transStart < transEnd) {
-                    val path = layout.multiParagraph.getPathForRange(transStart, transEnd)
+                    val path = layout.getSelectionPath(transStart, transEnd)
                     drawPath(path = path, color = selectionColor)
                 }
             }
@@ -548,7 +544,7 @@ fun CodeEditor(
                     }
                 }
             }
-            drawText(textLayoutResult = layout)
+            layout.draw(this)
             if (ctrlHoverLinkRange != null) {
                 val linkStart = ctrlHoverLinkRange.first.coerceIn(0, value.text.length)
                 val linkEnd = (ctrlHoverLinkRange.last + 1).coerceIn(linkStart, value.text.length)
@@ -1349,7 +1345,7 @@ private fun handleDefaultKey(
     event: KeyEvent,
     value: TextFieldValue,
     onChange: (TextFieldValue) -> Unit,
-    layout: TextLayoutResult,
+    layout: LineLayout,
     clipboard: ClipboardManager,
     onUndo: () -> Boolean,
     onRedo: () -> Boolean,
@@ -1530,7 +1526,7 @@ private fun insertReplacing(value: TextFieldValue, insertion: String): TextField
     return value.copy(text = newText, selection = TextRange(caret))
 }
 
-private fun caretAt(layout: TextLayoutResult, targetLine: Int, x: Float): Int {
+private fun caretAt(layout: LineLayout, targetLine: Int, x: Float): Int {
     val y = layout.getLineTop(targetLine) + 1f
     return layout.getOffsetForPosition(Offset(x, y))
 }
@@ -1538,7 +1534,7 @@ private fun caretAt(layout: TextLayoutResult, targetLine: Int, x: Float): Int {
 private fun OffsetMapping.safeOriginalToTransformed(offset: Int): Int = originalToTransformed(offset)
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyUnderline(
-    layout: TextLayoutResult,
+    layout: LineLayout,
     transStart: Int,
     transEnd: Int,
     color: Color,
@@ -1581,7 +1577,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWavyUnderline(
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDottedUnderline(
-    layout: TextLayoutResult,
+    layout: LineLayout,
     transStart: Int,
     transEnd: Int,
     color: Color,

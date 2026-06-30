@@ -198,19 +198,22 @@ class LspController(
             val initializeStartedMs = System.currentTimeMillis()
             val startFuture = c.start()
             scope.launch {
-                kotlinx.coroutines.delay(60_000)
+                val timeoutMs = 300_000L
+                kotlinx.coroutines.delay(timeoutMs)
                 if (myGeneration == clientGeneration && status.value == Status.STARTING) {
-                    println("[lsp] STARTING timeout (60s) — marking FAILED")
+                    println("[lsp] STARTING timeout (${timeoutMs / 1000}s) — marking FAILED, killing process")
                     startFuture.cancel(true)
+                    runCatching { c.forceClose() }
                     endActivity(STARTUP_KIND)
                     clearActivities("initialize timeout")
                     status.value = Status.FAILED
-                    statusDetail.value = "initialize did not respond within 60s"
+                    statusDetail.value = "initialize did not respond within ${timeoutMs / 1000}s"
                 }
             }
             startFuture.whenComplete { result, throwable ->
                 endActivity(STARTUP_KIND)
                 if (throwable != null) {
+                    runCatching { c.forceClose() }
                     clearActivities("initialize failed")
                     status.value = Status.FAILED
                     statusDetail.value = throwable.message ?: throwable.toString()
