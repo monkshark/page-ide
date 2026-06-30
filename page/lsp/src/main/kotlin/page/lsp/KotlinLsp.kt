@@ -27,7 +27,7 @@ object KotlinLsp {
     private const val RESOURCES_PROP = "compose.application.resources.dir"
     private const val DISABLE_DEV_PROP = "page.lsp.kotlin.disableDev"
     private const val USER_INSTALL_PROP = "page.lsp.kotlin.userInstall"
-    private const val USER_INSTALL_VERSION = "1.3.13-page-1"
+    private const val USER_INSTALL_VERSION = "1.3.13-page-3"
 
     sealed class Resolution {
         data class Found(val executable: Path, val origin: String) : Resolution()

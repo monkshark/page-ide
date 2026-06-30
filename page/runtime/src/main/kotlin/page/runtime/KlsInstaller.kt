@@ -11,7 +11,7 @@ import java.nio.file.StandardCopyOption
 import java.util.zip.ZipInputStream
 
 object KlsInstaller {
-    const val VERSION: String = "1.3.13-page-1"
+    const val VERSION: String = "1.3.13-page-3"
     const val DOWNLOAD_URL: String = "https://github.com/Monkshark/kotlin-language-server/releases/download/$VERSION/server.zip"
 
     sealed class Progress {
