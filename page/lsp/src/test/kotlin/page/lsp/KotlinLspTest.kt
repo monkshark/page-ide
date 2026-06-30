@@ -55,6 +55,23 @@ class KotlinLspTest {
     }
 
     @Test
+    fun `kls gradle opts set perf flags when none set`() {
+        val expected = "-Dorg.gradle.configuration-cache=false -Dorg.gradle.configureondemand=true " +
+            "-Dorg.gradle.priority=low -Dorg.gradle.workers.max=2"
+        assertEquals(expected, KotlinLsp.klsGradleOpts(null))
+        assertEquals(expected, KotlinLsp.klsGradleOpts("   "))
+    }
+
+    @Test
+    fun `kls gradle opts append perf flags preserving existing`() {
+        assertEquals(
+            "-Xmx512m -Dorg.gradle.configuration-cache=false -Dorg.gradle.configureondemand=true " +
+                "-Dorg.gradle.priority=low -Dorg.gradle.workers.max=2",
+            KotlinLsp.klsGradleOpts("-Xmx512m"),
+        )
+    }
+
+    @Test
     fun `not found when nothing on PATH or override or bundled`() {
         val prevOverride = System.getProperty("page.lsp.kotlin.path")
         val prevResources = System.getProperty("compose.application.resources.dir")

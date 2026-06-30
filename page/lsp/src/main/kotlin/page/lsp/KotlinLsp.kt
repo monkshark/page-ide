@@ -113,11 +113,30 @@ object KotlinLsp {
             builder.environment()["JAVA_HOME"] = javaHome
         }
         prependGradleToPath(builder)
+        applyKlsGradleOpts(builder)
         builder.redirectErrorStream(false)
         val process = builder.start()
         val transport = if (onStderrLine != null) ProcessTransport(process, onStderrLine)
         else ProcessTransport(process)
         return LspClient(transport, workspaceRoot, initialSettings = inlayHintsSettings())
+    }
+
+    private fun applyKlsGradleOpts(builder: ProcessBuilder) {
+        val env = builder.environment()
+        val key = env.keys.firstOrNull { it.equals("GRADLE_OPTS", ignoreCase = true) } ?: "GRADLE_OPTS"
+        env[key] = klsGradleOpts(env[key])
+    }
+
+    internal fun klsGradleOpts(current: String?): String {
+        val flags = listOf(
+            "-Dorg.gradle.configuration-cache=false",
+            "-Dorg.gradle.configureondemand=true",
+            "-Dorg.gradle.priority=low",
+            "-Dorg.gradle.workers.max=2",
+        )
+        val base = current.orEmpty().trim()
+        val parts = if (base.isEmpty()) flags else listOf(base) + flags
+        return parts.joinToString(" ")
     }
 
     private fun prependGradleToPath(builder: ProcessBuilder) {
