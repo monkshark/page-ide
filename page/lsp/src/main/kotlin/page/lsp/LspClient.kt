@@ -144,6 +144,12 @@ class LspClient(
         }
     }
 
+    fun forceClose() {
+        stateRef.set(LspState.EXITED)
+        try { listening?.cancel(true) } catch (_: Throwable) {}
+        try { transport.close() } catch (_: Throwable) {}
+    }
+
     private fun createLauncher(input: InputStream, output: OutputStream): Launcher<LanguageServer> =
         LSPLauncher.createClientLauncher(this, input, output)
 
