@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,7 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,7 +67,6 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,66 +86,6 @@ import page.atlas.graph.drillPathInSlice
 import page.atlas.interaction.OverviewSelection
 
 @Composable
-fun AtlasPanel(
-    slice: GraphSlice,
-    onNodeClick: (FilePath) -> Unit,
-    onClose: () -> Unit,
-    width: Dp,
-    projectMode: Boolean = false,
-    onProjectModeChange: (Boolean) -> Unit = {},
-    viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
-    onViewTabChange: (AtlasViewTab) -> Unit = {},
-    showExpand: Boolean = false,
-    onExpand: () -> Unit = {},
-    mapView: MapViewState = remember { MapViewState() },
-    atlasView: AtlasViewState = remember { AtlasViewState() },
-    overviewState: OverviewViewState = remember { OverviewViewState() },
-    loadProgress: Float? = null,
-    vcsMarks: Map<String, VcsMark> = emptyMap(),
-    vcsEnabled: Boolean = true,
-    onVcsEnabledChange: (Boolean) -> Unit = {},
-    activeFileId: String? = null,
-    followActive: Boolean = false,
-    onFollowActiveChange: (Boolean) -> Unit = {},
-    callsSlice: GraphSlice = GraphSlice.EMPTY,
-    callsView: AtlasViewState = remember { AtlasViewState() },
-    onCallsExpand: (String) -> Unit = {},
-    onCallsOpen: (String) -> Unit = {},
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.width(width).fillMaxHeight(),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        AtlasContent(
-            slice = slice,
-            onNodeClick = onNodeClick,
-            onClose = onClose,
-            projectMode = projectMode,
-            onProjectModeChange = onProjectModeChange,
-            viewTab = viewTab,
-            onViewTabChange = onViewTabChange,
-            showExpand = showExpand,
-            onExpand = onExpand,
-            mapView = mapView,
-            atlasView = atlasView,
-            overviewState = overviewState,
-            loadProgress = loadProgress,
-            vcsMarks = vcsMarks,
-            vcsEnabled = vcsEnabled,
-            onVcsEnabledChange = onVcsEnabledChange,
-            activeFileId = activeFileId,
-            followActive = followActive,
-            onFollowActiveChange = onFollowActiveChange,
-            callsSlice = callsSlice,
-            callsView = callsView,
-            onCallsExpand = onCallsExpand,
-            onCallsOpen = onCallsOpen,
-        )
-    }
-}
-
-@Composable
 fun AtlasContent(
     slice: GraphSlice,
     onNodeClick: (FilePath) -> Unit,
@@ -157,10 +94,6 @@ fun AtlasContent(
     onProjectModeChange: (Boolean) -> Unit = {},
     viewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     onViewTabChange: (AtlasViewTab) -> Unit = {},
-    showExpand: Boolean = false,
-    onExpand: () -> Unit = {},
-    showDock: Boolean = false,
-    onDock: () -> Unit = {},
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     overviewState: OverviewViewState = remember { OverviewViewState() },
@@ -171,13 +104,8 @@ fun AtlasContent(
     activeFileId: String? = null,
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
-    callsSlice: GraphSlice = GraphSlice.EMPTY,
-    callsView: AtlasViewState = remember { AtlasViewState() },
-    onCallsExpand: (String) -> Unit = {},
-    onCallsOpen: (String) -> Unit = {},
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
-    LaunchedEffect(callsSlice, callsView.pendingFocusId) { callsView.onSliceChanged(callsSlice) }
     val selectedId = atlasView.selectedId
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
@@ -249,11 +177,7 @@ fun AtlasContent(
         if (!relationsFollow) null
         else listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
     }
-    val searchSlice = when (viewTab) {
-        AtlasViewTab.RELATIONS -> slice
-        AtlasViewTab.ANALYSIS -> slice
-        AtlasViewTab.CALLS -> callsSlice
-    }
+    val searchSlice = slice
     val searchMatches = remember(searchSlice, searchQuery) {
         atlasSearchMatches(searchSlice.nodes, searchQuery)
     }
@@ -262,14 +186,9 @@ fun AtlasContent(
         if (searchMatches.isEmpty()) return
         searchIndex = (searchIndex + delta).mod(searchMatches.size)
         val node = searchMatches[searchIndex]
-        if (viewTab == AtlasViewTab.CALLS) {
-            callsView.selectedId = node.id
-            callsView.pendingFocusId = node.id
-        } else {
-            atlasView.selectedId = node.id
-            atlasView.pendingFocusId = node.id
-            mapView.focusCenterId = node.id
-        }
+        atlasView.selectedId = node.id
+        atlasView.pendingFocusId = node.id
+        mapView.focusCenterId = node.id
     }
     Column(
         modifier = Modifier
@@ -325,8 +244,6 @@ fun AtlasContent(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Box(modifier = Modifier.weight(1f))
-            if (showExpand) HeaderAction("Expand", onClick = onExpand)
-            if (showDock) HeaderAction("Dock", onClick = onDock)
             HeaderAction("Close", accent = true, onClick = onClose)
         }
         Divider()
@@ -340,9 +257,6 @@ fun AtlasContent(
         ) {
             ModeChip("Relations", viewTab == AtlasViewTab.RELATIONS) { onViewTabChange(AtlasViewTab.RELATIONS) }
             ModeChip("Analysis", viewTab == AtlasViewTab.ANALYSIS) { onViewTabChange(AtlasViewTab.ANALYSIS) }
-            if (callsSlice.nodes.isNotEmpty() || viewTab == AtlasViewTab.CALLS) {
-                ModeChip("Calls", viewTab == AtlasViewTab.CALLS) { onViewTabChange(AtlasViewTab.CALLS) }
-            }
             Box(modifier = Modifier.weight(1f))
             if (viewTab == AtlasViewTab.RELATIONS && activeFileId != null) {
                 ModeChip("Focus", relationsFollow) { relationsFollow = !relationsFollow }
@@ -369,34 +283,7 @@ fun AtlasContent(
             )
             Divider()
         }
-        if (viewTab == AtlasViewTab.CALLS) {
-            if (callsSlice.nodes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No call relationships found.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    AtlasCanvas(
-                        slice = callsSlice,
-                        projectMode = false,
-                        selectedId = callsView.selectedId,
-                        onSelect = { id ->
-                            callsView.selectedId = id
-                            if (id != null) onCallsExpand(id)
-                        },
-                        onNodeClick = onNodeClick,
-                        onNodeOpen = onCallsOpen,
-                        view = callsView,
-                    )
-                }
-                Divider()
-                LegendRow(listOf("calls" to EdgeKind.CALLS))
-            }
-        } else if (slice.nodes.isEmpty()) {
+        if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
                 Text(
@@ -711,7 +598,7 @@ private fun DrilledCard(
 }
 
 @Composable
-private fun HeaderAction(label: String, accent: Boolean = false, onClick: () -> Unit) {
+internal fun HeaderAction(label: String, accent: Boolean = false, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val tint = if (accent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
@@ -758,7 +645,7 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Divider() {
+internal fun Divider() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -808,216 +695,3 @@ private fun LegendItem(label: String, kind: EdgeKind) {
         )
     }
 }
-
-@Composable
-private fun AtlasCanvas(
-    slice: GraphSlice,
-    projectMode: Boolean,
-    selectedId: String?,
-    onSelect: (String?) -> Unit,
-    onNodeClick: (FilePath) -> Unit,
-    view: AtlasViewState,
-    onNodeOpen: ((String) -> Unit)? = null,
-    vcsMarks: Map<String, VcsMark> = emptyMap(),
-    vcsImpacted: Map<String, Int> = emptyMap(),
-) {
-    var yaw by view::yaw
-    var pitch by view::pitch
-    var zoomUser by view::zoomUser
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    var hoverPos by remember { mutableStateOf<Offset?>(null) }
-    val activeId = slice.nodes.firstOrNull { it.kind == NodeKind.ACTIVE }?.id
-    LaunchedEffect(activeId, projectMode) {
-        view.onCameraSubject(activeId, projectMode)
-    }
-    val scene = remember(slice) { buildScene(slice) }
-    var fromScene by remember { mutableStateOf(scene) }
-    var toScene by remember { mutableStateOf(scene) }
-    val morph = remember { Animatable(1f) }
-    LaunchedEffect(scene) {
-        if (toScene != scene) {
-            fromScene = toScene
-            toScene = scene
-            morph.snapTo(0f)
-            morph.animateTo(1f, tween(550, easing = FastOutSlowInEasing))
-        }
-    }
-    val morphT = morph.value
-    val blended = remember(fromScene, toScene, morphT) { blendScenes(fromScene, toScene, morphT) }
-    val freshIds = remember(fromScene, toScene) {
-        if (fromScene === toScene) emptySet()
-        else toScene.nodes.map { it.id }.toSet() - fromScene.nodes.map { it.id }.toSet()
-    }
-    val radius = remember(toScene) { sceneRadius(toScene) }
-    val zoom = run {
-        val side = min(canvasSize.width, canvasSize.height).toFloat()
-        if (side <= 0f) zoomUser else side * 0.42f / radius * zoomUser
-    }
-    val kindById = remember(slice) { slice.nodes.associate { it.id to it.kind } }
-    val weightById = remember(slice) { hubWeights(slice) }
-    val labelById = remember(slice) { slice.nodes.associate { it.id to it.label } }
-    val neighborsByHover = remember(slice) {
-        val map = HashMap<String, MutableSet<String>>()
-        for (edge in slice.edges) {
-            map.getOrPut(edge.from) { mutableSetOf() }.add(edge.to)
-            map.getOrPut(edge.to) { mutableSetOf() }.add(edge.from)
-        }
-        map
-    }
-    val atlas = rememberAtlasTheme()
-    val labelStyle = TextStyle(fontSize = 10.sp, color = atlas.label)
-    val textMeasurer = rememberTextMeasurer()
-
-    fun nodeRadius(id: String): Float {
-        val base = if (kindById[id] == NodeKind.ACTIVE) 11f else 8f
-        return base * (weightById[id] ?: 1f)
-    }
-
-    fun projected(): List<ProjectedNode> {
-        if (canvasSize.width <= 0 || canvasSize.height <= 0) return emptyList()
-        return projectScene(blended, yaw, pitch, zoom, canvasSize.width.toFloat(), canvasSize.height.toFloat())
-    }
-
-    fun nodeAt(pos: Offset): ProjectedNode? = projected()
-        .filter { hypot(pos.x - it.x, pos.y - it.y) <= max(nodeRadius(it.id) * it.scale, 14f) }
-        .minByOrNull { hypot(pos.x - it.x, pos.y - it.y) }
-
-    val hoverId = hoverPos?.let { nodeAt(it)?.id }
-    val focusId = selectedId ?: hoverId
-    val highlighted = focusId?.let { (neighborsByHover[it].orEmpty() + it) }
-    val rotationPaused = hoverId != null || selectedId != null
-    val rotationOwner = remember { Any() }
-    SideEffect { view.holdRotation(rotationOwner, rotationPaused) }
-    DisposableEffect(view) {
-        onDispose { view.releaseRotation(rotationOwner) }
-    }
-    LaunchedEffect(view) {
-        while (true) {
-            withFrameNanos { now -> view.autoRotateTick(now) }
-        }
-    }
-
-    Canvas(
-        modifier = Modifier
-            .fillMaxSize()
-            .clipToBounds()
-            .onSizeChanged { canvasSize = it }
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    yaw += dragAmount.x * 0.008f
-                    pitch = (pitch + dragAmount.y * 0.008f).coerceIn(-0.2f, 1.25f)
-                    view.lastInteractNanos = System.nanoTime()
-                }
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        when (event.type) {
-                            PointerEventType.Scroll -> {
-                                val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
-                                if (delta != 0f) {
-                                    zoomUser = (zoomUser * if (delta > 0f) 0.9f else 1.1f).coerceIn(0.2f, 5f)
-                                    view.lastInteractNanos = System.nanoTime()
-                                }
-                            }
-                            PointerEventType.Move -> {
-                                hoverPos = event.changes.firstOrNull()?.position
-                            }
-                            PointerEventType.Exit -> {
-                                hoverPos = null
-                            }
-                        }
-                    }
-                }
-            }
-            .pointerInput(slice) {
-                detectTapGestures(
-                    onTap = { tap ->
-                        onSelect(nodeAt(tap)?.id)
-                        view.lastInteractNanos = System.nanoTime()
-                    },
-                    onDoubleTap = { tap ->
-                        val hit = nodeAt(tap)
-                        if (hit != null) {
-                            val open = onNodeOpen
-                            if (open != null) open(hit.id)
-                            else slice.nodes.firstOrNull { it.id == hit.id }?.path?.let(onNodeClick)
-                        }
-                        view.lastInteractNanos = System.nanoTime()
-                    },
-                )
-            },
-    ) {
-        val projectedNodes = projectScene(blended, yaw, pitch, zoom, size.width, size.height)
-        if (projectedNodes.isEmpty()) return@Canvas
-        val byId = projectedNodes.associateBy { it.id }
-        val minDepth = projectedNodes.minOf { it.depth }
-        val maxDepth = projectedNodes.maxOf { it.depth }
-        val depthRange = (maxDepth - minDepth).coerceAtLeast(1f)
-        fun depthAlpha(depth: Float): Float = 0.5f + 0.5f * ((maxDepth - depth) / depthRange)
-        val labelBudget = if (zoomUser >= 1.5f) 24 else 8
-
-        for (ring in blended.rings) {
-            val c = projectPoint(0f, ring.y, 0f, yaw, pitch, zoom, size.width, size.height)
-            val rx = ring.radius * c.scale
-            val ry = rx * abs(sin(pitch))
-            drawAtlasRing(atlas, Offset(c.x, c.y), rx, ry)
-        }
-
-        for (edge in slice.edges) {
-            val from = byId[edge.from] ?: continue
-            val to = byId[edge.to] ?: continue
-            val dimmed = highlighted != null && (edge.from !in highlighted || edge.to !in highlighted)
-            val alpha = if (dimmed) 0.08f else depthAlpha((from.depth + to.depth) / 2f)
-            val start = Offset(from.x, from.y)
-            val end = Offset(to.x, to.y)
-            val targetRadius = nodeRadius(edge.to) * to.scale
-            drawAtlasEdge(atlas, edge.kind, start, end, targetRadius, alpha)
-        }
-        for (p in projectedNodes) {
-            val kind = kindById[p.id] ?: continue
-            val pos = Offset(p.x, p.y)
-            val r = (nodeRadius(p.id) * p.scale).coerceAtLeast(2f)
-            var alpha = depthAlpha(p.depth)
-            if (p.id in freshIds) alpha *= morphT
-            if (highlighted != null && p.id !in highlighted) alpha *= 0.18f
-            alpha = alpha.coerceIn(0f, 1f)
-            drawAtlasNode(atlas, kind, pos, r, alpha)
-            val mark = vcsMarks[p.id]
-            if (mark != null) {
-                drawAtlasVcsMark(mark, pos, r, alpha)
-            } else {
-                val impactDepth = vcsImpacted[p.id]
-                if (impactDepth != null) drawAtlasVcsImpact(impactDepth, pos, r, alpha)
-            }
-            if (p.id == selectedId) {
-                drawAtlasSelectionRing(atlas, pos, r, hasMark = mark != null, alpha = alpha)
-            }
-            val showLabel = p.id == hoverId ||
-                p.id == selectedId ||
-                highlighted?.contains(p.id) == true ||
-                kind == NodeKind.ACTIVE ||
-                projectedNodes.size <= labelBudget
-            if (showLabel) {
-                val raw = labelById[p.id] ?: continue
-                val label = if (raw.length > 28) raw.take(27) + "…" else raw
-                drawAtlasLabel(atlas, textMeasurer, labelStyle, label, pos, r, alpha)
-            }
-        }
-    }
-}
-
-private fun blendScenes(from: SceneModel, to: SceneModel, t: Float): SceneModel {
-    if (t >= 1f || from === to) return to
-    val fromById = from.nodes.associateBy { it.id }
-    return SceneModel(
-        to.nodes.map { n ->
-            val f = fromById[n.id] ?: return@map n
-            Node3D(n.id, f.x + (n.x - f.x) * t, f.y + (n.y - f.y) * t, f.z + (n.z - f.z) * t)
-        },
-        to.rings,
-    )
-}
-

@@ -51,7 +51,7 @@ import page.atlas.graph.FileRole
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
-import page.atlas.render.AtlasPanel
+import page.atlas.render.CallGraphPanel
 import page.atlas.render.VcsMark
 import page.atlas.render.AtlasViewState
 import page.atlas.render.MapViewState
@@ -514,7 +514,7 @@ internal fun IdeMainLayout(
                     )
                 }
                 PillarPill(
-                    atlasActive = ui.atlasOpen || ui.expandedPanel == ExpandedPanel.ATLAS,
+                    atlasActive = ui.expandedPanel == ExpandedPanel.ATLAS,
                     onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
                     currentPalette = palette,
                     onSelectPalette = onSelectPalette,
@@ -530,31 +530,13 @@ internal fun IdeMainLayout(
             ) {
                 Row(modifier = Modifier.fillMaxHeight()) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlas(it)) })
-                AtlasPanel(
-                    slice = atlasSlice,
-                    onNodeClick = { path -> onOpenFile(path); onEvent(IdeEvent.Panel.CloseAtlas) },
-                    onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
+                CallGraphPanel(
+                    slice = atlasCallsSlice,
                     width = ui.atlasWidth,
-                    projectMode = ui.atlasProjectMode,
-                    onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
-                    viewTab = ui.atlasViewTab,
-                    onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
-                    showExpand = true,
-                    onExpand = { onEvent(IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS)) },
-                    mapView = atlasMapView,
-                    atlasView = atlasView,
-                    overviewState = atlasOverviewState,
-                    loadProgress = atlasLoadProgress,
-                    vcsMarks = atlasVcsMarks,
-                    vcsEnabled = ui.atlasVcsOverlay,
-                    onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
-                    activeFileId = atlasActiveId,
-                    followActive = ui.atlasFollowActive,
-                    onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
-                    callsSlice = atlasCallsSlice,
+                    onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
                     callsView = atlasCallsView,
-                    onCallsExpand = onAtlasCallsExpand,
-                    onCallsOpen = onAtlasCallsOpen,
+                    onSelect = onAtlasCallsExpand,
+                    onOpen = onAtlasCallsOpen,
                 )
                 }
             }
@@ -784,8 +766,6 @@ internal fun IdeMainLayout(
                 slice = atlasSlice,
                 onNodeClick = { path -> onOpenFile(path); onEvent(IdeEvent.Panel.CloseAtlas) },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
-                showDock = true,
-                onDock = { onEvent(IdeEvent.Panel.DockAtlas) },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,
@@ -800,10 +780,6 @@ internal fun IdeMainLayout(
                 activeFileId = atlasActiveId,
                 followActive = ui.atlasFollowActive,
                 onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
-                callsSlice = atlasCallsSlice,
-                callsView = atlasCallsView,
-                onCallsExpand = onAtlasCallsExpand,
-                onCallsOpen = onAtlasCallsOpen,
             )
         }
         ExpandedPanel.NONE -> Unit
