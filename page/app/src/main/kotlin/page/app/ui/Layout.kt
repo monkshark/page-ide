@@ -241,6 +241,7 @@ internal fun IdeMainLayout(
     val installGuideOpen by (shellCtrl?.installGuideOpen ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
     var runtimeDialogOpen by remember { mutableStateOf<String?>(null) }
     var installManagerOpen by remember { mutableStateOf<String?>(null) }
+    var atlasFileSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     val runtimeVersions = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeSources = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeBuildFileVersions = remember { mutableStateOf(mapOf<String, String>()) }
@@ -550,7 +551,7 @@ internal fun IdeMainLayout(
                 Row(modifier = Modifier.fillMaxHeight()) {
                 ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlasFile(it)) })
                 AtlasFilePanel(
-                    slice = atlasSlice,
+                    slice = atlasFileSlice,
                     fileId = ui.atlasFileFocus ?: "",
                     width = ui.atlasFileWidth,
                     onClose = { onEvent(IdeEvent.Panel.CloseAtlasFile) },
@@ -788,8 +789,12 @@ internal fun IdeMainLayout(
                 onNodeClick = { path ->
                     onOpenFile(path)
                     val fileId = atlasSlice.nodes.firstOrNull { it.path == path }?.id
-                    if (fileId != null) onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
-                    else onEvent(IdeEvent.Panel.CollapsePanel)
+                    if (fileId != null) {
+                        atlasFileSlice = atlasSlice
+                        onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
+                    } else {
+                        onEvent(IdeEvent.Panel.CollapsePanel)
+                    }
                 },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
                 projectMode = ui.atlasProjectMode,
