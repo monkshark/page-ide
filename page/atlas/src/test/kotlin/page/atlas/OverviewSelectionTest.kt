@@ -48,6 +48,27 @@ class OverviewSelectionTest {
     }
 
     @Test
+    fun `select file sets file kind and id`() {
+        val s = OverviewSelection.NONE.selectModule("a").selectFile("a/Foo.kt")
+        assertEquals(Kind.FILE, s.kind)
+        assertEquals("a/Foo.kt", s.fileId)
+    }
+
+    @Test
+    fun `clear resets file selection`() {
+        val s = OverviewSelection.NONE.selectFile("a/Foo.kt").clear()
+        assertEquals(Kind.NONE, s.kind)
+        assertEquals(null, s.fileId)
+    }
+
+    @Test
+    fun `selecting a module drops a prior file selection`() {
+        val s = OverviewSelection.NONE.selectFile("a/Foo.kt").selectModule("b")
+        assertEquals(Kind.MODULE, s.kind)
+        assertEquals(null, s.fileId)
+    }
+
+    @Test
     fun `drilling clears active selection`() {
         val s = OverviewSelection.NONE.selectModule("a").drillInto("page")
         assertEquals(Kind.NONE, s.kind)

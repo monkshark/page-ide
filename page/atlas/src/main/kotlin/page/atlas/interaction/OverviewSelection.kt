@@ -4,15 +4,19 @@ data class OverviewSelection(
     val kind: Kind = Kind.NONE,
     val moduleId: String? = null,
     val pathTarget: String? = null,
+    val fileId: String? = null,
     val drillPath: List<String> = emptyList(),
 ) {
-    enum class Kind { NONE, MODULE, PATH }
+    enum class Kind { NONE, MODULE, PATH, FILE }
 
     fun selectModule(id: String): OverviewSelection =
-        copy(kind = Kind.MODULE, moduleId = id, pathTarget = null)
+        copy(kind = Kind.MODULE, moduleId = id, pathTarget = null, fileId = null)
+
+    fun selectFile(id: String): OverviewSelection =
+        copy(kind = Kind.FILE, fileId = id, pathTarget = null)
 
     fun clear(): OverviewSelection =
-        copy(kind = Kind.NONE, moduleId = null, pathTarget = null)
+        copy(kind = Kind.NONE, moduleId = null, pathTarget = null, fileId = null)
 
     fun tracePath(target: String): OverviewSelection =
         if (moduleId == null || target == moduleId) this
