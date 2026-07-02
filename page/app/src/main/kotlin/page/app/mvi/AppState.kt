@@ -47,6 +47,8 @@ internal data class LayoutState(
     val atlasViewTab: AtlasViewTab = AtlasViewTab.RELATIONS,
     val atlasVcsOverlay: Boolean = true,
     val atlasFollowActive: Boolean = false,
+    val atlasFileFocus: String? = null,
+    val atlasFileWidth: Dp = 260.dp,
     val expandedPanel: ExpandedPanel = ExpandedPanel.NONE,
 )
 

@@ -46,6 +46,9 @@ internal sealed interface IdeEvent {
         data object CloseAtlas : Panel
         data object FocusInAtlas : Panel
         data object ShowAtlasCalls : Panel
+        data class ShowAtlasFile(val fileId: String) : Panel
+        data object CloseAtlasFile : Panel
+        data class ResizeAtlasFile(val deltaDp: Dp) : Panel
         data class AtlasProjectModeChanged(val enabled: Boolean) : Panel
         data class AtlasViewTabChanged(val tab: AtlasViewTab) : Panel
         data class AtlasVcsOverlayChanged(val enabled: Boolean) : Panel

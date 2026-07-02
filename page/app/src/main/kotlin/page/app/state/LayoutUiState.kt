@@ -86,6 +86,12 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
     var atlasFollowActive: Boolean
         get() = store.layout.atlasFollowActive
         set(value) = store.updateLayout { it.copy(atlasFollowActive = value) }
+    var atlasFileFocus: String?
+        get() = store.layout.atlasFileFocus
+        set(value) = store.updateLayout { it.copy(atlasFileFocus = value) }
+    var atlasFileWidth: Dp
+        get() = store.layout.atlasFileWidth
+        set(value) = store.updateLayout { it.copy(atlasFileWidth = value) }
     var expandedPanel: ExpandedPanel
         get() = store.layout.expandedPanel
         set(value) = store.updateLayout { it.copy(expandedPanel = value) }

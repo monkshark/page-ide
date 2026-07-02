@@ -109,6 +109,10 @@ fun AtlasContent(
     val selectedId = atlasView.selectedId
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
+    val openFile: (FilePath) -> Unit = { path ->
+        onNodeClick(path)
+        onClose()
+    }
     LaunchedEffect(slice) {
         val path = overviewSelection.drillPath
         if (path.isNotEmpty()) {
@@ -170,13 +174,7 @@ fun AtlasContent(
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchIndex by remember { mutableStateOf(-1) }
-    val egoView = remember { EgoViewState() }
     var insightFocusOverride by remember(activeFileId) { mutableStateOf<String?>(null) }
-    var relationsFollow by remember { mutableStateOf(false) }
-    val relationsFocus = remember(slice, activeFileId, selectedId, relationsFollow) {
-        if (!relationsFollow) null
-        else listOf(activeFileId, selectedId).firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
-    }
     val searchSlice = slice
     val searchMatches = remember(searchSlice, searchQuery) {
         atlasSearchMatches(searchSlice.nodes, searchQuery)
@@ -198,11 +196,6 @@ fun AtlasContent(
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
                     searchOpen = true
-                    true
-                } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
-                    viewTab == AtlasViewTab.RELATIONS && relationsFocus != null
-                ) {
-                    relationsFollow = false
                     true
                 } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape &&
                     viewTab == AtlasViewTab.RELATIONS &&
@@ -258,9 +251,6 @@ fun AtlasContent(
             ModeChip("Relations", viewTab == AtlasViewTab.RELATIONS) { onViewTabChange(AtlasViewTab.RELATIONS) }
             ModeChip("Analysis", viewTab == AtlasViewTab.ANALYSIS) { onViewTabChange(AtlasViewTab.ANALYSIS) }
             Box(modifier = Modifier.weight(1f))
-            if (viewTab == AtlasViewTab.RELATIONS && activeFileId != null) {
-                ModeChip("Focus", relationsFollow) { relationsFollow = !relationsFollow }
-            }
         }
         Divider()
         if (searchOpen) {
@@ -295,15 +285,6 @@ fun AtlasContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        } else if (viewTab == AtlasViewTab.RELATIONS && relationsFocus != null) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                EgoCanvas(
-                    slice = slice,
-                    focusId = relationsFocus,
-                    onNodeClick = onNodeClick,
-                    view = egoView,
-                )
-            }
         } else if (viewTab == AtlasViewTab.RELATIONS) {
             var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }
             Box(
@@ -320,7 +301,7 @@ fun AtlasContent(
                     view = overviewView,
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
-                    onOpenFile = onNodeClick,
+                    onOpenFile = openFile,
                     onDrillFrom = { rect, drilled ->
                         drillFrom = drilled.node.id to rect
                         drillRects = drillRects + (drilled.node.id to rect)
@@ -391,7 +372,7 @@ fun AtlasContent(
                         graph = moduleGraph,
                         module = selectedModule,
                         onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
-                        onOpenFile = onNodeClick,
+                        onOpenFile = openFile,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     )
                 }
