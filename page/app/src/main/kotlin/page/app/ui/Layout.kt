@@ -51,6 +51,7 @@ import page.atlas.graph.FileRole
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.render.AtlasContent
+import page.atlas.render.AtlasFilePanel
 import page.atlas.render.CallGraphPanel
 import page.atlas.render.VcsMark
 import page.atlas.render.AtlasViewState
@@ -277,6 +278,7 @@ internal fun IdeMainLayout(
             when {
                 installManagerOpen != null -> { installManagerOpen = null; true }
                 settingsPanelOpen -> { onSettingsPanelClose(); true }
+                ui.atlasFileFocus != null -> { onEvent(IdeEvent.Panel.CloseAtlasFile); true }
                 else -> false
             }
         } else false
@@ -540,6 +542,25 @@ internal fun IdeMainLayout(
                 )
                 }
             }
+            AnimatedVisibility(
+                visible = ui.atlasFileFocus != null,
+                enter = expandHorizontally(tween(180), expandFrom = Alignment.End) + fadeIn(tween(180)),
+                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.End) + fadeOut(tween(180)),
+            ) {
+                Row(modifier = Modifier.fillMaxHeight()) {
+                ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlasFile(it)) })
+                AtlasFilePanel(
+                    slice = atlasSlice,
+                    fileId = ui.atlasFileFocus ?: "",
+                    width = ui.atlasFileWidth,
+                    onClose = { onEvent(IdeEvent.Panel.CloseAtlasFile) },
+                    onOpenFile = { id, path ->
+                        onOpenFile(path)
+                        onEvent(IdeEvent.Panel.ShowAtlasFile(id))
+                    },
+                )
+                }
+            }
             if (codeActionPreviewVisible) {
                 CodeActionPreviewPanel(
                     actions = codeActionPreviewActions,
@@ -764,7 +785,12 @@ internal fun IdeMainLayout(
         ) {
             AtlasContent(
                 slice = atlasSlice,
-                onNodeClick = { path -> onOpenFile(path); onEvent(IdeEvent.Panel.CloseAtlas) },
+                onNodeClick = { path ->
+                    onOpenFile(path)
+                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path }?.id
+                    if (fileId != null) onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
+                    else onEvent(IdeEvent.Panel.CollapsePanel)
+                },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
