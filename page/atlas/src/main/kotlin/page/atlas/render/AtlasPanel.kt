@@ -109,6 +109,10 @@ fun AtlasContent(
     val selectedId = atlasView.selectedId
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
+    val openFile: (FilePath) -> Unit = { path ->
+        onNodeClick(path)
+        onClose()
+    }
     LaunchedEffect(slice) {
         val path = overviewSelection.drillPath
         if (path.isNotEmpty()) {
@@ -297,7 +301,7 @@ fun AtlasContent(
                     view = overviewView,
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
-                    onOpenFile = onNodeClick,
+                    onOpenFile = openFile,
                     onDrillFrom = { rect, drilled ->
                         drillFrom = drilled.node.id to rect
                         drillRects = drillRects + (drilled.node.id to rect)
@@ -368,18 +372,7 @@ fun AtlasContent(
                         graph = moduleGraph,
                         module = selectedModule,
                         onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
-                        onSelectFile = { overviewSelection = overviewSelection.selectFile(it) },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    )
-                }
-                val selectedFileId = overviewSelection.fileId
-                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.FILE }
-                if (selectedFileId != null) {
-                    FileInspector(
-                        slice = slice,
-                        fileId = selectedFileId,
-                        onSelectFile = { overviewSelection = overviewSelection.selectFile(it) },
-                        onOpenFile = onNodeClick,
+                        onOpenFile = openFile,
                         modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                     )
                 }

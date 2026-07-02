@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.nio.file.Path as FilePath
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleLink
 import page.atlas.graph.ModuleNode
@@ -41,7 +42,7 @@ internal fun OverviewInspector(
     graph: ModuleGraph,
     module: ModuleNode,
     onSelectModule: (String) -> Unit,
-    onSelectFile: (String) -> Unit,
+    onOpenFile: (FilePath) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dependsOn = remember(graph, module.id) { moduleDependsOn(graph, module.id) }
@@ -98,7 +99,7 @@ internal fun OverviewInspector(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSelectFile(file.id) }
+                        .clickable { onOpenFile(file.path) }
                         .padding(horizontal = 12.dp, vertical = 2.dp),
                 )
             }
