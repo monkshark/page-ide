@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     api(project(":page:core"))
+    api(project(":shared-core"))
     api(project(":page:editor"))
     api(compose.desktop.currentOs)
     api(compose.material3)
