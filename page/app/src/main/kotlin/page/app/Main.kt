@@ -83,6 +83,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -609,6 +610,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         onCloseRequest = requestExit,
         state = windowState,
         title = windowTitle(focused().book.active?.path),
+        icon = painterResource("logo_app_icon.svg"),
         onPreviewKeyEvent = handleShortcut,
         onKeyEvent = handleShortcut,
     ) {
