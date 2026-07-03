@@ -57,7 +57,7 @@ internal fun TopBar(
             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppMarkGlyph(tint = colors.primary, size = 14.dp)
+            AppMarkGlyph(size = 14.dp)
             Spacer(Modifier.width(8.dp))
             Text(
                 text = PageIdentity.NAME,

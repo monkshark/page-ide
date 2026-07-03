@@ -252,18 +252,28 @@ internal fun SourceControlGlyph(tint: Color, size: Dp = 14.dp) {
 }
 
 @Composable
-internal fun AppMarkGlyph(tint: Color, size: Dp = 14.dp) {
+internal fun AppMarkGlyph(size: Dp = 14.dp) {
     Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val p = Path().apply {
-            moveTo(w * 0.5f, h * 0.08f)
-            lineTo(w * 0.92f, h * 0.5f)
-            lineTo(w * 0.5f, h * 0.92f)
-            lineTo(w * 0.08f, h * 0.5f)
-            close()
+        val s = this.size.minDimension
+        val den = 600f
+        val offX = s * (1f - 475f / den) / 2f
+        fun fx(x: Float) = (x - 311f) / den * s + offX
+        fun fy(y: Float) = (y - 224f) / den * s
+        fun rect(color: Color, x0: Float, y0: Float, x1: Float, y1: Float) {
+            drawRect(color, topLeft = Offset(fx(x0), fy(y0)), size = Size(fx(x1) - fx(x0), fy(y1) - fy(y0)))
         }
-        drawPath(p, color = tint)
+        rect(Color(0xFF07E1FD), 311f, 224f, 399f, 528f)
+        rect(Color(0xFF00E5FF), 311f, 547f, 399f, 824f)
+        rect(Color(0xFF05E0FE), 427f, 224f, 658f, 311f)
+        rect(Color(0xFF00E5FF), 503f, 333f, 786f, 420f)
+        rect(Color(0xFF0F9B98), 582f, 441f, 786f, 528f)
+        rect(Color(0xFF0D9E9B), 427f, 547f, 677f, 635f)
+        val sw = (10f / den * s).coerceAtLeast(0.6f)
+        val white = Color(0xFFFFFFFF)
+        drawLine(white, Offset(fx(453f), fy(311f)), Offset(fx(453f), fy(528f)), strokeWidth = sw)
+        drawLine(white, Offset(fx(536f), fy(397f)), Offset(fx(536f), fy(528f)), strokeWidth = sw)
+        drawLine(white, Offset(fx(451f), fy(376f)), Offset(fx(576f), fy(376f)), strokeWidth = sw)
+        drawLine(white, Offset(fx(536f), fy(484f)), Offset(fx(677f), fy(484f)), strokeWidth = sw)
     }
 }
 
