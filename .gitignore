@@ -4,6 +4,9 @@ plan/
 # Claude Code (로컬 도구)
 .claude/
 
+# Atlas 로컬 디자인 스크래치
+.atlas-designs/
+
 # IntelliJ IDEA / JetBrains
 .idea/
 *.iml
