@@ -1,6 +1,6 @@
 # PAGE IDE Docs
 
-> 한국어: [README.md](https://monkshark.github.io/page-ide/#README.md)
+> 한국어: [README_kr.md](https://monkshark.github.io/page-ide/#README_kr.md)
 
 > Multi-language desktop IDE — Pair · Atlas · Glass · Echo
 
@@ -63,7 +63,10 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 - [PendingClose](https://monkshark.github.io/page-ide/#modules/app/pending_close_en.md) — Close-request identifier
 - [FileDialogs](https://monkshark.github.io/page-ide/#modules/app/file_dialogs_en.md) — `JFileChooser` wrappers
 
-> `pair`, `atlas`, `echo`, `language`, `runtime`, `git`, `workspace` modules will be added in their respective milestones.
+### atlas module
+- [Atlas](https://monkshark.github.io/page-ide/#modules/atlas/main_en.md) — code graph (import · call · module dependencies)
+
+> `pair`, `echo`, `language`, `runtime`, `git`, `workspace` modules will be added in their respective milestones.
 
 ### Features
 > Pair / Atlas / Glass / Echo feature docs will be added at the close of each milestone.
