@@ -6,9 +6,13 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,7 +138,7 @@ private fun CodeBlockView(c: CodeBlock) {
             modifier = Modifier.fillMaxWidth().background(DocsTheme.background).padding(horizontal = 14.dp, vertical = 7.dp),
         )
         val lexer = CodeLexers.forLang(lang)
-        val code = if (lexer != null) colorizeCode(c.code, lexer, DocsSyntaxPalette) else AnnotatedString(c.code)
+        val code = if (lexer != null) colorizeCode(c.code, lexer, DocsTheme.syntax) else AnnotatedString(c.code)
         Text(
             code,
             color = DocsTheme.text,
@@ -204,18 +208,24 @@ private fun CalloutView(callout: Callout) {
     }
     val icon = when (callout.kind) {
         CalloutKind.WARNING, CalloutKind.DANGER -> "▲"
+        CalloutKind.TIP -> "✓"
         else -> "◆"
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
+            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, DocsTheme.outline, RoundedCornerShape(12.dp))
-            .background(DocsTheme.surface)
-            .padding(14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .background(edge.copy(alpha = 0.08f))
+            .border(1.dp, edge.copy(alpha = 0.32f), RoundedCornerShape(12.dp)),
     ) {
-        Text(icon, color = edge, fontSize = 15.sp)
-        Column { for (c in callout.children) Node(c) }
+        Box(modifier = Modifier.width(3.dp).fillMaxHeight().background(edge))
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(icon, color = edge, fontSize = 15.sp)
+            Column { for (c in callout.children) Node(c) }
+        }
     }
 }
 
