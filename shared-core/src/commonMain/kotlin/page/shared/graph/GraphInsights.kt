@@ -52,7 +52,7 @@ object GraphInsights {
         for (edge in edges) {
             if (edge.from == edge.to) continue
             if (!seen.add(edge.from to edge.to)) continue
-            indegree.merge(edge.to, 1, Int::plus)
+            indegree[edge.to] = (indegree[edge.to] ?: 0) + 1
         }
         return indegree
     }
