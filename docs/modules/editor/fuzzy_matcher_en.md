@@ -38,7 +38,7 @@ Consecutive matches / word boundaries / start-of-string combine into the sort ke
 | `+1` | Per match (baseline) |
 | `-(target.length - query.length)` | Length penalty (shorter targets edge ahead) |
 
-Same flavor as IntelliJ / VS Code "search anything" — the exact weights don't matter; what does is the qualitative ranking: **consecutive beats scattered, word boundary beats mid-word.**
+Same flavor as IntelliJ / VS Code "search anything" — the exact weights don't matter; what does is the qualitative ranking: consecutive beats scattered, word boundary beats mid-word.
 
 ---
 

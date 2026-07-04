@@ -52,7 +52,7 @@ private fun lineStartOffset(line: Int): Int
 private fun lineEndOffset(line: Int): Int
 ```
 
-Counts `\n` from the start each time. *O(N)* on large files, so a cached line index would be needed under heavy use — today `EditorPanel`'s `remember(value.text)` builds it once per text snapshot, which is enough.
+Counts `\n` from the start each time. O(N) on large files, so a cached line index would be needed under heavy use — today `EditorPanel`'s `remember(value.text)` builds it once per text snapshot, which is enough.
 
 ---
 

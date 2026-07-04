@@ -43,4 +43,4 @@ object PageIdentity {
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

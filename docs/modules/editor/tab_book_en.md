@@ -30,7 +30,7 @@ data class OpenTab(
 | `caret` | Last caret position (restored on tab switch) |
 | `history` | undo/redo stack scoped to this tab |
 
-`dirty` is `true` when *current body ≠ saved body*. The signal that drives the unsaved-changes dialog on `Ctrl+W`.
+`dirty` is `true` when current body ≠ saved body. The signal that drives the unsaved-changes dialog on `Ctrl+W`.
 
 ---
 

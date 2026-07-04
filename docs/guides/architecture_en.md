@@ -89,10 +89,10 @@ interface LLMProvider {
 }
 ```
 
-- **Ollama** — local, default. Code never leaves the user's machine.
-- **Anthropic Claude** — user-supplied API key.
-- **OpenAI ChatGPT** — user-supplied API key.
-- **OpenAI-compatible endpoint** — Together AI / Groq / self-hosted; user supplies the endpoint URL.
+- Ollama — local, default. Code never leaves the user's machine.
+- Anthropic Claude — user-supplied API key.
+- OpenAI ChatGPT — user-supplied API key.
+- OpenAI-compatible endpoint — Together AI / Groq / self-hosted; user supplies the endpoint URL.
 
 API keys are stored in the OS keychain (Windows Credential Manager, macOS Keychain, libsecret on Linux). No plaintext storage.
 

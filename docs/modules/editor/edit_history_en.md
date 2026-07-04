@@ -41,7 +41,7 @@ data class EditHistory(
 fun pushBeforeChange(prev: EditSnapshot, maxSize: Int = MAX_SIZE): EditHistory
 ```
 
-Pushes the state *just before* a new edit onto `past` and clears `future`. If the incoming snapshot equals `past.last()`, it's ignored — duplicates don't stack.
+Pushes the state just before a new edit onto `past` and clears `future`. If the incoming snapshot equals `past.last()`, it's ignored — duplicates don't stack.
 
 ---
 

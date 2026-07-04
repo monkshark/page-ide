@@ -28,9 +28,9 @@ data class Segment(val origStart: Int, val origEnd: Int, val replacement: String
 fun detect(text: String): List<Region>
 ```
 
-**Description**: Pulls every foldable `{`/`}` block out of the body.
+Description: Pulls every foldable `{`/`}` block out of the body.
 
-**Flow**:
+Flow:
 
 1. On `{` push the current line onto a stack:
    ```kotlin
@@ -51,7 +51,7 @@ fun detect(text: String): List<Region>
    - Line comments (`// ...`)
    - Block comments (`/* ... */`) — newline counter is kept in sync
 
-**Returns**: `List<Region>` sorted by `startLine`. Unmatched braces are dropped.
+Returns: `List<Region>` sorted by `startLine`. Unmatched braces are dropped.
 
 ---
 
@@ -61,9 +61,9 @@ fun detect(text: String): List<Region>
 fun segmentsFor(text: String, foldedRegions: Collection<Region>): List<Segment>
 ```
 
-**Description**: Converts folded regions into segments ready for `VisualTransformation`.
+Description: Converts folded regions into segments ready for `VisualTransformation`.
 
-**Flow**:
+Flow:
 
 1. Build the line-start offsets:
    ```kotlin
@@ -86,7 +86,7 @@ fun segmentsFor(text: String, foldedRegions: Collection<Region>): List<Segment>
    if (origStart < lastConsumedEnd) continue
    ```
 
-**Returns**: Non-overlapping `List<Segment>` sorted by `origStart`.
+Returns: Non-overlapping `List<Segment>` sorted by `origStart`.
 
 ---
 
@@ -97,15 +97,15 @@ fun originalToTransformed(segments: List<Segment>, original: Int): Int
 fun transformedToOriginal(segments: List<Segment>, transformed: Int): Int
 ```
 
-**Description**: Bidirectional `OffsetMapping` — drops directly into a Compose `VisualTransformation`.
+Description: Bidirectional `OffsetMapping` — drops directly into a Compose `VisualTransformation`.
 
 | Position | Mapping |
 |---|---|
-| *Before* a fold | Subtract the cumulative `savings` so far |
-| *Inside* a fold (original) | Snap to the fold's start (`origStart`) |
-| *Left half* of the placeholder (transformed) | Maps to `origStart` (just after `{`) |
-| *Right half* of the placeholder (transformed) | Maps to `origEnd` (just after `}`) |
-| *After* a fold | Subtract `savings` and continue checking |
+| Before a fold | Subtract the cumulative `savings` so far |
+| Inside a fold (original) | Snap to the fold's start (`origStart`) |
+| Left half of the placeholder (transformed) | Maps to `origStart` (just after `{`) |
+| Right half of the placeholder (transformed) | Maps to `origEnd` (just after `}`) |
+| After a fold | Subtract `savings` and continue checking |
 
 Splitting the placeholder at its midpoint pins clicks on the `}` side to the row after the fold — that suppresses spurious bracket matching and lets a drag through the placeholder cleanly cover the whole folded block.
 
@@ -123,14 +123,14 @@ fun foldedRegionAt(
 ): Region?
 ```
 
-**Description**: Returns the region whose placeholder `...` covers a given display offset — only the dots are click-active; `{`, surrounding spaces, and `}` miss so drag selection can start from them.
+Description: Returns the region whose placeholder `...` covers a given display offset — only the dots are click-active; `{`, surrounding spaces, and `}` miss so drag selection can start from them.
 
-**Flow**:
+Flow:
 
 1. Convert regions to segments and check which segment's `[dotsStart, dotsStart+3)` (the `...` substring) contains the click.
 2. Match that segment's `origStart` to the first sorted region with `lineEnd(r.startLine) == origStart` (= the outermost match).
 
-**Returns**: The matching `Region` when the click hits `...`; `null` for `{`, spaces, `}`, or anything outside the placeholder.
+Returns: The matching `Region` when the click hits `...`; `null` for `{`, spaces, `}`, or anything outside the placeholder.
 
 ---
 

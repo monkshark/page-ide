@@ -52,4 +52,4 @@ Kotlin 의 hard keywords + soft keywords + modifier keywords 75 여 개
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

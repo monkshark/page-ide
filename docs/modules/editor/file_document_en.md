@@ -34,7 +34,7 @@ fun loadOrNull(path: Path): String?
 fun save(path: Path, text: String)
 ```
 
-Overwrites the file with the text as UTF-8. Creates the file if missing. *No* file locking / partial-write protection / temp-file-then-rename safety — plain overwrite.
+Overwrites the file with the text as UTF-8. Creates the file if missing. No file locking / partial-write protection / temp-file-then-rename safety — plain overwrite.
 
 ---
 

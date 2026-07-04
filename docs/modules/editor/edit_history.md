@@ -41,7 +41,7 @@ data class EditHistory(
 fun pushBeforeChange(prev: EditSnapshot, maxSize: Int = MAX_SIZE): EditHistory
 ```
 
-새 편집이 발생하기 *직전* 의 상태를 `past` 에 쌓고 `future` 를 비운다. 같은 스냅샷 (`past.last() == prev`) 이 또 들어오면 무시 → 동일 상태가 두 번 쌓이지 않음
+새 편집이 발생하기 직전 의 상태를 `past` 에 쌓고 `future` 를 비운다. 같은 스냅샷 (`past.last() == prev`) 이 또 들어오면 무시 → 동일 상태가 두 번 쌓이지 않음
 
 ---
 
@@ -68,4 +68,4 @@ fun redo(current: EditSnapshot): Pair<EditHistory, EditSnapshot>?
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

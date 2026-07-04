@@ -41,7 +41,7 @@ private val IndentStep = 14.dp
 private val EdgePadding = 8.dp
 ```
 
-`IndentStep` 은 깊이 1 단계의 들여쓰기. chevron 영역은 깊이가 들어가도 *고정 폭* — 파일/디렉터리 아이콘이 흔들리지 않게
+`IndentStep` 은 깊이 1 단계의 들여쓰기. chevron 영역은 깊이가 들어가도 고정 폭 — 파일/디렉터리 아이콘이 흔들리지 않게
 
 ---
 
@@ -119,4 +119,4 @@ private fun TreeRow(
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

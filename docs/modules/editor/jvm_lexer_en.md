@@ -60,7 +60,7 @@ The `length > 1` guard in `startsWithUpperCase` keeps single-letter uppercase id
 
 ## Non-goals
 
-- Semantic analysis — type matching is a simple *capitalized start = type* rule. A variable named `Foo` gets type-colored (a misclass, but cheap)
+- Semantic analysis — type matching is a simple capitalized start = type rule. A variable named `Foo` gets type-colored (a misclass, but cheap)
 - Macro / annotation-arg parsing — `@Composable` itself is tokenized, but `(arg = 1)` is skipped
 
 ---

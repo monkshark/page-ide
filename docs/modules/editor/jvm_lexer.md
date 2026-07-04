@@ -60,7 +60,7 @@ private fun startsWithUpperCase(s: String) = s.isNotEmpty() && s[0].isUpperCase(
 
 ## 비목표
 
-- 의미 분석 — 식별자 → 타입 매칭은 단순 *대문자 시작 = 타입* 규칙. `String` 변수 이름이 `Foo` 면 타입으로 칠해진다 (오인식이지만 비용이 낮음)
+- 의미 분석 — 식별자 → 타입 매칭은 단순 대문자 시작 = 타입 규칙. `String` 변수 이름이 `Foo` 면 타입으로 칠해진다 (오인식이지만 비용이 낮음)
 - 매크로 / 어노테이션 인자 파싱 — `@Composable` 자체만 토큰화, `(arg = 1)` 부분은 건너뜀
 
 ---
@@ -74,4 +74,4 @@ private fun startsWithUpperCase(s: String) = s.isNotEmpty() && s[0].isUpperCase(
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

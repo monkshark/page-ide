@@ -89,14 +89,14 @@ interface LLMProvider {
 }
 ```
 
-- **Ollama** — 로컬, 기본. 코드가 PC를 떠나지 않는다.
-- **Anthropic Claude** — 사용자 본인 API 키.
-- **OpenAI ChatGPT** — 사용자 본인 API 키.
-- **OpenAI 호환 endpoint** — Together AI / Groq / 자체 호스팅 등 endpoint URL 직접 입력.
+- Ollama — 로컬, 기본. 코드가 PC를 떠나지 않는다.
+- Anthropic Claude — 사용자 본인 API 키.
+- OpenAI ChatGPT — 사용자 본인 API 키.
+- OpenAI 호환 endpoint — Together AI / Groq / 자체 호스팅 등 endpoint URL 직접 입력.
 
 API 키는 OS 키체인에 저장한다 (Windows Credential Manager 등). 평문 저장 금지.
 
 ---
 
 - [개요로 돌아가기](https://monkshark.github.io/page-ide/#guides/overview.md)
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

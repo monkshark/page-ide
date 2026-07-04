@@ -15,7 +15,7 @@ A bundle of pure functions for Tab / Shift+Tab / Enter / Backspace and auto-alig
 | `TAB_UNIT` | `4` | One indent unit = 4 spaces |
 | `TAB_SPACES` | `"    "` | Four-space literal |
 | `indentTriggers` | `{`, `(`, `[`, `:` | If the char right before Enter is one of these, indent one level further |
-| `matchingClosers` | `{→}`, `(→)`, `[→]` | Enter inside an empty pair triggers *split indent* |
+| `matchingClosers` | `{→}`, `(→)`, `[→]` | Enter inside an empty pair triggers split indent |
 | `unindentChars` | `}`, `]`, `)` | Typing one of these dedents the line by one step |
 
 ---
@@ -60,7 +60,7 @@ Inserts a literal `\t`. For files where the user actually wants a tab character 
 fun handleBackspace(edit: TextEdit): TextEdit?
 ```
 
-Only acts when the chars before the caret are *whitespace-only indent*. Deletes back to the previous 4-column boundary in one step. Returns `null` (selection / start of line / non-space inside indent) so the caller falls back to the default backspace.
+Only acts when the chars before the caret are whitespace-only indent. Deletes back to the previous 4-column boundary in one step. Returns `null` (selection / start of line / non-space inside indent) so the caller falls back to the default backspace.
 
 ---
 

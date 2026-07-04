@@ -39,7 +39,7 @@ val isActive: Boolean get() = query.isNotEmpty()
 val active: IntRange? get() = matches.getOrNull(activeMatchIndex)
 ```
 
-`isActive` means *a query is present* (the bar can be open with an empty query). `active` is the range of the active match, or `null`.
+`isActive` means a query is present (the bar can be open with an empty query). `active` is the range of the active match, or `null`.
 
 ---
 
@@ -53,7 +53,7 @@ val active: IntRange? get() = matches.getOrNull(activeMatchIndex)
 | `withCaseSensitive(text, value)` | Toggles, then re-runs the search with the same query |
 | `retarget(text)` | When body changes, re-finds matches and picks the nearest match to the previous active position as the new active |
 
-`retarget` is the load-bearing one — it preserves the *position the user was looking at* across edits and replacements.
+`retarget` is the load-bearing one — it preserves the position the user was looking at across edits and replacements.
 
 ---
 
@@ -74,7 +74,7 @@ Cycles `activeMatchIndex` (last → 0, 0 → last). With no matches, returns its
 private fun findAll(text: String, query: String, caseSensitive: Boolean): List<IntRange>
 ```
 
-Uses `String.regionMatches` to scan; collects *non-overlapping* matches by skipping forward by `query.length` after a hit (so searching `aa` in `aaa` yields one match `[0..1]`, not both `[0..1]`, `[1..2]`).
+Uses `String.regionMatches` to scan; collects non-overlapping matches by skipping forward by `query.length` after a hit (so searching `aa` in `aaa` yields one match `[0..1]`, not both `[0..1]`, `[1..2]`).
 
 Case folding is handled in one line via `ignoreCase = !caseSensitive`. No regex.
 
