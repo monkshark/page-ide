@@ -14,11 +14,10 @@
 
 ```mermaid
 flowchart LR
-    src[소스 파일] --> analyzer
-    analyzer[analyzer<br/>import 추출·해석] --> graph
-    graph[graph<br/>그래프 모델·쿼리] --> render
-    render[render<br/>패널·캔버스]
-    graph --> export[export<br/>스냅샷]
+    src["소스 파일"] --> az["analyzer<br/>import 추출·해석"]
+    az --> gr["graph<br/>그래프 모델·쿼리"]
+    gr --> rd["render<br/>패널·캔버스"]
+    gr --> ex["export<br/>스냅샷"]
 ```
 
 | 층 | 역할 |

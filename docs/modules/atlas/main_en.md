@@ -14,11 +14,10 @@ The module splits into four layers.
 
 ```mermaid
 flowchart LR
-    src[source files] --> analyzer
-    analyzer[analyzer<br/>extract·resolve imports] --> graph
-    graph[graph<br/>graph model·queries] --> render
-    render[render<br/>panels·canvas]
-    graph --> export[export<br/>snapshot]
+    src["source files"] --> az["analyzer<br/>extract·resolve imports"]
+    az --> gr["graph<br/>graph model·queries"]
+    gr --> rd["render<br/>panels·canvas"]
+    gr --> ex["export<br/>snapshot"]
 ```
 
 | Layer | Role |
