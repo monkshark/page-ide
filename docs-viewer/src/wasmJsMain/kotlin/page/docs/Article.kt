@@ -16,6 +16,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,18 +48,18 @@ import page.shared.md.Text as MdText
 import page.shared.md.WidgetRef
 
 @Composable
-fun Article(doc: Document) {
+fun Article(doc: Document, onHeadingPositioned: (String, LayoutCoordinates) -> Unit = { _, _ -> }) {
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = 800.dp).padding(horizontal = 48.dp, vertical = 56.dp),
     ) {
-        for (node in doc.children) Node(node)
+        for (node in doc.children) Node(node, onHeadingPositioned)
     }
 }
 
 @Composable
-private fun Node(node: MdNode) {
+private fun Node(node: MdNode, onHeadingPositioned: (String, LayoutCoordinates) -> Unit = { _, _ -> }) {
     when (node) {
-        is Heading -> HeadingView(node)
+        is Heading -> HeadingView(node, onHeadingPositioned)
         is Paragraph -> Text(
             inlineString(node.inlines),
             color = DocsTheme.text,
@@ -87,12 +89,12 @@ private fun Node(node: MdNode) {
                 .background(DocsTheme.surface, RoundedCornerShape(12.dp))
                 .padding(16.dp),
         ) { Text("⟨ widget: ${node.name} ⟩", color = DocsTheme.muted, fontSize = 13.sp) }
-        is Document -> for (c in node.children) Node(c)
+        is Document -> for (c in node.children) Node(c, onHeadingPositioned)
     }
 }
 
 @Composable
-private fun HeadingView(h: Heading) {
+private fun HeadingView(h: Heading, onHeadingPositioned: (String, LayoutCoordinates) -> Unit) {
     val size = when (h.level) {
         1 -> 32.sp
         2 -> 23.sp
@@ -106,7 +108,8 @@ private fun HeadingView(h: Heading) {
         fontSize = size,
         fontWeight = FontWeight.SemiBold,
         lineHeight = size * 1.3f,
-        modifier = Modifier.padding(top = top, bottom = 10.dp),
+        modifier = Modifier.onGloballyPositioned { onHeadingPositioned(h.slug, it) }
+            .padding(top = top, bottom = 10.dp),
     )
 }
 
