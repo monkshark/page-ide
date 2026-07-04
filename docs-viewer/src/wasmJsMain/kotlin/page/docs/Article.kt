@@ -46,6 +46,7 @@ import page.shared.md.Table
 import page.shared.md.TaskList
 import page.shared.md.Text as MdText
 import page.shared.md.WidgetRef
+import page.docs.widgets.PageWidgets
 
 @Composable
 fun Article(doc: Document, onHeadingPositioned: (String, LayoutCoordinates) -> Unit = { _, _ -> }) {
@@ -83,7 +84,9 @@ private fun Node(node: MdNode, onHeadingPositioned: (String, LayoutCoordinates) 
                 .background(DocsTheme.surface, RoundedCornerShape(10.dp))
                 .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 14.dp),
         ) { Column { for (c in node.children) Node(c) } }
-        is WidgetRef -> Box(
+        is WidgetRef -> if (PageWidgets.has(node.name)) {
+            PageWidgets.Render(node)
+        } else Box(
             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
                 .border(1.dp, DocsTheme.outline, RoundedCornerShape(12.dp))
                 .background(DocsTheme.surface, RoundedCornerShape(12.dp))
