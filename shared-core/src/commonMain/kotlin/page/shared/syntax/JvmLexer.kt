@@ -1,4 +1,4 @@
-package page.editor
+package page.shared.syntax
 
 internal abstract class JvmLexer(
     private val keywords: Set<String>,
