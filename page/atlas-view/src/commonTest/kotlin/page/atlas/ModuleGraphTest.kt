@@ -1,6 +1,5 @@
 package page.atlas
 
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -12,14 +11,15 @@ import page.atlas.graph.MODULE_MAX
 import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
 import page.atlas.graph.drillPathInSlice
+import page.shared.path.FilePath
 
 class ModuleGraphTest {
 
-    private fun id(p: String): String = Path.of(p).toString()
+    private fun id(p: String): String = FilePath.of(p).toString()
 
     private fun node(p: String, kind: NodeKind = NodeKind.WORKSPACE_FILE): GraphNode {
-        val path = Path.of(p)
-        return GraphNode(path.toString(), path.fileName.toString(), path, kind)
+        val path = FilePath.of(p)
+        return GraphNode(path.toString(), path.fileName, path, kind)
     }
 
     private fun edge(from: String, to: String): GraphEdge = GraphEdge(id(from), id(to))
@@ -66,7 +66,7 @@ class ModuleGraphTest {
         val a = graph.nodes.first { it.id == id("ws/a") }
         assertEquals(listOf("alpha.kt", "zeta.kt"), a.files.map { it.name })
         assertEquals(a.fileCount, a.files.size)
-        assertEquals(Path.of("ws/a/alpha.kt"), a.files.first().path)
+        assertEquals(FilePath.of("ws/a/alpha.kt"), a.files.first().path)
     }
 
     @Test
@@ -75,7 +75,7 @@ class ModuleGraphTest {
         repeat(10) { nodes += node("ws/page/app/service/S$it.kt") }
         repeat(8) { nodes += node("ws/page/app/ui/U$it.kt") }
         repeat(5) { nodes += node("ws/page/atlas/A$it.kt") }
-        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = Path.of("ws/page/app"))
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = FilePath.of("ws/page/app"))
 
         val labels = graph.nodes.mapTo(HashSet()) { it.label }
         assertTrue("service" in labels, "drilled into app subtree: $labels")
@@ -116,7 +116,7 @@ class ModuleGraphTest {
     fun `scope into a flat folder yields one node per file`() {
         val nodes = ArrayList<GraphNode>()
         repeat(6) { nodes += node("ws/pkg/F$it.kt") }
-        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = Path.of("ws/pkg"))
+        val graph = aggregateModules(GraphSlice(nodes, emptyList()), scopeRoot = FilePath.of("ws/pkg"))
 
         assertEquals(6, graph.nodes.size, "each file becomes its own node")
         assertTrue(graph.nodes.all { it.fileCount == 1 }, "file-level nodes hold a single file")
@@ -133,7 +133,7 @@ class ModuleGraphTest {
             edge("ws/pkg/F0.kt", "ws/util/Helper.kt"),
             edge("ws/util/Helper.kt", "ws/pkg/F1.kt"),
         )
-        val graph = aggregateModules(GraphSlice(nodes, edges), scopeRoot = Path.of("ws/pkg"))
+        val graph = aggregateModules(GraphSlice(nodes, edges), scopeRoot = FilePath.of("ws/pkg"))
 
         val ghost = graph.nodes.firstOrNull { it.external }
         assertTrue(ghost != null, "util surfaces as ghost: ${graph.nodes.map { it.label to it.external }}")
@@ -185,7 +185,7 @@ class ModuleGraphTest {
             listOf(node("ws/a/x.kt"), node("ws/a/y.kt"), node("ws/b/z.kt")),
             emptyList(),
         )
-        val graph = aggregateModules(slice, activePath = Path.of("ws/a/y.kt"))
+        val graph = aggregateModules(slice, activePath = FilePath.of("ws/a/y.kt"))
         assertEquals(NodeKind.ACTIVE, graph.nodes.first { it.id == id("ws/a") }.kind)
         assertEquals(NodeKind.WORKSPACE_FILE, graph.nodes.first { it.id == id("ws/b") }.kind)
     }
@@ -196,7 +196,7 @@ class ModuleGraphTest {
         var total = 0
         for (m in 0 until MODULE_MAX + 10) {
             val files = if (m < MODULE_MAX) 5 else 1
-            repeat(files) { nodes += node("ws/m%03d/F%d.kt".format(m, it)) }
+            repeat(files) { nodes += node("ws/m${m.toString().padStart(3, '0')}/F$it.kt") }
             total += files
         }
         val graph = aggregateModules(GraphSlice(nodes, emptyList()))

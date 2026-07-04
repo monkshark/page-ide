@@ -1,6 +1,5 @@
 package page.atlas
 
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -10,10 +9,11 @@ import page.atlas.graph.ModuleLayer
 import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.classifyModuleLayers
+import page.shared.path.FilePath
 
 class ModuleLayersTest {
     private fun mod(id: String, external: Boolean = false) =
-        ModuleNode(id, id, Path.of(id), 1, NodeKind.WORKSPACE_FILE, "kotlin", external = external)
+        ModuleNode(id, id, FilePath.of(id), 1, NodeKind.WORKSPACE_FILE, "kotlin", external = external)
 
     @Test
     fun chainSpreadsAcrossFourInternalLayers() {

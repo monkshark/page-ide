@@ -1,11 +1,11 @@
 package page.atlas.graph
 
-import java.nio.file.Path
+import page.shared.path.FilePath
 
 data class ModuleNode(
     val id: String,
     val label: String,
-    val dirPath: Path,
+    val dirPath: FilePath,
     val fileCount: Int,
     val kind: NodeKind,
     val language: String,
@@ -14,7 +14,7 @@ data class ModuleNode(
     val external: Boolean = false,
 )
 
-data class ModuleFile(val id: String, val name: String, val path: Path)
+data class ModuleFile(val id: String, val name: String, val path: FilePath)
 
 data class ModuleEdge(val from: String, val to: String, val weight: Int)
 
@@ -33,26 +33,26 @@ const val MODULE_MAX = 120
 const val TARGET_MODULES = 10
 const val ROOT_MODULE_LABEL = "<root>"
 
-fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Path? = null): ModuleGraph {
+fun aggregateModules(slice: GraphSlice, activePath: FilePath? = null, scopeRoot: FilePath? = null): ModuleGraph {
     val all = slice.nodes.filter { it.path != null }
     val files = if (scopeRoot == null) all
     else all.filter { (it.path!!.parent ?: it.path!!).startsWith(scopeRoot) }
     if (files.isEmpty()) return ModuleGraph.EMPTY
     val root = scopeRoot ?: commonRoot(files.map { it.path!!.parent ?: it.path!! })
     val workspaceRoot = commonRoot(all.map { it.path!!.parent ?: it.path!! })
-    val activeNorm = activePath?.toAbsolutePath()?.normalize()
+    val activeNorm = activePath
 
     val tree = DirNode(root)
     for (node in files) {
         val parent = node.path!!.parent
         var cur = tree
         if (parent != null && parent != root) {
-            val rel = runCatching { root.relativize(parent) }.getOrNull()
-            if (rel != null && rel.toString().isNotEmpty()) {
+            val rel = root.relativize(parent)
+            if (rel.toString().isNotEmpty()) {
                 var dir = root
-                for (seg in rel) {
+                for (seg in rel.segments) {
                     dir = dir.resolve(seg)
-                    cur = cur.dirs.getOrPut(seg.toString()) { DirNode(dir) }
+                    cur = cur.dirs.getOrPut(seg) { DirNode(dir) }
                 }
             }
         }
@@ -97,10 +97,8 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
             acc.fileCount++
             acc.files.add(ModuleFile(node.id, node.label, node.path!!))
             val ext = extensionOf(node.path)
-            if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
-            if (node.kind == NodeKind.ACTIVE ||
-                (activeNorm != null && node.path.toAbsolutePath().normalize() == activeNorm)
-            ) {
+            if (ext.isNotEmpty()) acc.languages[ext] = (acc.languages[ext] ?: 0) + 1
+            if (node.kind == NodeKind.ACTIVE || (activeNorm != null && node.path == activeNorm)) {
                 acc.active = true
             }
         }
@@ -113,10 +111,8 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
         acc.fileCount++
         acc.files.add(ModuleFile(node.id, node.label, path))
         val ext = extensionOf(path)
-        if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
-        if (node.kind == NodeKind.ACTIVE ||
-            (activeNorm != null && path.toAbsolutePath().normalize() == activeNorm)
-        ) {
+        if (ext.isNotEmpty()) acc.languages[ext] = (acc.languages[ext] ?: 0) + 1
+        if (node.kind == NodeKind.ACTIVE || (activeNorm != null && path == activeNorm)) {
             acc.active = true
         }
     }
@@ -126,7 +122,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
         val from = fileModule[edge.from] ?: continue
         val to = fileModule[edge.to] ?: continue
         if (from == to) continue
-        weights.merge(from to to, 1, Int::plus)
+        weights[from to to] = (weights[from to to] ?: 0) + 1
     }
 
     if (scopeRoot != null) {
@@ -141,7 +137,7 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
                 acc.fileCount++
                 acc.files.add(ModuleFile(node.id, node.label, node.path))
                 val ext = extensionOf(node.path)
-                if (ext.isNotEmpty()) acc.languages.merge(ext, 1, Int::plus)
+                if (ext.isNotEmpty()) acc.languages[ext] = (acc.languages[ext] ?: 0) + 1
             }
             return gid
         }
@@ -152,12 +148,12 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
                 from != null && to == null -> {
                     val ext = byId[edge.to] ?: continue
                     val gid = ghostFor(ext) ?: continue
-                    if (gid != from) weights.merge(from to gid, 1, Int::plus)
+                    if (gid != from) weights[from to gid] = (weights[from to gid] ?: 0) + 1
                 }
                 from == null && to != null -> {
                     val ext = byId[edge.from] ?: continue
                     val gid = ghostFor(ext) ?: continue
-                    if (gid != to) weights.merge(gid to to, 1, Int::plus)
+                    if (gid != to) weights[gid to to] = (weights[gid to to] ?: 0) + 1
                 }
             }
         }
@@ -187,7 +183,6 @@ fun aggregateModules(slice: GraphSlice, activePath: Path? = null, scopeRoot: Pat
         val dropped = ranked.drop(MODULE_MAX)
         droppedModules = dropped.size
         droppedFiles = dropped.sumOf { it.fileCount }
-        println("[atlas] aggregateModules dropped $droppedModules modules / $droppedFiles files (cap $MODULE_MAX)")
         nodes = kept
         edges = edges.filter { it.from in keptIds && it.to in keptIds }
     }
@@ -200,13 +195,13 @@ fun drillPathInSlice(slice: GraphSlice, drillPath: List<String>): List<String> {
     val dirs = slice.nodes.mapNotNull { node -> node.path?.let { it.parent ?: it } }
     val out = ArrayList<String>(drillPath.size)
     for (id in drillPath) {
-        val scope = runCatching { Path.of(id) }.getOrNull() ?: break
+        val scope = FilePath.of(id)
         if (dirs.any { it.startsWith(scope) }) out.add(id) else break
     }
     return out
 }
 
-private class DirNode(val dir: Path) {
+private class DirNode(val dir: FilePath) {
     val dirs = LinkedHashMap<String, DirNode>()
     val files = ArrayList<GraphNode>()
     var subtreeCount = 0
@@ -227,7 +222,7 @@ private class Cut(val node: DirNode, val loose: Boolean) {
     }
 }
 
-private class ModuleAcc(val dir: Path, val label: String) {
+private class ModuleAcc(val dir: FilePath, val label: String) {
     var fileCount = 0
     var active = false
     var splittable = false
@@ -259,20 +254,20 @@ private fun countSubtree(dir: DirNode): Int {
 private fun dominantLanguage(languages: Map<String, Int>): String =
     languages.entries.maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }.thenBy { it.key })?.key ?: ""
 
-private fun moduleLabel(moduleDir: Path, root: Path): String {
+private fun moduleLabel(moduleDir: FilePath, root: FilePath): String {
     if (moduleDir == root) return ROOT_MODULE_LABEL
-    val rel = runCatching { root.relativize(moduleDir) }.getOrNull()?.toString()
-    if (rel.isNullOrEmpty()) return moduleDir.fileName?.toString() ?: moduleDir.toString()
-    return rel.replace('\\', '/')
+    val rel = root.relativize(moduleDir).toString()
+    if (rel.isEmpty()) return moduleDir.fileName.ifEmpty { moduleDir.toString() }
+    return rel
 }
 
-private fun extensionOf(path: Path): String {
-    val name = path.fileName?.toString() ?: return ""
+private fun extensionOf(path: FilePath): String {
+    val name = path.fileName
     val dot = name.lastIndexOf('.')
     return if (dot in 1 until name.length - 1) name.substring(dot + 1).lowercase() else ""
 }
 
-private fun commonRoot(dirs: List<Path>): Path {
+private fun commonRoot(dirs: List<FilePath>): FilePath {
     var prefix = dirs.first()
     for (dir in dirs.drop(1)) {
         while (!dir.startsWith(prefix)) {

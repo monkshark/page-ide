@@ -1,6 +1,6 @@
 package page.atlas.graph
 
-import java.nio.file.Path
+import page.shared.path.FilePath
 
 enum class NodeKind { ACTIVE, WORKSPACE_FILE, EXTERNAL, SYMBOL }
 
@@ -9,7 +9,7 @@ enum class EdgeKind { IMPORT, IMPLEMENTS, EXTENDS, CALLS }
 data class GraphNode(
     val id: String,
     val label: String,
-    val path: Path?,
+    val path: FilePath?,
     val kind: NodeKind,
 )
 

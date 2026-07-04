@@ -2,6 +2,7 @@ package page.atlas
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import page.atlas.graph.ModuleEdge
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleNode
@@ -9,13 +10,12 @@ import page.atlas.graph.NodeKind
 import page.atlas.graph.moduleDependsOn
 import page.atlas.graph.modulePath
 import page.atlas.graph.moduleUsedBy
-import java.nio.file.Path
-import kotlin.test.assertNull
+import page.shared.path.FilePath
 
 class ModulePathTest {
 
     private fun mod(id: String): ModuleNode =
-        ModuleNode(id, id, Path.of(id), 1, NodeKind.WORKSPACE_FILE, "kt")
+        ModuleNode(id, id, FilePath.of(id), 1, NodeKind.WORKSPACE_FILE, "kt")
 
     private val graph = ModuleGraph(
         nodes = listOf(mod("a"), mod("b"), mod("c"), mod("d")),

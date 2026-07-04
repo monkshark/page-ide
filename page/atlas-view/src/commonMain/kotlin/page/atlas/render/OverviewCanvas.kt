@@ -58,6 +58,7 @@ import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.graph.modulePath
 import page.atlas.interaction.OverviewSelection
+import page.shared.path.FilePath
 
 private const val CARD_W = 132f
 private const val EXTERNAL_W = 156f
@@ -109,7 +110,7 @@ private data class DrillTransition(
     val capCycKeys: Set<Pair<String, String>>,
 )
 
-internal data class DrilledModule(
+data class DrilledModule(
     val node: ModuleNode,
     val isHub: Boolean,
     val inCycle: Boolean,
@@ -129,7 +130,7 @@ internal fun buildOverviewCards(graph: ModuleGraph, layout: ModuleLayerLayout): 
     }
     val maxFiles = graph.nodes.maxOf { it.fileCount }.coerceAtLeast(1)
     val indeg = HashMap<String, Int>()
-    for (e in graph.edges) if (e.from != e.to) indeg.merge(e.to, 1, Int::plus)
+    for (e in graph.edges) if (e.from != e.to) indeg[e.to] = (indeg[e.to] ?: 0) + 1
     val ranked = graph.nodes.sortedWith(
         compareByDescending<ModuleNode> { it.fileCount + (indeg[it.id] ?: 0) * 2 }.thenBy { it.id },
     )
@@ -185,7 +186,7 @@ private fun layerLabel(layer: ModuleLayer): String = when (layer) {
 }
 
 @Composable
-internal fun OverviewCanvas(
+fun OverviewCanvas(
     graph: ModuleGraph,
     layout: ModuleLayerLayout,
     activeModuleId: String?,
@@ -193,7 +194,8 @@ internal fun OverviewCanvas(
     view: MapViewState,
     selection: OverviewSelection,
     onSelectionChange: (OverviewSelection) -> Unit,
-    onOpenFile: (java.nio.file.Path) -> Unit,
+    onOpenFile: (FilePath) -> Unit,
+    roles: AtlasRoleColors,
     onDrillFrom: (Rect, DrilledModule) -> Unit = { _, _ -> },
     drillingOutId: String? = null,
     drillOutFromRect: Rect? = null,
@@ -210,7 +212,6 @@ internal fun OverviewCanvas(
     val onSurface = MaterialTheme.colorScheme.onSurface
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val primary = MaterialTheme.colorScheme.primary
-    val roles = atlasRoleColors()
     val bodyStyle = TextStyle(fontSize = 10.sp, color = labelColor)
     val bandStyle = TextStyle(fontSize = 9.sp, color = labelColor)
 
@@ -220,8 +221,8 @@ internal fun OverviewCanvas(
         val out = HashMap<String, Int>()
         for (e in graph.edges) {
             if (e.from == e.to) continue
-            inn.merge(e.to, 1, Int::plus)
-            out.merge(e.from, 1, Int::plus)
+            inn[e.to] = (inn[e.to] ?: 0) + 1
+            out[e.from] = (out[e.from] ?: 0) + 1
         }
         inn to out
     }
@@ -248,12 +249,12 @@ internal fun OverviewCanvas(
     }
     val parentIndeg = remember(parentGraph) {
         val inn = HashMap<String, Int>()
-        parentGraph?.edges?.forEach { if (it.from != it.to) inn.merge(it.to, 1, Int::plus) }
+        parentGraph?.edges?.forEach { if (it.from != it.to) inn[it.to] = (inn[it.to] ?: 0) + 1 }
         inn
     }
     val parentOutdeg = remember(parentGraph) {
         val out = HashMap<String, Int>()
-        parentGraph?.edges?.forEach { if (it.from != it.to) out.merge(it.from, 1, Int::plus) }
+        parentGraph?.edges?.forEach { if (it.from != it.to) out[it.from] = (out[it.from] ?: 0) + 1 }
         out
     }
     val parentCycleKeys = remember(parentGraph) {
@@ -786,7 +787,7 @@ internal fun OverviewCanvas(
 private fun smoothstep(p: Float, a: Float, b: Float): Float =
     ((p - a) / (b - a)).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-internal fun DrawScope.drawOverviewCard(
+fun DrawScope.drawOverviewCard(
     measurer: TextMeasurer,
     roles: AtlasRoleColors,
     surface: Color,

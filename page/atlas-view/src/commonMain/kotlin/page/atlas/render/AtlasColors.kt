@@ -1,10 +1,7 @@
 package page.atlas.render
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
-import page.ui.Glass
-import page.ui.GlassColors
 
 object AtlasInk {
     val incoming = Color(0xFF6E8BFF)
@@ -40,15 +37,3 @@ data class AtlasRoleColors(
     val path: Color,
     val neutral: Color,
 )
-
-fun atlasRoleColors(colors: GlassColors): AtlasRoleColors = AtlasRoleColors(
-    dependency = colors.primary,
-    usedBy = colors.accent,
-    cycle = colors.warn,
-    hub = colors.error,
-    path = colors.warn,
-    neutral = colors.muted,
-)
-
-@Composable
-fun atlasRoleColors(): AtlasRoleColors = atlasRoleColors(Glass.colors)

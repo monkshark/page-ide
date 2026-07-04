@@ -1,6 +1,5 @@
 package page.atlas
 
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,10 +10,11 @@ import page.atlas.graph.ModuleNode
 import page.atlas.graph.NodeKind
 import page.atlas.render.buildOverviewCards
 import page.atlas.render.layeredModuleLayout
+import page.shared.path.FilePath
 
 class OverviewCardsTest {
     private fun mod(id: String, fileCount: Int = 1, external: Boolean = false) =
-        ModuleNode(id, id, Path.of(id), fileCount, NodeKind.WORKSPACE_FILE, "kotlin", external = external)
+        ModuleNode(id, id, FilePath.of(id), fileCount, NodeKind.WORKSPACE_FILE, "kotlin", external = external)
 
     private fun scene(graph: ModuleGraph) = buildOverviewCards(graph, layeredModuleLayout(graph))
 
