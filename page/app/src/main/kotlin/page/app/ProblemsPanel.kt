@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.awt.Cursor
 import page.atlas.graph.GraphNode
+import page.atlas.toNioPath
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticPosition
 import page.lsp.DiagnosticSeverity
@@ -494,7 +495,7 @@ internal fun cycleDiagnostics(cycles: List<List<GraphNode>>): Map<String, List<D
     if (cycles.isEmpty()) return emptyMap()
     val out = LinkedHashMap<String, MutableList<Diagnostic>>()
     for (cycle in cycles) {
-        val members = cycle.mapNotNull { it.path }
+        val members = cycle.mapNotNull { it.path?.toNioPath() }
         if (members.size < 2) continue
         val names = members.map { it.fileName.toString() }.sorted()
         val message = "Dependency cycle · ${names.size} files: ${names.joinToString(", ")}"

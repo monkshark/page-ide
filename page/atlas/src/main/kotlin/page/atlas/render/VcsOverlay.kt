@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import java.nio.file.Path
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
+import page.atlas.toNioPath
 
 data class DrillEntry(
     val id: String,
@@ -63,7 +64,7 @@ fun vcsImpactEntries(nodes: List<GraphNode>, impacted: Map<String, Int>): List<D
     nodes.asSequence()
         .mapNotNull { node ->
             val depth = impacted[node.id] ?: return@mapNotNull null
-            depth to DrillEntry(node.id, node.label, node.path, emptyList())
+            depth to DrillEntry(node.id, node.label, node.path?.toNioPath(), emptyList())
         }
         .sortedWith(compareBy({ it.first }, { it.second.label.lowercase() }))
         .map { it.second }

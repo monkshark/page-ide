@@ -1,6 +1,6 @@
 package page.atlas
 
-import java.nio.file.Path
+import page.shared.path.FilePath
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,7 +13,7 @@ class AtlasSearchTest {
     private fun node(label: String, external: Boolean = false) = GraphNode(
         id = label,
         label = label,
-        path = if (external) null else Path.of("ws", label),
+        path = if (external) null else FilePath.of("ws/$label"),
         kind = if (external) NodeKind.EXTERNAL else NodeKind.WORKSPACE_FILE,
     )
 

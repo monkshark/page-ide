@@ -1,10 +1,10 @@
 package page.atlas
 
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import page.shared.path.FilePath
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
@@ -15,7 +15,7 @@ import page.atlas.graph.dependencyDigest
 class ProjectDependencyDigestTest {
 
     private fun node(id: String): GraphNode =
-        GraphNode(id, id, Path.of(id), NodeKind.WORKSPACE_FILE)
+        GraphNode(id, id, FilePath.of(id), NodeKind.WORKSPACE_FILE)
 
     private fun slice(ids: List<String>, edges: List<Pair<String, String>>): GraphSlice =
         GraphSlice(ids.map { node(it) }, edges.map { GraphEdge(it.first, it.second) })

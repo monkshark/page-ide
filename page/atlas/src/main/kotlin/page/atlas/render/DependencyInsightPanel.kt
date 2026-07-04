@@ -34,6 +34,7 @@ import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.HubFile
 import page.atlas.graph.ImpactedFile
+import page.atlas.toNioPath
 import page.ui.EditorFontFamily
 
 private const val HUB_MIN_DEPENDENTS = 8
@@ -144,7 +145,7 @@ private fun ImpactRow(entry: ImpactedFile, onRefocus: (String) -> Unit, onOpen: 
             .pointerInput(entry.node.id) {
                 detectTapGestures(
                     onTap = { onRefocus(entry.node.id) },
-                    onDoubleTap = { entry.node.path?.let(onOpen) },
+                    onDoubleTap = { entry.node.path?.toNioPath()?.let(onOpen) },
                 )
             }
             .padding(horizontal = 14.dp, vertical = 9.dp),
@@ -246,7 +247,7 @@ private fun HubCard(hub: HubFile, onRefocus: (String) -> Unit, onOpen: (FilePath
             .pointerInput(hub.node.id) {
                 detectTapGestures(
                     onTap = { onRefocus(hub.node.id) },
-                    onDoubleTap = { hub.node.path?.let(onOpen) },
+                    onDoubleTap = { hub.node.path?.toNioPath()?.let(onOpen) },
                 )
             }
             .padding(horizontal = 14.dp, vertical = 9.dp),

@@ -2,6 +2,7 @@ package page.atlas.graph
 
 import java.net.URI
 import java.nio.file.Path
+import page.atlas.toFilePath
 
 data class SymbolSpec(
     val name: String,
@@ -101,7 +102,7 @@ class SymbolGraphSession(
     }
 
     private fun register(spec: SymbolSpec, id: String, depth: Int) {
-        nodes[id] = GraphNode(id, spec.name, pathOf(spec.uri), NodeKind.SYMBOL)
+        nodes[id] = GraphNode(id, spec.name, pathOf(spec.uri)?.toFilePath(), NodeKind.SYMBOL)
         specs[id] = spec
         depths[id] = depth
     }

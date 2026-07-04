@@ -1,9 +1,9 @@
 package page.atlas
 
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import page.shared.path.FilePath
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphNode
@@ -12,7 +12,7 @@ import page.atlas.graph.NodeKind
 
 class GraphInsightsTest {
 
-    private fun file(id: String) = GraphNode(id, "$id.kt", Path.of("/src/$id.kt"), NodeKind.WORKSPACE_FILE)
+    private fun file(id: String) = GraphNode(id, "$id.kt", FilePath.of("/src/$id.kt"), NodeKind.WORKSPACE_FILE)
 
     private fun external(id: String) = GraphNode(id, id, null, NodeKind.EXTERNAL)
 
@@ -82,8 +82,8 @@ class GraphInsightsTest {
 
     @Test
     fun `impact breaks fully equal label ties by node id`() {
-        val a1 = GraphNode("a1", "same.kt", Path.of("/src/a1.kt"), NodeKind.WORKSPACE_FILE)
-        val a2 = GraphNode("a2", "same.kt", Path.of("/src/a2.kt"), NodeKind.WORKSPACE_FILE)
+        val a1 = GraphNode("a1", "same.kt", FilePath.of("/src/a1.kt"), NodeKind.WORKSPACE_FILE)
+        val a2 = GraphNode("a2", "same.kt", FilePath.of("/src/a2.kt"), NodeKind.WORKSPACE_FILE)
         val slice = GraphSlice(
             listOf(file("focus"), a2, a1),
             listOf(edge("a2", "focus"), edge("a1", "focus")),

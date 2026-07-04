@@ -32,7 +32,7 @@ class ImportGraphProviderTest {
         val activeNode = slice.nodes.single { it.kind == NodeKind.ACTIVE }
         assertEquals("Main.kt", activeNode.label)
         val workspaceNode = slice.nodes.single { it.kind == NodeKind.WORKSPACE_FILE }
-        assertEquals(helper.toAbsolutePath().normalize(), workspaceNode.path)
+        assertEquals(helper.toAbsolutePath().normalize().toFilePath(), workspaceNode.path)
         val external = slice.nodes.single { it.kind == NodeKind.EXTERNAL }
         assertEquals("java.util.List", external.label)
         assertEquals(null, external.path)
@@ -305,7 +305,7 @@ class ImportGraphProviderTest {
         val slice = ImportGraphProvider(root).nodesForFile(active, text)
         val workspace = slice.nodes.filter { it.kind == NodeKind.WORKSPACE_FILE }
         assertEquals(1, workspace.size)
-        assertEquals(model.toAbsolutePath().normalize(), workspace.single().path)
+        assertEquals(model.toAbsolutePath().normalize().toFilePath(), workspace.single().path)
         assertEquals(1, slice.edges.size)
         assertTrue(slice.nodes.none { it.kind == NodeKind.EXTERNAL })
     }
@@ -336,7 +336,7 @@ class ImportGraphProviderTest {
         val workspace = result.nodes.filter { it.kind == NodeKind.WORKSPACE_FILE }
         assertEquals(2, workspace.size)
         assertEquals(
-            setOf(slice.toAbsolutePath().normalize(), node.toAbsolutePath().normalize()),
+            setOf(slice.toAbsolutePath().normalize().toFilePath(), node.toAbsolutePath().normalize().toFilePath()),
             workspace.mapNotNull { it.path }.toSet(),
         )
         assertEquals(2, result.edges.size)

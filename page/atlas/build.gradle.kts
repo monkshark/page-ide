@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     api(project(":page:core"))
+    api(project(":page:atlas-view"))
     implementation(project(":page:ui"))
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)

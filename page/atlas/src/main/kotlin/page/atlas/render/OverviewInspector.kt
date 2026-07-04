@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.nio.file.Path as FilePath
+import page.shared.path.FilePath
 import page.atlas.graph.ModuleGraph
 import page.atlas.graph.ModuleLink
 import page.atlas.graph.ModuleNode

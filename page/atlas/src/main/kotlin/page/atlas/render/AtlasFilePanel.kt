@@ -32,6 +32,7 @@ import java.nio.file.Path as FilePath
 import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.Neighbor
+import page.atlas.toNioPath
 
 private const val NEIGHBOR_LIMIT = 12
 
@@ -96,7 +97,7 @@ fun AtlasFilePanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(enabled = focus.path != null) {
-                            focus.path?.let { onOpenFile(focus.id, it) }
+                            focus.path?.let { onOpenFile(focus.id, it.toNioPath()) }
                         }
                         .padding(horizontal = 12.dp, vertical = 1.dp),
                 )
@@ -157,7 +158,7 @@ private fun NeighborSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = path != null) {
-                    if (path != null) onOpenFile(neighbor.node.id, path)
+                    if (path != null) onOpenFile(neighbor.node.id, path.toNioPath())
                 }
                 .padding(horizontal = 16.dp, vertical = 2.dp),
         )

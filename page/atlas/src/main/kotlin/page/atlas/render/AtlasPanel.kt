@@ -70,7 +70,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.nio.file.Path as FilePath
+import java.nio.file.Path
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -84,11 +84,13 @@ import page.atlas.graph.NodeKind
 import page.atlas.graph.aggregateModules
 import page.atlas.graph.drillPathInSlice
 import page.atlas.interaction.OverviewSelection
+import page.atlas.toNioPath
+import page.shared.path.FilePath
 
 @Composable
 fun AtlasContent(
     slice: GraphSlice,
-    onNodeClick: (FilePath) -> Unit,
+    onNodeClick: (Path) -> Unit,
     onClose: () -> Unit,
     projectMode: Boolean = false,
     onProjectModeChange: (Boolean) -> Unit = {},
@@ -110,7 +112,7 @@ fun AtlasContent(
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
     val openFile: (FilePath) -> Unit = { path ->
-        onNodeClick(path)
+        onNodeClick(path.toNioPath())
         onClose()
     }
     LaunchedEffect(slice) {
@@ -302,6 +304,7 @@ fun AtlasContent(
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
                     onOpenFile = openFile,
+                    roles = atlasRoleColors(),
                     onDrillFrom = { rect, drilled ->
                         drillFrom = drilled.node.id to rect
                         drillRects = drillRects + (drilled.node.id to rect)
