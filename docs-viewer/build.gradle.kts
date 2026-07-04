@@ -28,3 +28,7 @@ kotlin {
         }
     }
 }
+
+tasks.named("wasmJsProcessResources") {
+    dependsOn(":page:atlas:exportAtlasSnapshot")
+}
