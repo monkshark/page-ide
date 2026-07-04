@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -33,7 +33,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 .search-box::placeholder{color:var(--muted)}
 .nav-list{flex:1;overflow-y:auto;padding:8px 0}
 .nav-group{padding:0 8px;margin-bottom:4px}
-.nav-group-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
+.nav-section{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text);padding:14px 16px 6px;margin-top:8px;border-top:1px solid var(--accent-dim)}
+.nav-group-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px;display:flex;align-items:center;gap:7px;user-select:none;border-radius:6px}
+.nav-group-title.module{color:var(--text);font-weight:700;font-size:12.5px;letter-spacing:.3px;cursor:pointer;transition:background .15s}
+.nav-group-title.module:hover{background:var(--accent-dim)}
+.nav-group-title.module::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--accent);flex:none}
+.nav-chevron{margin-left:auto;display:inline-flex;align-items:center;color:var(--muted);opacity:.65;transition:transform .25s ease,opacity .15s;transform:rotate(90deg)}
+.nav-chevron svg{display:block}
+.nav-group-title.module:hover .nav-chevron{opacity:1}
+.nav-group.collapsed .nav-chevron{transform:rotate(0deg)}
+.nav-group-items{overflow:hidden;max-height:1600px;opacity:1;transform:translateY(0);transition:max-height .28s ease,opacity .22s ease,transform .28s ease}
+.nav-group.collapsed .nav-group-items{max-height:0;opacity:0;transform:translateY(-6px)}
 .nav-item{display:block;padding:6px 12px;font-size:13px;color:var(--muted);text-decoration:none;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s}
 .nav-item:hover{background:var(--accent-dim);color:var(--text)}
 .nav-item.active{background:var(--accent-dim);color:var(--accent);font-weight:500}
@@ -138,15 +148,7 @@ function closeSidebar(){document.getElementById('sidebar').classList.remove('ope
 <script>
 /*__MD_DATA__*/
 
-var FILES = [
-  { titleKo:'개요', titleEn:'Overview', items:[
-    {nameKo:'README (목차)',         nameEn:'README (index)',         pathKo:'README.md',                   pathEn:'README_en.md'}
-  ]},
-  { titleKo:'가이드', titleEn:'Guides', items:[
-    {nameKo:'PAGE 개요',             nameEn:'PAGE overview',          pathKo:'guides/overview.md',          pathEn:'guides/overview_en.md'},
-    {nameKo:'아키텍처',              nameEn:'Architecture',           pathKo:'guides/architecture.md',      pathEn:'guides/architecture_en.md'}
-  ]}
-];
+var FILES = /*__NAV_DATA__*/[];
 
 (function(){
   try {
@@ -194,7 +196,7 @@ var FILES = [
   } catch(e){ console.warn('Mermaid init skipped:', e); }
 
   var LANG_KEY = 'docsViewerLang';
-  function getLang(){ return localStorage.getItem(LANG_KEY) === 'en' ? 'en' : 'ko'; }
+  function getLang(){ return localStorage.getItem(LANG_KEY) === 'ko' ? 'ko' : 'en'; }
   function setLang(l){ localStorage.setItem(LANG_KEY, l === 'en' ? 'en' : 'ko'); }
 
   var PATH_INDEX = {};
@@ -227,22 +229,43 @@ var FILES = [
   function renderNav(lang){
     navList.innerHTML = '';
     allItems = [];
+    var lastSection = null;
     FILES.forEach(function(g){
+      if(g.section && g.section !== lastSection){
+        var sEl = document.createElement('div');
+        sEl.className = 'nav-section';
+        sEl.textContent = g.section;
+        navList.appendChild(sEl);
+      }
+      lastSection = g.section || null;
+      var collapsible = !!g.section;
       var gEl = document.createElement('div');
-      gEl.className = 'nav-group';
+      gEl.className = collapsible ? 'nav-group collapsible collapsed' : 'nav-group';
       var titleEl = document.createElement('div');
-      titleEl.className = 'nav-group-title';
-      titleEl.textContent = titleForGroup(g, lang);
+      titleEl.className = collapsible ? 'nav-group-title module' : 'nav-group-title';
+      var titleText = document.createElement('span');
+      titleText.textContent = titleForGroup(g, lang);
+      titleEl.appendChild(titleText);
+      if(collapsible){
+        var chev = document.createElement('span');
+        chev.className = 'nav-chevron';
+        chev.innerHTML = '<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        titleEl.appendChild(chev);
+        titleEl.onclick = function(){ gEl.classList.toggle('collapsed'); };
+      }
       gEl.appendChild(titleEl);
+      var itemsEl = document.createElement('div');
+      itemsEl.className = 'nav-group-items';
       g.items.forEach(function(it){
         var a = document.createElement('a');
         a.className = 'nav-item';
         a.textContent = nameForItem(it, lang);
         a.dataset.path = pathForItem(it, lang);
         a.onclick = function(){ loadFile(a.dataset.path); };
-        gEl.appendChild(a);
+        itemsEl.appendChild(a);
         allItems.push({el:a, item:it, group:g});
       });
+      gEl.appendChild(itemsEl);
       navList.appendChild(gEl);
     });
   }
@@ -277,7 +300,9 @@ var FILES = [
 
   function highlightActive(p){
     allItems.forEach(function(i){
-      i.el.classList.toggle('active', i.el.dataset.path === p);
+      var on = i.el.dataset.path === p;
+      i.el.classList.toggle('active', on);
+      if(on){ var grp = i.el.closest('.nav-group'); if(grp) grp.classList.remove('collapsed'); }
     });
   }
 
@@ -290,6 +315,7 @@ var FILES = [
     navList.querySelectorAll('.nav-group').forEach(function(g){
       var vis = Array.from(g.querySelectorAll('.nav-item')).some(function(i){ return i.style.display !== 'none'; });
       g.style.display = vis ? '' : 'none';
+      if(q) g.classList.remove('collapsed');
     });
   }
   document.getElementById('search').addEventListener('input', applySearchFilter);
@@ -331,7 +357,7 @@ var FILES = [
     var lang = getLang();
     var backLabel = (lang === 'en') ? 'Back' : '뒤로';
     var fwdLabel = (lang === 'en') ? 'Forward' : '앞으로';
-    var rootPath = (lang === 'en' && MD_DATA['README_en.md']) ? 'README_en.md' : 'README.md';
+    var rootPath = (lang === 'en' && MD_DATA['README_en.md']) ? 'README_en.md' : 'README_kr.md';
 
     var navHtml = '<div class="breadcrumb"><span class="nav-btns">'
       + '<button class="nav-btn" onclick="window._goBack()" ' + (canBack ? '' : 'disabled') + ' title="' + backLabel + '">&#8592;</button>'
@@ -579,7 +605,7 @@ var FILES = [
   });
 
   function initialDefaultPath(){
-    return (getLang() === 'en' && MD_DATA['README_en.md']) ? 'README_en.md' : 'README.md';
+    return (getLang() === 'en' && MD_DATA['README_en.md']) ? 'README_en.md' : 'README_kr.md';
   }
 
   var initialLang = getLang();
