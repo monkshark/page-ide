@@ -29,6 +29,31 @@ kotlin {
     }
 }
 
+val docsResourceDir = layout.projectDirectory.dir("src/wasmJsMain/resources/docs")
+val docsIndexFile = layout.projectDirectory.file("src/wasmJsMain/resources/docs-index.json")
+
+val syncDocs by tasks.registering(Copy::class) {
+    from(rootProject.projectDir.resolve("docs")) { include("**/*.md") }
+    into(docsResourceDir)
+}
+
+val generateDocsIndex by tasks.registering {
+    dependsOn(syncDocs)
+    val dir = docsResourceDir.asFile
+    val out = docsIndexFile.asFile
+    inputs.dir(dir)
+    outputs.file(out)
+    doLast {
+        val rels = dir.walkTopDown()
+            .filter { it.isFile && it.extension == "md" }
+            .map { it.relativeTo(dir).path.replace('\\', '/') }
+            .sorted()
+            .toList()
+        out.writeText(rels.joinToString(prefix = "[", postfix = "]", separator = ",") { "\"$it\"" })
+    }
+}
+
 tasks.named("wasmJsProcessResources") {
     dependsOn(":page:atlas:exportAtlasSnapshot")
+    dependsOn(generateDocsIndex)
 }
