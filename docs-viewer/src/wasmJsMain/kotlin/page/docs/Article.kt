@@ -46,6 +46,8 @@ import page.shared.md.Table
 import page.shared.md.TaskList
 import page.shared.md.Text as MdText
 import page.shared.md.WidgetRef
+import page.shared.syntax.CodeLexers
+import page.shared.syntax.colorizeCode
 import page.docs.widgets.PageWidgets
 
 @Composable
@@ -131,8 +133,10 @@ private fun CodeBlockView(c: CodeBlock) {
             fontSize = 11.sp,
             modifier = Modifier.fillMaxWidth().background(DocsTheme.background).padding(horizontal = 14.dp, vertical = 7.dp),
         )
+        val lexer = CodeLexers.forLang(lang)
+        val code = if (lexer != null) colorizeCode(c.code, lexer, DocsSyntaxPalette) else AnnotatedString(c.code)
         Text(
-            c.code,
+            code,
             color = DocsTheme.text,
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,

@@ -1,6 +1,19 @@
 package page.docs
 
 import androidx.compose.ui.graphics.Color
+import page.shared.syntax.SyntaxPalette
+
+val DocsSyntaxPalette = SyntaxPalette(
+    keyword = Color(0xFF9DA8FF),
+    string = Color(0xFF4FD3C7),
+    number = Color(0xFFC9B6FF),
+    comment = Color(0xFF828DA8),
+    docComment = Color(0xFF6E8FA8),
+    todoTag = Color(0xFFF08FC8),
+    annotation = Color(0xFFB79CFF),
+    type = Color(0xFF7FD6E0),
+    identifier = Color(0xFFC8D0E6),
+)
 
 object DocsTheme {
     val background = Color(0xFF0A0D14)
