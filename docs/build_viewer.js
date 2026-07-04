@@ -100,11 +100,15 @@ function buildNav(files) {
 
 const navData = JSON.stringify(buildNav(mdFiles));
 
+const snapshotFile = path.join(docsDir, 'atlas-snapshot.json');
+const atlasData = fs.existsSync(snapshotFile) ? fs.readFileSync(snapshotFile, 'utf8').trim() : 'null';
+
 const templateFile = path.join(docsDir, '_viewer_template.html');
 const template = fs.readFileSync(templateFile, 'utf8');
 const html = template
   .replace('/*__MD_DATA__*/', 'const MD_DATA = ' + jsonData + ';')
-  .replace('/*__NAV_DATA__*/[]', navData);
+  .replace('/*__NAV_DATA__*/[]', navData)
+  .replace('/*__ATLAS_DATA__*/null', atlasData);
 
 fs.writeFileSync(outFile, html, 'utf8');
 const sizeKB = (Buffer.byteLength(html) / 1024).toFixed(1);

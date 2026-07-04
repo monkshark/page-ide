@@ -45,35 +45,19 @@ page/
 
 ---
 
-## Dependency direction (planned)
+## Dependency direction
 
-```mermaid
-graph TD
-  app --> ui
-  app --> workspace
-  app --> editor
-  app --> language
-  app --> atlas
-  app --> echo
-  app --> pair
-  app --> runtime
-  app --> git
-  ui --> core
-  workspace --> core
-  editor --> core
-  language --> core
-  atlas --> language
-  atlas --> core
-  echo --> core
-  pair --> core
-  runtime --> core
-  git --> core
+The graph below shows how the modules actually depend on each other today. Hover a node to isolate its neighbors; scroll to zoom, drag to pan.
+
+```page-widget
+atlas
 ```
 
-The rules are simple.
+Dependencies flow strictly downward, with no cycles.
 
-- Every module depends only on `core` (or on nothing).
-- Feature modules (e.g. `editor` ↔ `pair`) do not depend on each other directly. Communication goes through `core` event buses or interfaces.
+- `core` and `shared-core` are the foundation — they depend on nothing.
+- `editor` is the text substrate that `ui`, `language`, and `workspace` all build on.
+- Feature modules depend only downward on the foundation and substrate modules they need (`core`, `editor`, `lsp`, `runtime`, `ui`) — never sideways on each other.
 - Assembly and wiring live in `app`.
 
 ---

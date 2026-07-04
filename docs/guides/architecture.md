@@ -45,36 +45,20 @@ page/
 
 ---
 
-## 의존 방향 (계획)
+## 의존 방향
 
-```mermaid
-graph TD
-  app --> ui
-  app --> workspace
-  app --> editor
-  app --> language
-  app --> atlas
-  app --> echo
-  app --> pair
-  app --> runtime
-  app --> git
-  ui --> core
-  workspace --> core
-  editor --> core
-  language --> core
-  atlas --> language
-  atlas --> core
-  echo --> core
-  pair --> core
-  runtime --> core
-  git --> core
+아래 그래프는 현재 모듈이 서로 어떻게 의존하는지 그대로 보여준다. 노드에 마우스를 올리면 이웃만 남고, 휠로 확대·드래그로 이동한다.
+
+```page-widget
+atlas
 ```
 
-원칙은 단순하다.
+의존은 위에서 아래로만 흐르고 순환이 없다.
 
-- 모든 모듈은 `core`만 의존한다 (또는 `core`도 의존하지 않는다).
-- 기능 모듈끼리(예: `editor` ↔ `pair`)는 직접 의존하지 않는다. 통신은 `core`의 이벤트 버스나 인터페이스로.
-- 조립과 와이어링은 `app`이 전담한다.
+- `core` · `shared-core` 는 아무것도 의존하지 않는 바닥층이다.
+- `editor` 는 `ui` · `language` · `workspace` 가 함께 딛는 텍스트 기반이라, 기능 모듈이 그 위에 선다.
+- 기능 모듈은 필요한 바닥·기반 모듈(`core` · `editor` · `lsp` · `runtime` · `ui`)만 아래로 의존하고, 서로 옆으로는 의존하지 않는다.
+- 조립과 와이어링은 `app` 이 전담한다.
 
 ---
 
