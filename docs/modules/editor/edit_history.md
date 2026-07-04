@@ -54,7 +54,15 @@ fun redo(current: EditSnapshot): Pair<EditHistory, EditSnapshot>?
 
 `current` 는 현재 보이는 상태. `undo` 는 `past` 의 마지막을 꺼내 보여주고 현재를 `future` 로 보낸다. `redo` 는 반대. 각자 스택이 비어 있으면 `null`
 
-반환은 `(새 EditHistory, 복원할 스냅샷)` — 호출자는 둘 다 받아서 탭 상태에 반영해야 한다 (`TabBook.undoOnActive` 참고)
+반환은 `(새 EditHistory, 복원할 스냅샷)` — 호출자는 둘 다 받아서 탭 상태에 반영해야 한다.
+
+실제 사용처 `TabBook.undoOnActive` 는 이 Pair 를 이렇게 소비한다.
+
+```kotlin
+val (newHistory, restored) = tab.history.undo(current) ?: return null
+```
+
+`restored` 로 활성 탭의 텍스트·캐럿을 바꾸고, `newHistory` 를 그 탭의 `history` 에 다시 끼워 넣는다.
 
 ---
 

@@ -54,7 +54,15 @@ fun redo(current: EditSnapshot): Pair<EditHistory, EditSnapshot>?
 
 `current` is the currently displayed state. `undo` pops `past.last()` and pushes `current` onto `future`. `redo` reverses it. Returns `null` when the relevant stack is empty.
 
-Returns `(new EditHistory, snapshot to restore)` — the caller must consume both and apply them to tab state (see `TabBook.undoOnActive`).
+Returns `(new EditHistory, snapshot to restore)` — the caller must consume both and apply them to tab state.
+
+The real caller `TabBook.undoOnActive` consumes the Pair like this:
+
+```kotlin
+val (newHistory, restored) = tab.history.undo(current) ?: return null
+```
+
+`restored` replaces the active tab's text and caret, and `newHistory` is stitched back into that tab's `history`.
 
 ---
 
