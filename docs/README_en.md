@@ -66,7 +66,25 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 ### atlas module
 - [Atlas](https://monkshark.github.io/page-ide/#modules/atlas/main_en.md) — code graph (import · call · module dependencies)
 
-> `pair`, `echo`, `language`, `runtime`, `git`, `workspace` modules will be added in their respective milestones.
+### lsp module
+- [LSP](https://monkshark.github.io/page-ide/#modules/lsp/main_en.md) — Language server client layer (transport · init · backend registry)
+
+### language module
+- [Language](https://monkshark.github.io/page-ide/#modules/language/main_en.md) — Language-intelligence orchestration (routing · document sync · completion · diagnostics)
+
+### runtime module
+- [Runtime](https://monkshark.github.io/page-ide/#modules/runtime/main_en.md) — Toolchain / language-server install, program execution, embedded terminal
+
+### workspace module
+- [Workspace](https://monkshark.github.io/page-ide/#modules/workspace/main_en.md) — File tree, file operations, rename refactors, project search
+
+### git module
+- [Git](https://monkshark.github.io/page-ide/#modules/git/main_en.md) — Workspace VCS status (change kinds from git status)
+
+### perf module
+- [Perf](https://monkshark.github.io/page-ide/#modules/perf/main_en.md) — Startup instrumentation and a UI-freeze watchdog
+
+> `pair`, `echo` modules will be added in their respective milestones.
 
 ### Features
 > Pair / Atlas / Glass / Echo feature docs will be added at the close of each milestone.
