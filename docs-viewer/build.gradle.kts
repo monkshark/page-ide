@@ -21,6 +21,7 @@ kotlin {
     sourceSets {
         wasmJsMain.dependencies {
             implementation(project(":shared-core"))
+            implementation(project(":page:atlas-view"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)

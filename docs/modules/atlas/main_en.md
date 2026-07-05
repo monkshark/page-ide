@@ -8,6 +8,16 @@ A file tree shows only directory structure. What calls what, and which module de
 
 ---
 
+## Live overview
+
+Below is this repository drawn as an Atlas overview. Cards sit in columns by dependency depth; double-click a splittable module to drill into it. Use the path at the top to step back out.
+
+```page-widget
+AtlasOverview
+```
+
+---
+
 ## Structure
 
 The module splits into four layers.

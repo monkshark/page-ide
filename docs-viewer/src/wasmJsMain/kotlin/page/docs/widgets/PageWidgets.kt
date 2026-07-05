@@ -20,4 +20,5 @@ object PageWidgets {
 
 fun registerPageWidgets() {
     PageWidgets.register("AtlasDemo") { args -> AtlasDemo(args) }
+    PageWidgets.register("AtlasOverview") { args -> AtlasOverview(args) }
 }
