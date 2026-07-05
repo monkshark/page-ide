@@ -14,7 +14,7 @@ Wraps Swing's `JFileChooser` and normalizes the result to `Path?`, so callers on
 fun open(parent: Frame): Path?
 ```
 
-File-open dialog in `FILES_ONLY` mode. Returns `null` on *Cancel*.
+File-open dialog in `FILES_ONLY` mode. Returns `null` on Cancel.
 
 | Caller | When |
 |---|---|
@@ -32,7 +32,7 @@ Save dialog. When `suggested` is given (e.g., `Untitled.kt`), it pre-fills the f
 
 | Caller | When |
 |---|---|
-| `Ctrl+S` on a tab whose path is a virtual *untitled* | Pick a new path |
+| `Ctrl+S` on a tab whose path is a virtual untitled | Pick a new path |
 
 ---
 

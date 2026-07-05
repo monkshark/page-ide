@@ -39,7 +39,7 @@ val isActive: Boolean get() = query.isNotEmpty()
 val active: IntRange? get() = matches.getOrNull(activeMatchIndex)
 ```
 
-`isActive` 는 *질의가 들어있는 상태* (검색바가 열려 있어도 빈 검색어일 수 있음). `active` 는 활성 매치의 범위 — 없으면 `null`
+`isActive` 는 질의가 들어있는 상태 (검색바가 열려 있어도 빈 검색어일 수 있음). `active` 는 활성 매치의 범위 — 없으면 `null`
 
 ---
 
@@ -53,7 +53,7 @@ val active: IntRange? get() = matches.getOrNull(activeMatchIndex)
 | `withCaseSensitive(text, value)` | 토글 후 동일 검색어로 다시 찾기 |
 | `retarget(text)` | 본문이 바뀌었을 때 매치 다시 찾고, 직전 활성 위치에 가장 가까운 매치를 새 활성으로 |
 
-`retarget` 가 핵심 — 사용자가 치환하거나 본문을 편집한 뒤에도 *현재 보던 매치 근처* 에 머무르게 하는 사용감을 만든다
+`retarget` 가 핵심 — 사용자가 치환하거나 본문을 편집한 뒤에도 현재 보던 매치 근처 에 머무르게 하는 사용감을 만든다
 
 ---
 
@@ -74,7 +74,7 @@ fun prev(): SearchState
 private fun findAll(text: String, query: String, caseSensitive: Boolean): List<IntRange>
 ```
 
-`String.regionMatches` 로 한 번씩 비교하며 *겹치지 않는* 매치만 수집 — 매치를 찾으면 인덱스를 `query.length` 만큼 건너뛴다 (예: `aaa` 에서 `aa` 검색 → `[0..1]` 한 개. `[0..1]`, `[1..2]` 가 아님)
+`String.regionMatches` 로 한 번씩 비교하며 겹치지 않는 매치만 수집 — 매치를 찾으면 인덱스를 `query.length` 만큼 건너뛴다 (예: `aaa` 에서 `aa` 검색 → `[0..1]` 한 개. `[0..1]`, `[1..2]` 가 아님)
 
 대소문자는 `ignoreCase = !caseSensitive` 로 한 줄 처리. 정규식 미사용
 
@@ -98,4 +98,4 @@ private fun findAll(text: String, query: String, caseSensitive: Boolean): List<I
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

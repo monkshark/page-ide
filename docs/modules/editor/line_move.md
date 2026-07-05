@@ -2,7 +2,7 @@
 
 > `page/editor/src/main/kotlin/page/editor/LineMove.kt` — 라인 이동 / 복제
 
-Alt+↑ / Alt+↓ 와 (향후) Shift+Alt+↑·↓ 의 핵심 로직. 선택 범위 전체를 *하나의 블록* 으로 다루어 위/아래 라인과 자리를 바꾼다
+Alt+↑ / Alt+↓ 와 (향후) Shift+Alt+↑·↓ 의 핵심 로직. 선택 범위 전체를 하나의 블록 으로 다루어 위/아래 라인과 자리를 바꾼다
 
 > English: [line_move_en.md](https://monkshark.github.io/page-ide/#modules/editor/line_move_en.md)
 
@@ -35,8 +35,8 @@ fun duplicateDown(edit: TextEdit): TextEdit
 
 | 함수 | 동작 |
 |---|---|
-| `duplicateUp` | 사본을 *위* 에 두고, 캐럿/선택은 아래쪽 (원본) 에 머무름 |
-| `duplicateDown` | 사본을 *아래* 에 두고, 캐럿/선택은 아래쪽 (사본) 으로 이동 |
+| `duplicateUp` | 사본을 위 에 두고, 캐럿/선택은 아래쪽 (원본) 에 머무름 |
+| `duplicateDown` | 사본을 아래 에 두고, 캐럿/선택은 아래쪽 (사본) 으로 이동 |
 
 블록 길이를 알기 위해 `lastEnd - firstStart + 1` (줄바꿈 한 글자 포함) 을 더해 캐럿을 보정
 
@@ -63,4 +63,4 @@ private fun lineEnd(text: String, offset: Int): Int
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

@@ -4,6 +4,17 @@ plan/
 # Claude Code (로컬 도구)
 .claude/
 
+# Atlas 로컬 디자인 스크래치
+.atlas-designs/
+
+# 빌드타임 생성 Atlas 스냅샷
+docs-viewer/src/wasmJsMain/resources/atlas-snapshot.json
+
+# 빌드타임 동기화 문서 트리 + 인덱스 (docs/ 원본에서 복사)
+docs-viewer/src/wasmJsMain/resources/docs/*
+!docs-viewer/src/wasmJsMain/resources/docs/sample.md
+docs-viewer/src/wasmJsMain/resources/docs-index.json
+
 # IntelliJ IDEA / JetBrains
 .idea/
 *.iml

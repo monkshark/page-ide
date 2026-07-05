@@ -30,7 +30,7 @@ data class OpenTab(
 | `caret` | 마지막 캐럿 위치 (탭 전환 시 복원) |
 | `history` | 이 탭만의 undo/redo 스택 |
 
-`dirty` 는 *현재 본문 ≠ 저장 본문* 일 때 `true`. `Ctrl+W` 누를 때 다이얼로그 띄울지 결정하는 핵심
+`dirty` 는 현재 본문 ≠ 저장 본문 일 때 `true`. `Ctrl+W` 누를 때 다이얼로그 띄울지 결정하는 핵심
 
 ---
 
@@ -134,4 +134,4 @@ fun move(from: Int, to: Int): TabBook
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

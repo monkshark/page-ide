@@ -35,7 +35,7 @@ data class Token(val kind: TokenKind, val range: IntRange) {
 }
 ```
 
-One token = kind + text range. `endExclusive` is a convenience for `AnnotatedString.Builder.addStyle(start, end)`'s *exclusive end*.
+One token = kind + text range. `endExclusive` is a convenience for `AnnotatedString.Builder.addStyle(start, end)`'s exclusive end.
 
 ---
 
@@ -47,7 +47,7 @@ interface SyntaxLexer {
 }
 ```
 
-A simple contract: read the file once, return a token list once. No *incremental tokenization* or *partial update* optimization — `EditorPanel` caches the result via `remember(value.text)`.
+A simple contract: read the file once, return a token list once. No incremental tokenization or partial update optimization — `EditorPanel` caches the result via `remember(value.text)`.
 
 ---
 

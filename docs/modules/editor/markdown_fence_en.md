@@ -22,7 +22,7 @@ Walks line by line from the start, tracking fence state. Returns the state on th
 | Caret reached while inside a fence (excluding the open/close lines themselves) | `true` |
 | Reached EOF still inside a fence | The last `inFence` value |
 
-If the caret lands on a *fence boundary line* (the line with the opening/closing chars), the result is `false` — Markdown semantics treat that line as *outside* the fence.
+If the caret lands on a fence boundary line (the line with the opening/closing chars), the result is `false` — Markdown semantics treat that line as outside the fence.
 
 ---
 
@@ -40,7 +40,7 @@ Follows CommonMark's fence rules.
 | Fence char | `` ` `` or `~` |
 | Fence length | 3 or more in a row |
 
-Remembers the opening fence's *char* and *length*; a closer must match the char and be at least as long.
+Remembers the opening fence's char and length; a closer must match the char and be at least as long.
 
 ---
 

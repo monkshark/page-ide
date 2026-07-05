@@ -1,6 +1,6 @@
 # PAGE IDE Docs
 
-> 한국어: [README.md](https://monkshark.github.io/page-ide/#README.md)
+> 한국어: [README_kr.md](https://monkshark.github.io/page-ide/#README_kr.md)
 
 > Multi-language desktop IDE — Pair · Atlas · Glass · Echo
 
@@ -63,7 +63,28 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 - [PendingClose](https://monkshark.github.io/page-ide/#modules/app/pending_close_en.md) — Close-request identifier
 - [FileDialogs](https://monkshark.github.io/page-ide/#modules/app/file_dialogs_en.md) — `JFileChooser` wrappers
 
-> `pair`, `atlas`, `echo`, `language`, `runtime`, `git`, `workspace` modules will be added in their respective milestones.
+### atlas module
+- [Atlas](https://monkshark.github.io/page-ide/#modules/atlas/main_en.md) — code graph (import · call · module dependencies)
+
+### lsp module
+- [LSP](https://monkshark.github.io/page-ide/#modules/lsp/main_en.md) — Language server client layer (transport · init · backend registry)
+
+### language module
+- [Language](https://monkshark.github.io/page-ide/#modules/language/main_en.md) — Language-intelligence orchestration (routing · document sync · completion · diagnostics)
+
+### runtime module
+- [Runtime](https://monkshark.github.io/page-ide/#modules/runtime/main_en.md) — Toolchain / language-server install, program execution, embedded terminal
+
+### workspace module
+- [Workspace](https://monkshark.github.io/page-ide/#modules/workspace/main_en.md) — File tree, file operations, rename refactors, project search
+
+### git module
+- [Git](https://monkshark.github.io/page-ide/#modules/git/main_en.md) — Workspace VCS status (change kinds from git status)
+
+### perf module
+- [Perf](https://monkshark.github.io/page-ide/#modules/perf/main_en.md) — Startup instrumentation and a UI-freeze watchdog
+
+> `pair`, `echo` modules will be added in their respective milestones.
 
 ### Features
 > Pair / Atlas / Glass / Echo feature docs will be added at the close of each milestone.

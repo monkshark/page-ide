@@ -1,0 +1,221 @@
+{
+  "nodes": [
+    {
+      "id": "app",
+      "label": "app",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "atlas",
+      "label": "atlas",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "core",
+      "label": "core",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "echo",
+      "label": "echo",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "editor",
+      "label": "editor",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "git",
+      "label": "git",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "language",
+      "label": "language",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "lsp",
+      "label": "lsp",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "pair",
+      "label": "pair",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "perf",
+      "label": "perf",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "runtime",
+      "label": "runtime",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "ui",
+      "label": "ui",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "workspace",
+      "label": "workspace",
+      "kind": "WORKSPACE"
+    },
+    {
+      "id": "shared-core",
+      "label": "shared-core",
+      "kind": "WORKSPACE"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "atlas",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "editor",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "git",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "language",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "lsp",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "perf",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "runtime",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "ui",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "app",
+      "to": "workspace",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "atlas",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "atlas",
+      "to": "ui",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "echo",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "editor",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "editor",
+      "to": "shared-core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "git",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "language",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "language",
+      "to": "editor",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "language",
+      "to": "lsp",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "language",
+      "to": "runtime",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "lsp",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "pair",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "ui",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "ui",
+      "to": "editor",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "ui",
+      "to": "shared-core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "workspace",
+      "to": "core",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "workspace",
+      "to": "editor",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "workspace",
+      "to": "lsp",
+      "kind": "IMPORT"
+    },
+    {
+      "from": "workspace",
+      "to": "runtime",
+      "kind": "IMPORT"
+    }
+  ]
+}

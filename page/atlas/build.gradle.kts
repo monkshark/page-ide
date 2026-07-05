@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     api(project(":page:core"))
+    api(project(":page:atlas-view"))
     implementation(project(":page:ui"))
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
@@ -29,4 +30,14 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+val exportAtlasSnapshot by tasks.registering(JavaExec::class) {
+    dependsOn(tasks.named("classes"))
+    mainClass.set("page.atlas.export.SnapshotExporter")
+    classpath = sourceSets["main"].runtimeClasspath
+    val out = rootProject.projectDir.resolve("docs-viewer/src/wasmJsMain/resources/atlas-snapshot.json")
+    args(rootProject.projectDir.absolutePath, out.absolutePath)
+    outputs.file(out)
+    outputs.upToDateWhen { false }
 }

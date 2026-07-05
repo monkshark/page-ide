@@ -35,7 +35,7 @@ data class Token(val kind: TokenKind, val range: IntRange) {
 }
 ```
 
-토큰 한 개 = 종류 + 텍스트 범위. `endExclusive` 는 `AnnotatedString.Builder.addStyle(start, end)` 의 *exclusive end* 와 맞추기 위한 편의 프로퍼티
+토큰 한 개 = 종류 + 텍스트 범위. `endExclusive` 는 `AnnotatedString.Builder.addStyle(start, end)` 의 exclusive end 와 맞추기 위한 편의 프로퍼티
 
 ---
 
@@ -47,7 +47,7 @@ interface SyntaxLexer {
 }
 ```
 
-파일 한 번 읽고 토큰 리스트 한 번 만드는 단순 계약. *증분 토큰화* / *부분 갱신* 같은 최적화는 미지원 — `EditorPanel` 이 `remember(value.text)` 로 캐싱
+파일 한 번 읽고 토큰 리스트 한 번 만드는 단순 계약. 증분 토큰화 / 부분 갱신 같은 최적화는 미지원 — `EditorPanel` 이 `remember(value.text)` 로 캐싱
 
 ---
 
@@ -71,4 +71,4 @@ interface SyntaxLexer {
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

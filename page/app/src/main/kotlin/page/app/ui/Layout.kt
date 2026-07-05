@@ -50,6 +50,7 @@ import page.app.mvi.IdeEvent
 import page.atlas.graph.FileRole
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
+import page.atlas.toFilePath
 import page.atlas.render.AtlasContent
 import page.atlas.render.AtlasFilePanel
 import page.atlas.render.CallGraphPanel
@@ -788,7 +789,7 @@ internal fun IdeMainLayout(
                 slice = atlasSlice,
                 onNodeClick = { path ->
                     onOpenFile(path)
-                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path }?.id
+                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path.toFilePath() }?.id
                     if (fileId != null) {
                         atlasFileSlice = atlasSlice
                         onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))

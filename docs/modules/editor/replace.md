@@ -44,9 +44,9 @@ fun applyAll(text: String, matches: List<IntRange>, replacement: String): Result
 
 매치 리스트 전체를 한 번에 치환. `StringBuilder` 로 매치 사이의 원본 조각을 그대로 이어붙여 단일 패스로 새 문자열을 만든다
 
-`matches` 가 비어 있으면 원본 텍스트와 `replacedCount = 0` 반환. 캐럿은 `0` 으로 리셋 — *전부 치환* 후 캐럿 위치는 의미가 모호해서 일단 단순화
+`matches` 가 비어 있으면 원본 텍스트와 `replacedCount = 0` 반환. 캐럿은 `0` 으로 리셋 — 전부 치환 후 캐럿 위치는 의미가 모호해서 일단 단순화
 
-`matches` 는 *서로 겹치지 않고* *오름차순* 이라는 전제 — `SearchState.findAll` 이 이 조건을 만족시킨다
+`matches` 는 서로 겹치지 않고 오름차순 이라는 전제 — `SearchState.findAll` 이 이 조건을 만족시킨다
 
 ---
 
@@ -59,4 +59,4 @@ fun applyAll(text: String, matches: List<IntRange>, replacement: String): Result
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

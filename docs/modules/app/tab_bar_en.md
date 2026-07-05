@@ -76,7 +76,7 @@ Active background: `colorScheme.background` (same tone as the editor body → vi
 private fun CloseButton(dirty: Boolean, onClick: () -> Unit)
 ```
 
-Normally `×`. When the tab is dirty and the cursor is *not* over the chip, shows `●` (unsaved indicator). On hover it flips back to `×` — the indicator and the button share the same slot, so chip width never shifts.
+Normally `×`. When the tab is dirty and the cursor is not over the chip, shows `●` (unsaved indicator). On hover it flips back to `×` — the indicator and the button share the same slot, so chip width never shifts.
 
 ---
 

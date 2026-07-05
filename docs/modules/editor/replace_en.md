@@ -44,9 +44,9 @@ fun applyAll(text: String, matches: List<IntRange>, replacement: String): Result
 
 Replaces every match in one pass. Uses `StringBuilder` to splice the unchanged segments between matches, producing the new text in a single pass.
 
-If `matches` is empty, returns the original text with `replacedCount = 0`. The caret is reset to `0` — after a *replace all*, the caret position is ambiguous, so this keeps it simple.
+If `matches` is empty, returns the original text with `replacedCount = 0`. The caret is reset to `0` — after a replace all, the caret position is ambiguous, so this keeps it simple.
 
-Assumes `matches` is *non-overlapping* and *ascending* — `SearchState.findAll` already guarantees that.
+Assumes `matches` is non-overlapping and ascending — `SearchState.findAll` already guarantees that.
 
 ---
 

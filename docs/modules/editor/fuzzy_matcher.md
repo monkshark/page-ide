@@ -38,7 +38,7 @@ fun match(query: String, target: String): Match?
 | `+1` | 매치마다 기본 |
 | `-(타겟길이 - 쿼리길이)` | 길이 패널티 (짧은 타겟이 살짝 우선) |
 
-이 조합은 IntelliJ / VS Code 의 "search anything" 류 휴리스틱 — 정확한 가중치가 중요한 게 아니라, **연속 매치가 흩어진 매치보다, 단어 경계 매치가 중간 매치보다 위로 올라오는** 정성적 순위가 핵심
+이 조합은 IntelliJ / VS Code 의 "search anything" 류 휴리스틱 — 정확한 가중치가 중요한 게 아니라, 연속 매치가 흩어진 매치보다, 단어 경계 매치가 중간 매치보다 위로 올라오는 정성적 순위가 핵심
 
 ---
 
@@ -63,4 +63,4 @@ data class Match(val score: Int, val indices: IntArray)
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

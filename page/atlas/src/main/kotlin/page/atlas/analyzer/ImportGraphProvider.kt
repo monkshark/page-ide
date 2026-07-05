@@ -10,6 +10,7 @@ import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
+import page.atlas.toFilePath
 
 class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
@@ -33,7 +34,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         val edges = LinkedHashMap<Pair<String, String>, GraphEdge>()
         val queue = ArrayDeque<Pair<Path, String?>>()
         val processed = HashSet<String>()
-        nodes[activeId] = GraphNode(activeId, activePath.fileName.toString(), activePath, NodeKind.ACTIVE)
+        nodes[activeId] = GraphNode(activeId, activePath.fileName.toString(), activePath.toFilePath(), NodeKind.ACTIVE)
         queue += activePath to text
         while (queue.isNotEmpty()) {
             val (file, override) = queue.removeFirst()
@@ -90,7 +91,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             val resolved = file.toAbsolutePath().normalize()
             val id = resolved.toString()
             val kind = if (id == activeId) NodeKind.ACTIVE else NodeKind.WORKSPACE_FILE
-            nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved, kind)
+            nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved.toFilePath(), kind)
         }
         val queue = ArrayDeque<Pair<Path, String?>>()
         for ((done, file) in files.withIndex()) {
@@ -144,7 +145,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     ): GraphNode? {
         if (nodes.size >= MAX_NODES) return null
         val node = if (resolved != null) {
-            GraphNode(id, resolved.fileName.toString(), resolved, NodeKind.WORKSPACE_FILE)
+            GraphNode(id, resolved.fileName.toString(), resolved.toFilePath(), NodeKind.WORKSPACE_FILE)
         } else {
             GraphNode(id, raw.target, null, NodeKind.EXTERNAL)
         }
@@ -212,7 +213,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         nodes[id]?.let { return it }
         if (nodes.size >= MAX_NODES) return null
         val resolved = sibling.toAbsolutePath().normalize()
-        val node = GraphNode(id, resolved.fileName.toString(), resolved, NodeKind.WORKSPACE_FILE)
+        val node = GraphNode(id, resolved.fileName.toString(), resolved.toFilePath(), NodeKind.WORKSPACE_FILE)
         nodes[id] = node
         queue += resolved to null
         return node

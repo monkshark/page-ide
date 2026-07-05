@@ -76,7 +76,7 @@ private fun TabChip(
 private fun CloseButton(dirty: Boolean, onClick: () -> Unit)
 ```
 
-평소엔 `×`. dirty 인데 *마우스가 칩 위에 없으면* `●` (저장 표시). 호버 시 `×` 로 전환 — 저장 표시와 닫기 버튼이 같은 자리를 공유해 칩 폭이 일정
+평소엔 `×`. dirty 인데 마우스가 칩 위에 없으면 `●` (저장 표시). 호버 시 `×` 로 전환 — 저장 표시와 닫기 버튼이 같은 자리를 공유해 칩 폭이 일정
 
 ---
 
@@ -88,4 +88,4 @@ private fun CloseButton(dirty: Boolean, onClick: () -> Unit)
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

@@ -4,7 +4,7 @@
 
 > `page/editor/src/main/kotlin/page/editor/LineMove.kt` — Line move / duplicate
 
-Core logic for Alt+↑ / Alt+↓ (and future Shift+Alt+↑·↓). Treats the entire selection as *one block* and swaps it with the line above/below.
+Core logic for Alt+↑ / Alt+↓ (and future Shift+Alt+↑·↓). Treats the entire selection as one block and swaps it with the line above/below.
 
 ---
 
@@ -35,8 +35,8 @@ Duplicates the selected block above or below.
 
 | Function | Behavior |
 |---|---|
-| `duplicateUp` | Copy goes *above*, caret/selection stays on the original (now below) |
-| `duplicateDown` | Copy goes *below*, caret/selection moves to the copy (now below) |
+| `duplicateUp` | Copy goes above, caret/selection stays on the original (now below) |
+| `duplicateDown` | Copy goes below, caret/selection moves to the copy (now below) |
 
 Uses `lastEnd - firstStart + 1` (block length including the trailing newline) as the caret offset.
 

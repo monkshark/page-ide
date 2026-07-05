@@ -52,7 +52,7 @@ private fun lineStartOffset(line: Int): Int
 private fun lineEndOffset(line: Int): Int
 ```
 
-`\n` 을 매번 처음부터 카운트. 큰 파일에선 *O(N)* 비용이라 호출 빈도가 높으면 라인 인덱스 캐시가 필요 — 현재는 `EditorPanel` 이 `remember(value.text)` 로 한 번만 만들고 공유하므로 충분
+`\n` 을 매번 처음부터 카운트. 큰 파일에선 O(N) 비용이라 호출 빈도가 높으면 라인 인덱스 캐시가 필요 — 현재는 `EditorPanel` 이 `remember(value.text)` 로 한 번만 만들고 공유하므로 충분
 
 ---
 
@@ -73,4 +73,4 @@ private fun lineEndOffset(line: Int): Int
 
 ---
 
-- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README.md)
+- [목차로 돌아가기](https://monkshark.github.io/page-ide/#README_kr.md)

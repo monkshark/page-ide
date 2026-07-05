@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import page.atlas.graph.GraphNode
 import page.atlas.graph.NodeKind
+import page.shared.path.FilePath
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticPosition
 import page.lsp.DiagnosticSeverity
@@ -13,7 +14,7 @@ import page.lsp.DiagnosticSeverity
 class CycleDiagnosticsTest {
 
     private fun node(name: String): GraphNode =
-        GraphNode(name, name, Path.of(name), NodeKind.WORKSPACE_FILE)
+        GraphNode(name, name, FilePath.of(name), NodeKind.WORKSPACE_FILE)
 
     private fun external(id: String): GraphNode =
         GraphNode(id, id, null, NodeKind.EXTERNAL)
