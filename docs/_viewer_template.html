@@ -47,8 +47,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 .nav-item{display:block;padding:6px 12px;font-size:13px;color:var(--muted);text-decoration:none;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .15s}
 .nav-item:hover{background:var(--accent-dim);color:var(--text)}
 .nav-item.active{background:var(--accent-dim);color:var(--accent);font-weight:500}
-.content{flex:1;overflow-y:auto;padding:40px;scroll-behavior:smooth}
-.content-inner{max-width:860px;margin:0 auto;padding-bottom:40vh}
+.content{flex:1;overflow-y:auto;padding:40px;scroll-behavior:smooth;display:flex;justify-content:center;gap:36px;align-items:flex-start}
+.content-inner{flex:1 1 auto;min-width:0;max-width:860px;padding-bottom:40vh}
+.toc{width:200px;flex:none;position:sticky;top:40px;align-self:flex-start;max-height:calc(100vh - 80px);overflow-y:auto;padding-left:14px;border-left:1px solid var(--border)}
+.toc-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+.toc a{display:block;color:var(--muted);text-decoration:none;font-size:12.5px;line-height:1.45;padding:4px 0 4px 12px;margin-left:-14px;border-left:2px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s,border-color .12s}
+.toc a.lvl3{padding-left:24px;font-size:12px}
+.toc a:hover{color:var(--text)}
+.toc a.active{color:var(--accent);border-left-color:var(--accent)}
+@media(max-width:1100px){.toc{display:none}}
 .welcome{text-align:center;padding:120px 20px;color:var(--muted)}
 .welcome h2{font-size:20px;margin-bottom:8px;color:var(--text)}
 .welcome p{font-size:14px}
@@ -112,6 +119,14 @@ html[data-theme="light"] .theme-toggle .icon-sun{display:block}
 html[data-theme="light"] .theme-toggle .icon-moon{display:none}
 @media(max-width:768px){.sidebar{position:fixed;left:-300px;top:0;bottom:0;z-index:99;transition:left .25s ease}.sidebar.open{left:0}.overlay.show{display:block}.menu-toggle{display:block}.content{padding:20px 14px}.md h1{font-size:22px}.md h2{font-size:18px}.md h3{font-size:15px}.md pre{padding:10px 12px;font-size:12px}.md table{font-size:12px;display:block;overflow-x:auto}.md th,.md td{padding:6px 8px;white-space:nowrap}}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.md h1,.md h2,.md h3,.md h4{position:relative}
+.heading-anchor{position:absolute;left:-18px;top:.12em;font-size:.82em;font-weight:400;color:var(--muted);opacity:0;text-decoration:none;transition:opacity .12s,color .12s}
+.md h1:hover>.heading-anchor,.md h2:hover>.heading-anchor,.md h3:hover>.heading-anchor,.md h4:hover>.heading-anchor{opacity:.5}
+.heading-anchor:hover{opacity:1 !important;color:var(--accent)}
+.src-link{float:right;font-size:12px;color:var(--muted);text-decoration:none}
+.src-link:hover{color:var(--accent);text-decoration:underline}
+.nav-item[data-hit="1"]::after{content:"\00b6";margin-left:6px;color:var(--accent);opacity:.6;font-size:11px}
+@media(max-width:768px){.heading-anchor{display:none}}
 </style>
 <script>
 (function(){
@@ -229,6 +244,9 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
     });
   });
 
+  var CONTENT_INDEX = {};
+  Object.keys(MD_DATA).forEach(function(p){ CONTENT_INDEX[p] = (MD_DATA[p] || '').toLowerCase(); });
+
   function pathForItem(item, lang){
     if(lang === 'en' && item.pathEn) return item.pathEn;
     return item.pathKo;
@@ -294,7 +312,6 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
     document.getElementById('langKo').classList.toggle('active', lang === 'ko');
     document.getElementById('langEn').classList.toggle('active', lang === 'en');
     document.getElementById('search').placeholder = (lang === 'en') ? 'Search... (Ctrl+K)' : '검색... (Ctrl+K)';
-    document.getElementById('sidebarTitle').textContent = (lang === 'en') ? 'PAGE IDE Docs' : 'PAGE IDE Docs';
     renderNav(lang);
 
     if(!opts.skipContentSwap){
@@ -325,9 +342,17 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
 
   function applySearchFilter(){
     var q = (document.getElementById('search').value || '').toLowerCase().trim();
+    var lang = getLang();
     allItems.forEach(function(i){
       var hay = (i.item.nameKo + ' ' + (i.item.nameEn||'') + ' ' + i.item.pathKo + ' ' + (i.item.pathEn||'')).toLowerCase();
-      i.el.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+      var nameHit = !q || hay.indexOf(q) !== -1;
+      var bodyHit = false;
+      if(q && !nameHit){
+        var body = CONTENT_INDEX[pathForItem(i.item, lang)];
+        if(body && body.indexOf(q) !== -1) bodyHit = true;
+      }
+      i.el.style.display = (nameHit || bodyHit) ? '' : 'none';
+      if(bodyHit) i.el.dataset.hit = '1'; else i.el.removeAttribute('data-hit');
     });
     navList.querySelectorAll('.nav-group').forEach(function(g){
       var vis = Array.from(g.querySelectorAll('.nav-item')).some(function(i){ return i.style.display !== 'none'; });
@@ -336,6 +361,16 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
     });
   }
   document.getElementById('search').addEventListener('input', applySearchFilter);
+  document.getElementById('search').addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    for(var i = 0; i < allItems.length; i++){
+      if(allItems[i].el.style.display !== 'none'){
+        loadFile(allItems[i].el.dataset.path);
+        this.blur();
+        break;
+      }
+    }
+  });
 
   var history = [];
   var historyIndex = -1;
@@ -475,6 +510,79 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
     el.appendChild(cap);
   }
 
+  function copyText(text, onDone){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(onDone || function(){}).catch(function(){});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); if(onDone) onDone(); } catch(e){}
+      document.body.removeChild(ta);
+    }
+  }
+
+  var tocHeads = [], tocLinks = [];
+  function buildTocFor(inner, p){
+    var toc = document.getElementById('toc');
+    if(!toc){
+      toc = document.createElement('nav'); toc.id = 'toc'; toc.className = 'toc';
+      document.getElementById('content').appendChild(toc);
+    }
+    toc.innerHTML = '';
+    tocHeads = []; tocLinks = [];
+    var heads = Array.prototype.slice.call(inner.querySelectorAll('.md h2, .md h3'));
+    if(heads.length < 2){ toc.style.display = 'none'; return; }
+    toc.style.display = '';
+    var label = document.createElement('div');
+    label.className = 'toc-label';
+    label.textContent = getLang() === 'en' ? 'On this page' : '이 페이지';
+    toc.appendChild(label);
+    heads.forEach(function(h){
+      if(!h.id) h.id = slugify(h.textContent);
+      var a = document.createElement('a');
+      a.textContent = h.textContent;
+      a.className = h.tagName === 'H3' ? 'lvl3' : 'lvl2';
+      a.href = '#' + p + '#' + h.id;
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        h.scrollIntoView({behavior:'smooth', block:'start'});
+        window.history.pushState({path:p, scrollTo:h.id}, '', '#' + p + '#' + h.id);
+      });
+      toc.appendChild(a);
+      tocHeads.push(h); tocLinks.push(a);
+    });
+    syncTocActive();
+  }
+  function syncTocActive(){
+    if(!tocHeads.length) return;
+    var scroller = document.getElementById('content');
+    var stop = scroller.getBoundingClientRect().top;
+    var active = 0;
+    for(var i = 0; i < tocHeads.length; i++){
+      if(tocHeads[i].getBoundingClientRect().top - stop <= 100) active = i; else break;
+    }
+    tocLinks.forEach(function(a, idx){ a.classList.toggle('active', idx === active); });
+  }
+  document.getElementById('content').addEventListener('scroll', syncTocActive, {passive:true});
+
+  function addHeadingAnchors(inner, p){
+    inner.querySelectorAll('.md h1, .md h2, .md h3, .md h4').forEach(function(h){
+      if(!h.id || h.querySelector('.heading-anchor')) return;
+      var a = document.createElement('a');
+      a.className = 'heading-anchor';
+      a.href = '#' + p + '#' + h.id;
+      a.textContent = '#';
+      a.title = getLang() === 'en' ? 'Copy link to this section' : '이 섹션 링크 복사';
+      a.addEventListener('click', function(e){
+        e.preventDefault();
+        copyText(location.origin + location.pathname + '#' + p + '#' + h.id);
+        window.history.pushState({path:p, scrollTo:h.id}, '', '#' + p + '#' + h.id);
+        h.scrollIntoView({behavior:'smooth', block:'start'});
+      });
+      h.appendChild(a);
+    });
+  }
+
   function loadFile(p, opts){
     opts = opts || {};
     var text = MD_DATA[p];
@@ -512,13 +620,18 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
       + '</span>'
       + '<a href="#" onclick="window._loadFile(\'' + rootPath + '\');return false">docs</a> / '
       + (dir ? dir + ' / ' : '')
-      + '<strong>' + fileName + '</strong></div>';
+      + '<strong>' + fileName + '</strong>'
+      + '<a class="src-link" href="https://github.com/monkshark/page-ide/blob/main/docs/' + p + '" target="_blank" rel="noopener">' + (lang === 'en' ? 'Edit on GitHub' : 'GitHub에서 편집') + '</a>'
+      + '</div>';
 
     inner.innerHTML = navHtml + '<div class="md">' + html + '</div>';
 
     inner.querySelectorAll('.md h1, .md h2, .md h3, .md h4, .md h5, .md h6').forEach(function(h){
       if(!h.id) h.id = slugify(h.textContent);
     });
+
+    buildTocFor(inner, p);
+    addHeadingAnchors(inner, p);
 
     inner.querySelectorAll('.md a[href]').forEach(function(a){
       var href = a.getAttribute('href');
@@ -770,7 +883,6 @@ var ATLAS_DATA = /*__ATLAS_DATA__*/null;
       document.getElementById('langKo').classList.toggle('active', info.lang === 'ko');
       document.getElementById('langEn').classList.toggle('active', info.lang === 'en');
       document.getElementById('search').placeholder = (info.lang === 'en') ? 'Search... (Ctrl+K)' : '검색... (Ctrl+K)';
-      document.getElementById('sidebarTitle').textContent = 'PAGE IDE Docs';
       renderNav(info.lang);
     }
     loadFile(parsedInit.path, parsedInit.scrollTo ? {scrollTo: parsedInit.scrollTo} : undefined);
