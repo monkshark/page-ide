@@ -11,7 +11,7 @@
 
 > Multi-language desktop IDE — **P**air · **A**tlas · **G**lass · **E**cho
 
-**PAGE is a multi-language desktop IDE built from scratch with Kotlin and Compose Multiplatform Desktop.** It currently provides LSP-based completion and diagnostics for 24 languages, single-file execution for 13 languages, and in-IDE auto-installation of language servers and toolchains. Functionality is split across 12 modules with a strictly one-way dependency direction. The goal is to integrate four dimensions into one workspace: code (text), code graph (space), work timeline (time), and an AI companion (conversation).
+**PAGE is a multi-language desktop IDE built from scratch with Kotlin and Compose Multiplatform Desktop.** It currently provides LSP-based completion and diagnostics for 24 languages, single-file execution for 13 languages, and in-IDE auto-installation of language servers and toolchains. Functionality is split across 16 modules with a strictly one-way dependency direction. The goal is to integrate four dimensions into one workspace: code (text), code graph (space), work timeline (time), and an AI companion (conversation).
 
 [Devlog (Korean)](https://monkshark.github.io/categories/page-개발기/)
 
@@ -38,7 +38,7 @@ Auto-install targets: JDK, Node, Python, Go, Rust, .NET SDK, Dart/Flutter, Swift
 
 ## Core values
 
-The four design pillars PAGE aims for. Pair, Atlas, and Echo are at the design / early-implementation stage — the descriptions below are target scenarios, not finished features.
+The four design pillars PAGE aims for. Atlas is functional (import / call / module graphs) and Glass is partially implemented. Pair and Echo are still at the design / early-implementation stage; the table below describes each pillar's target shape alongside what exists today.
 
 | Pillar | Meaning |
 |---|---|
@@ -56,11 +56,13 @@ Functionality is split into modules, and dependencies always flow in one directi
 ```mermaid
 graph TD
     app[page:app<br/>window / entry point / integration]
+    docs[docs-viewer<br/>docs site wasm]
 
     subgraph Feature module layer
         ui[page:ui<br/>Glass design system]
         editor[page:editor<br/>text buffer / editing]
         lsp[page:lsp<br/>language server backends]
+        language[page:language<br/>language definitions]
         runtime[page:runtime<br/>toolchain install / run]
         workspace[page:workspace<br/>workspace state]
         atlas[page:atlas<br/>code graph]
@@ -70,31 +72,45 @@ graph TD
         perf[page:perf<br/>performance metrics]
     end
 
+    subgraph Multiplatform layer
+        atlasview[page:atlas-view<br/>Atlas overview render · jvm+wasm]
+        shared[shared-core<br/>parser / graph / path · jvm+wasm]
+    end
+
     core[page:core<br/>identifiers / shared domain]
 
-    app --> ui & editor & lsp & runtime & workspace & atlas & echo & pair & git
-    ui & editor & lsp & runtime & workspace & atlas & echo & pair & git & perf --> core
+    app --> ui & editor & lsp & language & runtime & workspace & atlas & echo & pair & git
+    ui & editor & lsp & language & runtime & workspace & atlas & echo & pair & git & perf --> core
+    atlas --> atlasview
+    atlasview --> shared
+    docs --> atlasview & shared
 ```
 
 ### Directory layout
 
 ```
-page/
-├── core/        Identifiers / shared domain models (pure Kotlin, no external deps)
-├── perf/        Performance metrics
-├── ui/          Glass design system (Material 3 + design tokens)
-├── editor/      Text buffer control and editing logic
-├── lsp/         Language server backends (LSP4J-based JSON-RPC, multi-instance routing)
-├── runtime/     Per-language toolchain install and single-file compile/run
-├── workspace/   Workspace state management and persistence
-├── atlas/       Code graph (design stage)
-├── echo/        Work timeline (design stage)
-├── pair/        AI companion (design stage)
-├── git/         Version control integration (design stage)
-└── app/         Window / entry point / full module integration (Main)
+.
+├── page/
+│   ├── core/        Identifiers / shared domain models (pure Kotlin, no external deps)
+│   ├── perf/        Performance metrics
+│   ├── ui/          Glass design system (Material 3 + design tokens)
+│   ├── editor/      Text buffer control and editing logic
+│   ├── lsp/         Language server backends (LSP4J-based JSON-RPC, multi-instance routing)
+│   ├── language/    Language definition metadata (routing / profiles)
+│   ├── runtime/     Per-language toolchain install and single-file compile/run
+│   ├── workspace/   Workspace state management and persistence
+│   ├── atlas/       Code graph (import / call / module views)
+│   ├── atlas-view/  Atlas overview render — multiplatform (jvm + wasmJs)
+│   ├── echo/        Work timeline (scaffolding)
+│   ├── pair/        AI companion (scaffolding)
+│   ├── git/         Version control integration
+│   └── app/         Window / entry point / full module integration (Main)
+├── shared-core/    Shared parser / graph / path code — multiplatform (jvm + wasmJs)
+└── docs-viewer/    Docs site (Compose wasm)
 ```
 
 - One-way dependency: `app → feature modules → core`
+- Multiplatform: `docs-viewer → atlas-view → shared-core` (shared jvm + wasmJs, no `java.*`)
 - `core` has no external library dependencies (pure Kotlin)
 
 See [architecture_en.md](https://monkshark.github.io/page-ide/#guides/architecture_en.md) for the design rationale.
