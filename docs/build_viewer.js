@@ -33,8 +33,8 @@ function prettyName(file) {
   return file.replace(/\.md$/, '').replace(/_/g, ' ');
 }
 
-const MODULE_TITLES = { ui: 'UI', lsp: 'LSP' };
-const MODULE_ORDER = ['app', 'core', 'editor', 'ui', 'lsp', 'language', 'runtime', 'workspace', 'atlas', 'git', 'echo', 'pair', 'perf'];
+const MODULE_TITLES = { ui: 'UI', lsp: 'LSP', 'shared-core': 'Shared Core', 'atlas-view': 'Atlas View', 'docs-viewer': 'Docs Viewer' };
+const MODULE_ORDER = ['app', 'core', 'shared-core', 'editor', 'ui', 'lsp', 'language', 'runtime', 'workspace', 'atlas', 'atlas-view', 'git', 'echo', 'pair', 'perf', 'docs-viewer'];
 
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
