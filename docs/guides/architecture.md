@@ -4,7 +4,7 @@
 
 > 모듈 경계, 의존 방향, 기술 스택 결정.
 
-이 문서는 코드가 채워지면서 살이 붙는다. 현재는 결정된 골격만 정리한다.
+PAGE 는 16 개 Gradle 모듈로 나뉜다. 경계는 의존이 한 방향으로만 흐르도록 잡았고, 대부분 모듈은 이미 구현돼 있다. `echo` · `pair` 두 모듈만 아직 스캐폴딩 단계다.
 
 ---
 
@@ -13,35 +13,43 @@
 | 영역 | 선택 | 비고 |
 |---|---|---|
 | 언어 | Kotlin (JVM 21+) | 자바 생태계 라이브러리 그대로 활용 |
-| UI | Compose Multiplatform Desktop | JetBrains Fleet 동일 스택, Skia 기반 |
-| 빌드 | Gradle (Kotlin DSL) | 멀티모듈 |
-| LSP | LSP4J (Eclipse) | 다언어 지원 표준 |
-| 신택스 | Tree-sitter | JNI 바인딩 |
-| Git | JGit | 자체 구현 회피 |
-| 로컬 저장 | SQLite (xerial JDBC) | Echo 타임라인 |
-| AI HTTP | OkHttp | `LLMProvider` 인터페이스 + 어댑터 4종 |
-| PTY | JediTerm 또는 pty4j | 프로토타입 후 결정 |
+| UI | Compose Multiplatform | 데스크톱은 Skia, docs 뷰어는 wasmJs 타깃 |
+| 빌드 | Gradle (Kotlin DSL) | 멀티모듈 16 개 |
+| LSP | LSP4J (Eclipse) | `lsp` 모듈의 전송·초기화 층 |
+| 신택스 | Tree-sitter | `atlas` 의 import·심볼 추출 (JNI). 에디터 하이라이팅은 자체 렉서 |
+| Git | `git status --porcelain` 서브프로세스 | 시스템 git 호출, JGit 미사용 |
+| PTY | pty4j | `runtime` 내장 터미널 |
+| 로컬 저장 | SQLite (xerial JDBC) | Echo 타임라인 (예정) |
+| AI HTTP | OkHttp | `LLMProvider` 인터페이스 + 어댑터 (Pair, 예정) |
 
 ---
 
-## 모듈 구조 (계획)
+## 모듈 구조
+
+`shared-core` 와 `docs-viewer` 는 멀티플랫폼(jvm+wasmJs) 모듈이라 레포 루트에 있고, 나머지 데스크톱 모듈은 `page/` 아래에 있다.
 
 ```
-page/
-├── core         (공통 유틸, 도메인 타입, 이벤트 버스)
-├── editor       (텍스트 버퍼, 신택스 하이라이팅, 키 입력)
-├── language     (LSP 클라이언트, 언어 정의 JSON 로더)
-├── workspace    (파일 트리, 다중 탭, 분할 화면, 프로젝트 모델)
-├── ui           (Compose 컴포넌트, Glass 디자인 토큰)
-├── atlas        (코드 그래프 분석 + 렌더)
-├── echo         (키스트로크 레코더 + 타임라인 UI)
-├── pair         (LLMProvider, 어댑터, 채팅/관찰자/에이전트/튜터)
-├── runtime      (PTY, 빌드/실행, 출력 패널)
-├── git          (JGit 래퍼, diff/스테이지/커밋 UI)
-└── app          (조립층, 메인 진입점)
+page-ide/
+├── shared-core   (Compose MPP: 마크다운·JSON 파서, 그래프 모델, FilePath)
+├── docs-viewer   (Compose wasmJs: 공개 docs 뷰어 + 위젯 섬)
+└── page/
+    ├── core         (앱 정체성, 공통 도메인 타입)
+    ├── perf         (시작 성능 계측, UI 멈춤 감시)
+    ├── editor       (텍스트 버퍼, 편집 이력, 신택스 렉서, 퍼지/빠른 열기)
+    ├── ui           (Compose 컴포넌트, Glass 디자인 토큰, 신택스 팔레트)
+    ├── lsp          (LSP4J 클라이언트: 전송·초기화·백엔드 등록)
+    ├── language     (언어 지능 오케스트레이션: 라우팅·문서 동기화·완성·진단)
+    ├── runtime      (툴체인·언어 서버 설치, pty4j 실행, 내장 터미널)
+    ├── workspace    (파일 트리, 파일 조작, 이름 변경 리팩터, 프로젝트 검색)
+    ├── atlas-view   (Compose MPP: overview 그래프 모델 + 렌더)
+    ├── atlas        (tree-sitter 코드 그래프 분석, IDE 패널, 스냅샷 export)
+    ├── git          (`git status --porcelain` 기반 워크스페이스 VCS 상태)
+    ├── echo         (키스트로크 레코더 + 타임라인 — 스캐폴딩)
+    ├── pair         (LLMProvider 어댑터: 채팅·관찰자·에이전트·튜터 — 스캐폴딩)
+    └── app          (조립층, 메인 진입점)
 ```
 
-> 각 모듈의 상세 책임은 코드가 들어오면서 별도 문서로 분리한다.
+각 모듈의 상세 책임은 [목차](https://monkshark.github.io/page-ide/#README_kr.md)의 모듈별 문서로 이어진다.
 
 ---
 
@@ -55,16 +63,17 @@ atlas
 
 의존은 위에서 아래로만 흐르고 순환이 없다.
 
-- `core` · `shared-core` 는 아무것도 의존하지 않는 바닥층이다.
+- `core` (JVM 공통) 와 `shared-core` (Compose MPP) 는 아무것도 의존하지 않는 바닥층이다.
 - `editor` 는 `ui` · `language` · `workspace` 가 함께 딛는 텍스트 기반이라, 기능 모듈이 그 위에 선다.
 - 기능 모듈은 필요한 바닥·기반 모듈(`core` · `editor` · `lsp` · `runtime` · `ui`)만 아래로 의존하고, 서로 옆으로는 의존하지 않는다.
+- `atlas-view` 는 `atlas` 에서 overview 렌더만 멀티플랫폼으로 뽑아낸 층이라, 데스크톱 `atlas` 와 wasm `docs-viewer` 가 같은 렌더 코드를 공유한다.
 - 조립과 와이어링은 `app` 이 전담한다.
 
 ---
 
 ## AI 프로바이더 전략
 
-`LLMProvider` 인터페이스를 두고 어댑터 네 가지로 갈아끼운다.
+`pair` 모듈은 아직 스캐폴딩이지만, 층 설계는 정해져 있다. `LLMProvider` 인터페이스를 두고 어댑터 네 가지로 갈아끼운다.
 
 ```kotlin
 interface LLMProvider {
