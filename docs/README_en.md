@@ -13,11 +13,15 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 ## Table of contents
 
 ### Guides
+- [Getting started](https://monkshark.github.io/page-ide/#guides/getting_started_en.md) — The shortest path from a clone to a running desktop IDE
 - [PAGE overview](https://monkshark.github.io/page-ide/#guides/overview_en.md) — The four core values (Pair · Atlas · Glass · Echo) and what we will not build
 - [Architecture](https://monkshark.github.io/page-ide/#guides/architecture_en.md) — Module structure, dependency direction, and stack choices
 
 ### core module
 - [PageIdentity](https://monkshark.github.io/page-ide/#modules/core/page_identity_en.md) — Single home for app name / acronym / tagline
+
+### shared-core module
+- [Shared Core](https://monkshark.github.io/page-ide/#modules/shared-core/main_en.md) — Multiplatform foundation shared by the desktop IDE and wasm viewer (markdown / JSON parsers, graph model, FilePath)
 
 ### editor module
 - [TextBuffer](https://monkshark.github.io/page-ide/#modules/editor/text_buffer_en.md) — `StringBuilder` wrapper + line/column coordinates
@@ -66,6 +70,9 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 ### atlas module
 - [Atlas](https://monkshark.github.io/page-ide/#modules/atlas/main_en.md) — code graph (import · call · module dependencies)
 
+### atlas-view module
+- [Atlas View](https://monkshark.github.io/page-ide/#modules/atlas-view/main_en.md) — overview graph model / render (multiplatform, shared by desktop and the docs viewer)
+
 ### lsp module
 - [LSP](https://monkshark.github.io/page-ide/#modules/lsp/main_en.md) — Language server client layer (transport · init · backend registry)
 
@@ -84,10 +91,10 @@ Build the viewer with `node build_viewer.js` to produce `index.html`, which open
 ### perf module
 - [Perf](https://monkshark.github.io/page-ide/#modules/perf/main_en.md) — Startup instrumentation and a UI-freeze watchdog
 
-> `pair`, `echo` modules will be added in their respective milestones.
+### docs-viewer module
+- [Docs Viewer](https://monkshark.github.io/page-ide/#modules/docs-viewer/main_en.md) — The Compose wasmJs app that renders this docs site, plus its widget islands
 
-### Features
-> Pair / Atlas / Glass / Echo feature docs will be added at the close of each milestone.
+> `pair`, `echo` modules will be added in their respective milestones.
 
 ---
 
