@@ -450,4 +450,50 @@ class ImportResolverTest {
             ImportResolver.resolve(RawImport("app.Config", false), active, WorkspaceIndex(root), declIndex(root))
         assertNull(resolved)
     }
+
+    @Test
+    fun `csharp namespace using resolves to every file in the namespace`(@TempDir root: Path) {
+        val calc = root.resolve("src/App/Services/Calculator.cs")
+        Files.createDirectories(calc.parent)
+        Files.writeString(calc, "namespace App.Services;\n\npublic class Calculator { }")
+        val order = root.resolve("src/App/Services/Order.cs")
+        Files.writeString(order, "namespace App.Services;\n\npublic class Order { }")
+        val other = root.resolve("src/App/Models/User.cs")
+        Files.createDirectories(other.parent)
+        Files.writeString(other, "namespace App.Models;\n\npublic class User { }")
+        val active = root.resolve("src/App/Program.cs")
+        Files.writeString(active, "namespace App;")
+        val resolved = ImportResolver.resolveAll(
+            RawImport("App.Services", false, wildcard = true), active, WorkspaceIndex(root), declIndex(root),
+        )
+        assertEquals(
+            setOf(calc.toAbsolutePath().normalize(), order.toAbsolutePath().normalize()),
+            resolved.toSet(),
+        )
+    }
+
+    @Test
+    fun `csharp static using resolves to the declaring type file`(@TempDir root: Path) {
+        val model = root.resolve("src/App/Services/Calculator.cs")
+        Files.createDirectories(model.parent)
+        Files.writeString(model, "namespace App.Services;\n\npublic class Calculator { }\npublic class Rounder { }")
+        val active = root.resolve("src/App/Program.cs")
+        Files.writeString(active, "namespace App;")
+        val resolved = ImportResolver.resolve(
+            RawImport("App.Services.Calculator", false, listOf("Calculator")),
+            active,
+            WorkspaceIndex(root),
+            declIndex(root),
+        )
+        assertEquals(model, resolved)
+    }
+
+    @Test
+    fun `csharp framework using stays external`(@TempDir root: Path) {
+        val active = root.resolve("Program.cs")
+        Files.writeString(active, "namespace App;")
+        assertNull(
+            ImportResolver.resolve(RawImport("System", false, wildcard = true), active, WorkspaceIndex(root)),
+        )
+    }
 }

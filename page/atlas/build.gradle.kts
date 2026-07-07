@@ -25,6 +25,7 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-scala:0.24.0")
     implementation("io.github.bonede:tree-sitter-ruby:0.23.1")
     implementation("io.github.bonede:tree-sitter-php:0.24.2")
+    implementation("io.github.bonede:tree-sitter-c-sharp:0.23.1")
     testImplementation(kotlin("test"))
 }
 
