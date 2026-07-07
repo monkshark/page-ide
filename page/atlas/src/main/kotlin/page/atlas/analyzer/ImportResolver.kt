@@ -51,7 +51,7 @@ class WorkspaceIndex(private val root: Path) {
         val SKIP_DIRS = setOf(".git", "build", "out", "node_modules", "target", ".gradle")
         val SOURCE_EXTS = setOf(
             "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
-            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc", "rb", "php", "cs",
+            "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc", "rb", "php", "cs", "swift",
         )
     }
 }
@@ -95,6 +95,7 @@ object ImportResolver {
             "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx" -> resolveC(raw, activeFile, index)
             "rb" -> resolveRuby(raw, activeFile, index)
             "php" -> resolvePhp(raw, activeFile, index, declIndex)
+            "swift" -> resolveSwift(raw, index)
             else -> null
         }
     }
@@ -280,6 +281,15 @@ object ImportResolver {
         val active = normalized(activeFile)
         return index.files().filter { normalized(it).endsWith("/$rel") }
             .maxByOrNull { commonPrefixLength(normalized(it), active) }
+    }
+
+    private fun resolveSwift(raw: RawImport, index: WorkspaceIndex): Path? {
+        val module = raw.target.substringBefore('.').trim()
+        if (module.isEmpty()) return null
+        index.refreshIfStale()
+        return index.files().firstOrNull { file ->
+            file.fileName.toString().endsWith(".swift") && file.parent?.fileName?.toString() == module
+        }
     }
 
     private fun resolvePhp(

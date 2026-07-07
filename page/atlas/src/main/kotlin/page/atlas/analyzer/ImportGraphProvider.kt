@@ -225,6 +225,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         "py", "pyi" -> listOf("py", "pyi")
         "js", "jsx", "mjs", "cjs", "ts", "tsx" -> listOf("ts", "tsx", "js", "jsx")
         "dart" -> listOf("dart")
+        "swift" -> listOf("swift")
         else -> null
     }
 

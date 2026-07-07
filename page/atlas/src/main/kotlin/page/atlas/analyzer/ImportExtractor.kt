@@ -18,6 +18,7 @@ import org.treesitter.TreeSitterPython
 import org.treesitter.TreeSitterRuby
 import org.treesitter.TreeSitterRust
 import org.treesitter.TreeSitterScala
+import org.treesitter.TreeSitterSwift
 import org.treesitter.TreeSitterTypescript
 import page.atlas.graph.EdgeKind
 
@@ -189,6 +190,13 @@ object ImportExtractor {
             "file_scoped_namespace_declaration",
             ::TreeSitterCSharp,
         ),
+        SWIFT(
+            setOf("import_declaration"),
+            setOf("inheritance_specifier"),
+            setOf("class_declaration", "protocol_declaration"),
+            null,
+            ::TreeSitterSwift,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -219,6 +227,7 @@ object ImportExtractor {
         "rb" to Lang.RUBY,
         "php" to Lang.PHP,
         "cs" to Lang.CSHARP,
+        "swift" to Lang.SWIFT,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -228,11 +237,12 @@ object ImportExtractor {
         "inline", "value", "companion", "external", "override", "lateinit", "const", "suspend", "operator",
         "infix", "tailrec", "static", "native", "synchronized", "transient", "volatile", "strictfp",
         "default", "expect", "actual", "case", "lazy", "implicit", "partial", "readonly", "ref", "unsafe",
+        "fileprivate", "indirect",
     )
 
     private val DECL_KEYWORDS = setOf(
         "class", "interface", "object", "fun", "val", "var", "typealias", "record", "enum", "annotation",
-        "trait", "def", "type", "function", "struct",
+        "trait", "def", "type", "function", "struct", "protocol",
     )
 
     fun supports(path: Path): Boolean = extOf(path) in langs
@@ -490,6 +500,7 @@ object ImportExtractor {
         Lang.RUBY -> parseRubyRequire(snippet)
         Lang.PHP -> if (type == "namespace_use_declaration") parsePhpUse(snippet) else parsePhpRequire(snippet)
         Lang.CSHARP -> parseCsharpUsing(snippet)
+        Lang.SWIFT -> parseSwiftImport(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -504,6 +515,7 @@ object ImportExtractor {
         Lang.RUBY -> typeNames(snippet.trim().removePrefix("<")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.PHP -> parsePhpRelation(type, snippet)
         Lang.CSHARP -> typeNames(snippet.trim().removePrefix(":")).map { RawRelation(it, EdgeKind.EXTENDS) }
+        Lang.SWIFT -> typeNames(snippet.trim()).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
@@ -775,6 +787,19 @@ object ImportExtractor {
         }
         if (body.isEmpty()) return emptyList()
         return listOf(RawImport(body, false, emptyList(), wildcard = true))
+    }
+
+    private val SWIFT_IMPORT_KINDS =
+        setOf("struct", "class", "enum", "protocol", "typealias", "func", "var", "let")
+
+    private fun parseSwiftImport(snippet: String): List<RawImport> {
+        val idx = snippet.indexOf("import")
+        if (idx < 0) return emptyList()
+        val tokens = snippet.substring(idx + "import".length).trim()
+            .split(Regex("\\s+")).filter { it.isNotBlank() }
+        val start = if (tokens.firstOrNull() in SWIFT_IMPORT_KINDS) 1 else 0
+        val target = tokens.getOrNull(start)?.trim() ?: return emptyList()
+        return if (target.isEmpty()) emptyList() else listOf(RawImport(target, false))
     }
 
     private fun parsePhpRelation(type: String, snippet: String): List<RawRelation> = when (type) {
