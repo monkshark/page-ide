@@ -6,6 +6,7 @@ import org.treesitter.TSNode
 import org.treesitter.TSParser
 import org.treesitter.TSTreeCursor
 import org.treesitter.TreeSitterC
+import org.treesitter.TreeSitterCSharp
 import org.treesitter.TreeSitterCpp
 import org.treesitter.TreeSitterDart
 import org.treesitter.TreeSitterGo
@@ -175,6 +176,19 @@ object ImportExtractor {
             "namespace_definition",
             ::TreeSitterPhp,
         ),
+        CSHARP(
+            setOf("using_directive"),
+            setOf("base_list"),
+            setOf(
+                "class_declaration",
+                "interface_declaration",
+                "struct_declaration",
+                "enum_declaration",
+                "record_declaration",
+            ),
+            "file_scoped_namespace_declaration",
+            ::TreeSitterCSharp,
+        ),
     }
 
     private val langs: Map<String, Lang> = mapOf(
@@ -204,6 +218,7 @@ object ImportExtractor {
         "sc" to Lang.SCALA,
         "rb" to Lang.RUBY,
         "php" to Lang.PHP,
+        "cs" to Lang.CSHARP,
     )
 
     private val parsers = mutableMapOf<Lang, TSParser>()
@@ -212,12 +227,12 @@ object ImportExtractor {
         "public", "private", "protected", "internal", "abstract", "final", "sealed", "open", "data",
         "inline", "value", "companion", "external", "override", "lateinit", "const", "suspend", "operator",
         "infix", "tailrec", "static", "native", "synchronized", "transient", "volatile", "strictfp",
-        "default", "expect", "actual", "case", "lazy", "implicit",
+        "default", "expect", "actual", "case", "lazy", "implicit", "partial", "readonly", "ref", "unsafe",
     )
 
     private val DECL_KEYWORDS = setOf(
         "class", "interface", "object", "fun", "val", "var", "typealias", "record", "enum", "annotation",
-        "trait", "def", "type", "function",
+        "trait", "def", "type", "function", "struct",
     )
 
     fun supports(path: Path): Boolean = extOf(path) in langs
@@ -349,7 +364,11 @@ object ImportExtractor {
         var i = 0
         while (i < tokens.size && tokens[i] in DECL_MODIFIERS) i++
         if (i >= tokens.size) return null
-        if ((tokens[i] == "enum" || tokens[i] == "annotation") && i + 1 < tokens.size && tokens[i + 1] == "class") i++
+        if (i + 1 < tokens.size && (
+                ((tokens[i] == "enum" || tokens[i] == "annotation") && tokens[i + 1] == "class") ||
+                    (tokens[i] == "record" && (tokens[i + 1] == "class" || tokens[i + 1] == "struct"))
+            )
+        ) i++
         if (tokens[i] !in DECL_KEYWORDS || i + 1 >= tokens.size) return null
         val name = tokens[i + 1]
             .substringBefore('<').substringBefore('(').substringBefore(':').substringAfterLast('.').trim()
@@ -470,6 +489,7 @@ object ImportExtractor {
         Lang.SCALA -> parseScala(snippet)
         Lang.RUBY -> parseRubyRequire(snippet)
         Lang.PHP -> if (type == "namespace_use_declaration") parsePhpUse(snippet) else parsePhpRequire(snippet)
+        Lang.CSHARP -> parseCsharpUsing(snippet)
     }
 
     private fun parseRelation(lang: Lang, type: String, snippet: String): List<RawRelation> = when (lang) {
@@ -483,6 +503,7 @@ object ImportExtractor {
         Lang.SCALA -> parseScalaRelation(snippet)
         Lang.RUBY -> typeNames(snippet.trim().removePrefix("<")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.PHP -> parsePhpRelation(type, snippet)
+        Lang.CSHARP -> typeNames(snippet.trim().removePrefix(":")).map { RawRelation(it, EdgeKind.EXTENDS) }
         Lang.GO, Lang.RUST, Lang.C -> emptyList()
     }
 
@@ -734,6 +755,26 @@ object ImportExtractor {
     private fun parsePhpRequire(snippet: String): List<RawImport> {
         val target = unquote(snippet) ?: return emptyList()
         return if (target.isEmpty()) emptyList() else listOf(RawImport(target, true))
+    }
+
+    private fun parseCsharpUsing(snippet: String): List<RawImport> {
+        var body = snippet.trim().removeSuffix(";").trim()
+        if (body.startsWith("global ")) body = body.removePrefix("global").trim()
+        if (!body.startsWith("using")) return emptyList()
+        body = body.removePrefix("using").trim()
+        if ('=' in body) {
+            val alias = body.substringBefore('=').trim()
+            val target = body.substringAfter('=').trim()
+            if (target.isEmpty()) return emptyList()
+            return listOf(RawImport(target, false, listOfNotNull(localName(alias))))
+        }
+        if (body.startsWith("static ")) {
+            val target = body.removePrefix("static").trim()
+            if (target.isEmpty()) return emptyList()
+            return listOf(RawImport(target, false, dottedSymbols(target, target)))
+        }
+        if (body.isEmpty()) return emptyList()
+        return listOf(RawImport(body, false, emptyList(), wildcard = true))
     }
 
     private fun parsePhpRelation(type: String, snippet: String): List<RawRelation> = when (type) {

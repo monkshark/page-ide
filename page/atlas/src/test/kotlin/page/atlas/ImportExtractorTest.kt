@@ -610,4 +610,60 @@ class ImportExtractorTest {
         val calls = ImportExtractor.analyze(Path.of("app.js"), "function a(){ b() }").calls
         assertEquals(emptyList(), calls)
     }
+
+    @Test
+    fun `csharp using directives distinguish namespace static and alias`() {
+        val text = """
+            global using System.Text;
+            using System;
+            using System.Collections.Generic;
+            using static System.Math;
+            using Json = System.Text.Json;
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("Program.cs"), text)
+        assertEquals(
+            listOf(
+                RawImport("System.Text", false, wildcard = true),
+                RawImport("System", false, wildcard = true),
+                RawImport("System.Collections.Generic", false, wildcard = true),
+                RawImport("System.Math", false, listOf("Math")),
+                RawImport("System.Text.Json", false, listOf("Json")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `csharp file-scoped namespace declarations and base types`() {
+        val text = """
+            using System;
+
+            namespace App.Services;
+
+            public partial class OrderService : BaseService, IOrderService { }
+
+            public interface IOrderService { }
+
+            public readonly struct Money { }
+
+            public enum Status { Open, Closed }
+
+            public record Person(string Name);
+
+            public record class Employee(string Id);
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("OrderService.cs"), text)
+        assertEquals("App.Services", analysis.declarations.packageName)
+        assertEquals(
+            listOf("OrderService", "IOrderService", "Money", "Status", "Person", "Employee"),
+            analysis.declarations.symbols,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("BaseService", EdgeKind.EXTENDS),
+                RawRelation("IOrderService", EdgeKind.EXTENDS),
+            ),
+            analysis.relations,
+        )
+    }
 }

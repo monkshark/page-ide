@@ -33,7 +33,7 @@ flowchart LR
 
 `ImportExtractor` pulls import statements from source using tree-sitter parsers. It detects the language by file extension and supports:
 
-Java · Kotlin · Python · JavaScript · TypeScript · Go · Rust · Dart · C · C++ · Scala · Ruby · PHP
+Java · Kotlin · Python · JavaScript · TypeScript · Go · Rust · Dart · C · C++ · Scala · Ruby · PHP · C#
 
 An extracted import is just a string; it has to be linked to a real file before it becomes an edge. `ImportResolver` handles the common cases, and languages with a package manifest get a dedicated resolver.
 
