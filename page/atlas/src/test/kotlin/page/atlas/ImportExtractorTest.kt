@@ -666,4 +666,58 @@ class ImportExtractorTest {
             analysis.relations,
         )
     }
+
+    @Test
+    fun `swift import directives including submodule and testable`() {
+        val text = """
+            import Foundation
+            import SwiftUI
+            @testable import MyApp
+            import struct Foundation.Date
+            import class UIKit.UIView
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("App.swift"), text)
+        assertEquals(
+            listOf(
+                RawImport("Foundation", false),
+                RawImport("SwiftUI", false),
+                RawImport("MyApp", false),
+                RawImport("Foundation.Date", false),
+                RawImport("UIKit.UIView", false),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `swift declarations and inheritance skip extensions as symbols`() {
+        val text = """
+            import Foundation
+
+            public final class OrderService: BaseService, OrderProtocol { }
+
+            struct Money: Codable { }
+
+            enum Status { case open, closed }
+
+            protocol OrderProtocol { }
+
+            extension OrderService: Equatable { }
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("OrderService.swift"), text)
+        assertEquals("", analysis.declarations.packageName)
+        assertEquals(
+            listOf("OrderService", "Money", "Status", "OrderProtocol"),
+            analysis.declarations.symbols,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("BaseService", EdgeKind.EXTENDS),
+                RawRelation("OrderProtocol", EdgeKind.EXTENDS),
+                RawRelation("Codable", EdgeKind.EXTENDS),
+                RawRelation("Equatable", EdgeKind.EXTENDS),
+            ),
+            analysis.relations,
+        )
+    }
 }

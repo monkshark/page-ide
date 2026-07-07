@@ -496,4 +496,34 @@ class ImportResolverTest {
             ImportResolver.resolve(RawImport("System", false, wildcard = true), active, WorkspaceIndex(root)),
         )
     }
+
+    @Test
+    fun `swift module import resolves to file in the module source directory`(@TempDir root: Path) {
+        val target = root.resolve("Sources/Feature/Widget.swift")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "public struct Widget { }")
+        val active = root.resolve("Sources/App/Main.swift")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "import Feature")
+        assertEquals(target, ImportResolver.resolve(RawImport("Feature", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
+    fun `swift submodule import resolves by leading module segment`(@TempDir root: Path) {
+        val target = root.resolve("Sources/Feature/Widget.swift")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "public struct Widget { }")
+        val active = root.resolve("Sources/App/Main.swift")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "import struct Feature.Widget")
+        assertEquals(target, ImportResolver.resolve(RawImport("Feature.Widget", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
+    fun `swift system framework import stays external`(@TempDir root: Path) {
+        val active = root.resolve("Sources/App/Main.swift")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "import Foundation")
+        assertNull(ImportResolver.resolve(RawImport("Foundation", false), active, WorkspaceIndex(root)))
+    }
 }
