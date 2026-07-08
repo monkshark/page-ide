@@ -52,6 +52,47 @@ class ImportResolverTest {
     }
 
     @Test
+    fun `vue relative import resolves to sibling component`(@TempDir root: Path) {
+        val target = root.resolve("src/components/Child.vue")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "<template><div/></template>")
+        val active = root.resolve("src/components/Parent.vue")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("./Child.vue", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `svelte import resolves to sibling ts module without extension`(@TempDir root: Path) {
+        val target = root.resolve("src/store.ts")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "export const store = 1")
+        val active = root.resolve("src/Page.svelte")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("./store", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `typescript import resolves to vue component`(@TempDir root: Path) {
+        val target = root.resolve("src/Widget.vue")
+        Files.createDirectories(target.parent)
+        Files.writeString(target, "<template><span/></template>")
+        val active = root.resolve("src/app.ts")
+        Files.writeString(active, "")
+        val resolved = ImportResolver.resolve(RawImport("./Widget.vue", true), active, WorkspaceIndex(root))
+        assertEquals(target, resolved)
+    }
+
+    @Test
+    fun `vue framework import stays external`(@TempDir root: Path) {
+        val active = root.resolve("src/Parent.vue")
+        Files.createDirectories(active.parent)
+        Files.writeString(active, "")
+        assertNull(ImportResolver.resolve(RawImport("vue", false), active, WorkspaceIndex(root)))
+    }
+
+    @Test
     fun `python relative import walks up directories`(@TempDir root: Path) {
         val target = root.resolve("pkg/mod.py")
         Files.createDirectories(target.parent)

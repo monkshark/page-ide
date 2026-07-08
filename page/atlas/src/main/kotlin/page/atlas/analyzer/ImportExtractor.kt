@@ -245,7 +245,19 @@ object ImportExtractor {
         "trait", "def", "type", "function", "struct", "protocol",
     )
 
-    fun supports(path: Path): Boolean = extOf(path) in langs
+    private val SFC_EXTS = setOf("vue", "svelte")
+
+    private val SFC_SCRIPT = Regex(
+        "<script\\b([^>]*)>(.*?)</script>",
+        setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+    )
+
+    private val SFC_TS_LANG = Regex(
+        "lang\\s*=\\s*[\"'](ts|typescript|tsx)[\"']",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun supports(path: Path): Boolean = extOf(path) in langs || extOf(path) in SFC_EXTS
 
     fun supportsStaticCalls(path: Path): Boolean {
         val lang = langs[extOf(path)] ?: return false
@@ -255,8 +267,18 @@ object ImportExtractor {
     fun extract(path: Path, text: String): List<RawImport> = analyze(path, text).imports
 
     fun analyze(path: Path, text: String): FileAnalysis {
-        val lang = langs[extOf(path)] ?: return FileAnalysis.EMPTY
         if (text.isBlank()) return FileAnalysis.EMPTY
+        val ext = extOf(path)
+        if (ext in SFC_EXTS) {
+            val (masked, ts) = maskSfcScript(text)
+            if (masked.isBlank()) return FileAnalysis.EMPTY
+            return analyzeWith(if (ts) Lang.TS else Lang.JS, masked)
+        }
+        val lang = langs[ext] ?: return FileAnalysis.EMPTY
+        return analyzeWith(lang, text)
+    }
+
+    private fun analyzeWith(lang: Lang, text: String): FileAnalysis {
         val parser = parserFor(lang)
         val tree = synchronized(parser) { parser.parseString(null, text) } ?: return FileAnalysis.EMPTY
         val byteToChar = buildByteToChar(text)
@@ -269,6 +291,17 @@ object ImportExtractor {
             collectDeclarations(tree.rootNode, lang, text, byteToChar),
             collectCalls(tree.rootNode, lang, text, byteToChar),
         )
+    }
+
+    private fun maskSfcScript(text: String): Pair<String, Boolean> {
+        val chars = CharArray(text.length) { if (text[it] == '\n') '\n' else ' ' }
+        var ts = false
+        for (match in SFC_SCRIPT.findAll(text)) {
+            if (SFC_TS_LANG.containsMatchIn(match.groupValues[1])) ts = true
+            val body = match.groups[2] ?: continue
+            for (i in body.range) chars[i] = text[i]
+        }
+        return String(chars) to ts
     }
 
     private fun collectCalls(root: TSNode, lang: Lang, text: String, byteToChar: IntArray): List<CallSite> {

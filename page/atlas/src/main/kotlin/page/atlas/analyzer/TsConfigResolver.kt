@@ -11,7 +11,7 @@ object TsConfigResolver {
 
     private val cache = HashMap<String, Cached>()
 
-    private val PROBE_SUFFIXES = listOf(".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs")
+    private val PROBE_SUFFIXES = listOf(".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte")
     private val INDEX_FILES = listOf("index.ts", "index.tsx", "index.js", "index.jsx", "index.mjs")
 
     fun resolve(activeFile: Path, rawTarget: String): Path? {
