@@ -171,6 +171,61 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `vue single-file component extracts imports from script setup and ignores template`() {
+        val text = """
+            <template>
+              <Child :count="n" />
+              <p>import fake from 'not-real'</p>
+            </template>
+
+            <script setup lang="ts">
+            import Child from './Child.vue'
+            import { store } from '@/store'
+            import { ref } from 'vue'
+            const n = ref(0)
+            </script>
+
+            <style scoped>
+            p { color: red; }
+            </style>
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("Parent.vue"), text)
+        assertEquals(
+            listOf(
+                RawImport("./Child.vue", true, listOf("Child")),
+                RawImport("@/store", false, listOf("store")),
+                RawImport("vue", false, listOf("ref")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `svelte component extracts imports from module and instance script blocks`() {
+        val text = """
+            <script context="module">
+            import { load } from './loader.js'
+            </script>
+
+            <script>
+            import Widget from './Widget.svelte'
+            import { onMount } from 'svelte'
+            </script>
+
+            <h1>Hello</h1>
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("Page.svelte"), text)
+        assertEquals(
+            listOf(
+                RawImport("./loader.js", true, listOf("load")),
+                RawImport("./Widget.svelte", true, listOf("Widget")),
+                RawImport("svelte", false, listOf("onMount")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
     fun `go grouped imports`() {
         val text = """
             package main

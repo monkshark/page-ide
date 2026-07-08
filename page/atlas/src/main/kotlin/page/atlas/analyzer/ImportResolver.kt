@@ -52,6 +52,7 @@ class WorkspaceIndex(private val root: Path) {
         val SOURCE_EXTS = setOf(
             "java", "kt", "kts", "py", "pyi", "js", "jsx", "mjs", "cjs", "ts", "tsx", "go", "rs", "dart",
             "c", "h", "cpp", "cc", "cxx", "hpp", "hh", "hxx", "scala", "sc", "rb", "php", "cs", "swift",
+            "vue", "svelte",
         )
     }
 }
@@ -82,7 +83,7 @@ object ImportResolver {
         declIndex: DeclarationIndex? = null,
     ): Path? {
         return when (extOf(activeFile)) {
-            "js", "jsx", "mjs", "cjs", "ts", "tsx" -> resolveJsRelative(raw, activeFile)
+            "js", "jsx", "mjs", "cjs", "ts", "tsx", "vue", "svelte" -> resolveJsRelative(raw, activeFile)
             "py", "pyi" ->
                 if (raw.relative) resolvePythonRelative(raw, activeFile)
                 else resolvePythonAbsolute(raw, activeFile, index)
@@ -107,7 +108,7 @@ object ImportResolver {
         val name = base.fileName?.toString() ?: return null
         val probes = buildList {
             add(base)
-            for (suffix in listOf(".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs")) add(base.resolveSibling(name + suffix))
+            for (suffix in listOf(".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte")) add(base.resolveSibling(name + suffix))
             for (idx in listOf("index.ts", "index.tsx", "index.js", "index.jsx", "index.mjs")) add(base.resolve(idx))
         }
         return probes.firstOrNull { Files.isRegularFile(it) }
