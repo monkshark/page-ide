@@ -226,6 +226,75 @@ class ImportExtractorTest {
     }
 
     @Test
+    fun `vue script without setup resolves imports on the javascript path`() {
+        val text = """
+            <template><Base /></template>
+
+            <script>
+            import Base from './Base.vue'
+            import helpers from '@/lib/helpers'
+            export default {
+              components: { Base },
+            }
+            </script>
+        """.trimIndent()
+        val imports = ImportExtractor.extract(Path.of("Widget.vue"), text)
+        assertEquals(
+            listOf(
+                RawImport("./Base.vue", true, listOf("Base")),
+                RawImport("@/lib/helpers", false, listOf("helpers")),
+            ),
+            imports,
+        )
+    }
+
+    @Test
+    fun `single-file component without a script block yields no imports and stays supported`() {
+        val text = """
+            <template>
+              <p>import x from 'y'</p>
+            </template>
+
+            <style>p { color: red; }</style>
+        """.trimIndent()
+        assertTrue(ImportExtractor.supports(Path.of("Static.vue")))
+        assertTrue(ImportExtractor.supports(Path.of("Static.svelte")))
+        assertTrue(ImportExtractor.extract(Path.of("Static.vue"), text).isEmpty())
+    }
+
+    @Test
+    fun `csharp block-scoped namespace extracts imports and relations but not nested declarations`() {
+        val text = """
+            using System;
+            using App.Data;
+
+            namespace App.Services
+            {
+                public class OrderService : BaseService, IOrderService
+                {
+                }
+            }
+        """.trimIndent()
+        val analysis = ImportExtractor.analyze(Path.of("OrderService.cs"), text)
+        assertEquals(
+            listOf(
+                RawImport("System", false, emptyList(), wildcard = true),
+                RawImport("App.Data", false, emptyList(), wildcard = true),
+            ),
+            analysis.imports,
+        )
+        assertEquals(
+            listOf(
+                RawRelation("BaseService", EdgeKind.EXTENDS),
+                RawRelation("IOrderService", EdgeKind.EXTENDS),
+            ),
+            analysis.relations,
+        )
+        assertEquals("", analysis.declarations.packageName)
+        assertTrue(analysis.declarations.symbols.isEmpty())
+    }
+
+    @Test
     fun `go grouped imports`() {
         val text = """
             package main
