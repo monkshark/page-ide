@@ -137,4 +137,18 @@ class TsConfigResolverTest {
             ImportResolver.resolve(RawImport("@/services/auth", false), active, WorkspaceIndex(root)),
         )
     }
+
+    @Test
+    fun `alias resolves to vue single-file component from a vue active file`(@TempDir root: Path) {
+        write(
+            root.resolve("tsconfig.json"),
+            """{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["src/*"] } } }""",
+        )
+        val target = write(root.resolve("src/components/Widget.vue"), "<template><div/></template>")
+        val active = write(root.resolve("src/App.vue"), "")
+        assertEquals(
+            target,
+            ImportResolver.resolve(RawImport("@/components/Widget", false), active, WorkspaceIndex(root)),
+        )
+    }
 }
