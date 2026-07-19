@@ -13,6 +13,7 @@ import page.lsp.LanguageBackend
 import page.lsp.LanguageRegistry
 import page.lsp.LspBackends
 import page.lsp.RenameWorkspaceEdit
+import page.runtime.PageRuntimeEnv
 import java.nio.file.Path
 
 class LspRouter(
@@ -38,6 +39,23 @@ class LspRouter(
                 it.ensureStarted(backend)
             }
         }
+    }
+
+    @Synchronized
+    fun prewarm(backendId: String): Boolean {
+        if (controllers.containsKey(backendId)) return true
+        val backend = LspBackends.byId(backendId) ?: return false
+        val env = HashMap(System.getenv())
+        PageRuntimeEnv.applyTo(env)
+        if (backend.resolveExecutable(env) !is LanguageBackend.Resolution.Found) return false
+        controllers.getOrPut(backend.id) {
+            val scope = CoroutineScope(SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.Default)
+            LspController(workspaceRoot, scope).also {
+                it.applyEditHandler = applyEditHandler
+                it.ensureStarted(backend)
+            }
+        }
+        return true
     }
 
     fun backendFor(path: Path): LanguageBackend? = LspBackends.forFile(path, workspaceRoot)
