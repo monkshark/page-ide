@@ -72,6 +72,7 @@ internal fun InstallManagerPanel(
     onInstallRequested: (String) -> Unit,
     onVersionChanged: () -> Unit = {},
     onBeforeDelete: suspend (lspId: String) -> Unit = {},
+    onAfterDelete: suspend (lspId: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val entries = remember { buildManagerEntries() }
@@ -107,6 +108,7 @@ internal fun InstallManagerPanel(
                 onInstallRequested = onInstallRequested,
                 onVersionChanged = onVersionChanged,
                 onBeforeDelete = onBeforeDelete,
+                onAfterDelete = onAfterDelete,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         } else {
@@ -194,6 +196,7 @@ private fun ManagerDetailPane(
     onInstallRequested: (String) -> Unit,
     onVersionChanged: () -> Unit = {},
     onBeforeDelete: suspend (lspId: String) -> Unit = {},
+    onAfterDelete: suspend (lspId: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val installer = remember(entry.id) { LspInstallers.forId(entry.id) }
@@ -222,11 +225,15 @@ private fun ManagerDetailPane(
         val wasActive = activeVersion == version
         scope.launch(Dispatchers.IO) {
             runCatching { onBeforeDelete(entry.id) }
-            if (wasActive) {
-                val pointer = dir.parent?.resolve("CURRENT")
-                if (pointer != null) runCatching { java.nio.file.Files.deleteIfExists(pointer) }
+            try {
+                if (wasActive) {
+                    val pointer = dir.parent?.resolve("CURRENT")
+                    if (pointer != null) runCatching { java.nio.file.Files.deleteIfExists(pointer) }
+                }
+                runCatching { ArchiveExtractors.deleteRecursively(dir) }
+            } finally {
+                runCatching { onAfterDelete(entry.id) }
             }
-            runCatching { ArchiveExtractors.deleteRecursively(dir) }
             withContext(Dispatchers.Main) {
                 refreshVersions()
                 onVersionChanged()
