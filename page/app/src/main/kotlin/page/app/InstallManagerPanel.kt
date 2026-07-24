@@ -221,12 +221,13 @@ private fun ManagerDetailPane(
 
     fun deleteVersion(version: String) {
         val inst = installer ?: return
+        val wasActive = activeVersion == version
         scope.launch(Dispatchers.IO) {
-            runCatching { onBeforeDelete(entry.id) }
+            if (wasActive) runCatching { onBeforeDelete(entry.id) }
             try {
                 runCatching { inst.uninstall(version) }
             } finally {
-                runCatching { onAfterDelete(entry.id) }
+                if (wasActive) runCatching { onAfterDelete(entry.id) }
             }
             withContext(Dispatchers.Main) {
                 refreshVersions()
