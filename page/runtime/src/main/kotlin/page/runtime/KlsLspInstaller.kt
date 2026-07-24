@@ -43,6 +43,10 @@ class KlsLspInstaller : LspInstaller {
         return true
     }
 
+    override fun uninstall(version: String) {
+        KlsInstaller.uninstallLabel(version)
+    }
+
     override fun availableVersions(): List<String> {
         val now = System.currentTimeMillis()
         val cached = LspReleasesCache.load()

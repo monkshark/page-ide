@@ -1505,6 +1505,15 @@ class LspController(
         scope.cancel()
     }
 
+    fun shutdownNow() {
+        pendingChanges.values.forEach { it.cancel() }
+        pendingChanges.clear()
+        clearActivities("shutdown")
+        runCatching { client?.forceClose() }
+        client = null
+        scope.cancel()
+    }
+
     private fun startActivityJanitor() {
         scope.launch {
             while (true) {

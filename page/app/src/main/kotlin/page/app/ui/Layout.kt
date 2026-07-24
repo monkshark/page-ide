@@ -400,8 +400,10 @@ internal fun IdeMainLayout(
                             }
                         },
                         onBeforeDelete = { id ->
-                            lspRouter.shutdownLanguage(id)
-                            kotlinx.coroutines.delay(500)
+                            lspRouter.beginLanguageDelete(id)
+                        },
+                        onAfterDelete = { id ->
+                            lspRouter.endLanguageDelete(id)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )

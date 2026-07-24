@@ -21,6 +21,7 @@ class LspRouter(
     private val parentScope: CoroutineScope,
 ) {
     private val controllers = mutableMapOf<String, LspController>()
+    private val deleting = mutableSetOf<String>()
 
     @Volatile
     var applyEditHandler: ((RenameWorkspaceEdit) -> Boolean)? = null
@@ -32,6 +33,7 @@ class LspRouter(
     @Synchronized
     fun controllerFor(path: Path): LspController? {
         val backend = LspBackends.forFile(path, workspaceRoot) ?: return null
+        if (backend.id in deleting) return controllers[backend.id]
         return controllers.getOrPut(backend.id) {
             val scope = CoroutineScope(SupervisorJob(parentScope.coroutineContext[Job]) + Dispatchers.Default)
             LspController(workspaceRoot, scope).also {
@@ -43,6 +45,7 @@ class LspRouter(
 
     @Synchronized
     fun prewarm(backendId: String): Boolean {
+        if (backendId in deleting) return false
         if (controllers.containsKey(backendId)) return true
         val backend = LspBackends.byId(backendId) ?: return false
         val env = HashMap(System.getenv())
@@ -65,9 +68,16 @@ class LspRouter(
     @Synchronized
     fun controllerById(id: String): LspController? = controllers[id]
 
-    @Synchronized
-    fun shutdownLanguage(id: String) {
-        controllers.remove(id)?.shutdown()
+    fun beginLanguageDelete(id: String) {
+        val ctrl = synchronized(this) {
+            deleting += id
+            controllers.remove(id)
+        }
+        ctrl?.shutdownNow()
+    }
+
+    fun endLanguageDelete(id: String) {
+        synchronized(this) { deleting -= id }
     }
 
     @Synchronized

@@ -233,6 +233,64 @@ class KlsInstallerTest {
     }
 
     @Test
+    fun uninstallLabelRemovesRootAndClearsActive() {
+        val home = newTempDir("kls-home-")
+        val labelA = "1.3.13-page-1 (fork)"
+        val labelB = "1.3.12 (upstream)"
+
+        for (label in listOf(labelA, labelB)) {
+            val target = KlsInstaller.installRootFor(label, home)
+            val zip = newTempFile("kls-zip-", ".zip")
+            writeSampleZip(zip, prefix = "server")
+            KlsInstaller.installFromZip(zip, target)
+            Files.writeString(target.resolve("LABEL"), label)
+        }
+        KlsInstaller.setActiveLabel(labelA, home)
+        val rootA = KlsInstaller.installRootFor(labelA, home)
+
+        KlsInstaller.uninstallLabel(labelA, home)
+
+        assertFalse(Files.exists(rootA), "label dir must be gone")
+        assertEquals(setOf(labelB), KlsInstaller.installedLabels(home).toSet())
+        assertNull(KlsInstaller.activeLabel(home), "CURRENT must be cleared when active label removed")
+    }
+
+    @Test
+    fun uninstallLabelKeepsCurrentWhenRemovingInactive() {
+        val home = newTempDir("kls-home-")
+        val labelA = "1.3.13-page-1 (fork)"
+        val labelB = "1.3.12 (upstream)"
+
+        for (label in listOf(labelA, labelB)) {
+            val target = KlsInstaller.installRootFor(label, home)
+            val zip = newTempFile("kls-zip-", ".zip")
+            writeSampleZip(zip, prefix = "server")
+            KlsInstaller.installFromZip(zip, target)
+            Files.writeString(target.resolve("LABEL"), label)
+        }
+        KlsInstaller.setActiveLabel(labelA, home)
+
+        KlsInstaller.uninstallLabel(labelB, home)
+
+        assertEquals(setOf(labelA), KlsInstaller.installedLabels(home).toSet())
+        assertEquals(labelA, KlsInstaller.activeLabel(home), "active label must survive inactive removal")
+    }
+
+    @Test
+    fun uninstallLabelFallsBackToLegacyInstall() {
+        val home = newTempDir("kls-home-")
+        val legacyRoot = KlsInstaller.installRoot(home)
+        val zip = newTempFile("kls-zip-", ".zip")
+        writeSampleZip(zip, prefix = "server")
+        KlsInstaller.installFromZip(zip, legacyRoot)
+        assertTrue(KlsInstaller.isInstalled(legacyRoot))
+
+        KlsInstaller.uninstallLabel("1.3.13-page-3 (fork)", home)
+
+        assertFalse(Files.exists(legacyRoot), "legacy install must be removed when no labeled dir matches")
+    }
+
+    @Test
     fun executableAfterInstallResolvesToCorrectBinary() {
         val home = newTempDir("kls-home-")
         val target = KlsInstaller.installRoot(home)

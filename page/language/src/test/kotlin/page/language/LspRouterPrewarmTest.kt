@@ -80,4 +80,30 @@ class LspRouterPrewarmTest {
         assertFalse(router.prewarm("no-such-backend"))
         assertNull(router.controllerById("no-such-backend"))
     }
+
+    @Test
+    fun beginLanguageDeleteRemovesControllerAndBlocksRespawn() {
+        LspBackends.register(FakeBackend("delete-guard", found = true))
+        val router = router()
+
+        assertTrue(router.prewarm("delete-guard"))
+        assertNotNull(router.controllerById("delete-guard"))
+
+        router.beginLanguageDelete("delete-guard")
+        assertNull(router.controllerById("delete-guard"))
+        assertFalse(router.prewarm("delete-guard"))
+        assertNull(router.controllerById("delete-guard"))
+
+        router.endLanguageDelete("delete-guard")
+        assertTrue(router.prewarm("delete-guard"))
+        assertNotNull(router.controllerById("delete-guard"))
+    }
+
+    @Test
+    fun beginLanguageDeleteIsSafeWhenAbsent() {
+        val router = router()
+        router.beginLanguageDelete("never-started")
+        assertNull(router.controllerById("never-started"))
+        router.endLanguageDelete("never-started")
+    }
 }
