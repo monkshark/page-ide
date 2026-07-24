@@ -221,16 +221,10 @@ private fun ManagerDetailPane(
 
     fun deleteVersion(version: String) {
         val inst = installer ?: return
-        val dir = inst.installDir(version)
-        val wasActive = activeVersion == version
         scope.launch(Dispatchers.IO) {
             runCatching { onBeforeDelete(entry.id) }
             try {
-                if (wasActive) {
-                    val pointer = dir.parent?.resolve("CURRENT")
-                    if (pointer != null) runCatching { java.nio.file.Files.deleteIfExists(pointer) }
-                }
-                runCatching { ArchiveExtractors.deleteRecursively(dir) }
+                runCatching { inst.uninstall(version) }
             } finally {
                 runCatching { onAfterDelete(entry.id) }
             }

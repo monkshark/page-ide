@@ -33,6 +33,14 @@ interface LspInstaller {
         return lspHome().resolve(languageId).resolve(v)
     }
 
+    fun uninstall(version: String) {
+        val dir = installDir(version)
+        if (activeVersion() == version) {
+            dir.parent?.resolve("CURRENT")?.let { runCatching { java.nio.file.Files.deleteIfExists(it) } }
+        }
+        runCatching { ArchiveExtractors.deleteRecursively(dir) }
+    }
+
     sealed class Progress {
         data class Downloading(val bytesRead: Long, val total: Long) : Progress()
         data class Extracting(val message: String = "Extracting…") : Progress()

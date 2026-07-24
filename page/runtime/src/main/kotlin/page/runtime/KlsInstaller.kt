@@ -81,6 +81,17 @@ object KlsInstaller {
         return null
     }
 
+    fun uninstallLabel(label: String, home: Path = userHome()) {
+        val wasActive = activeLabel(home) == label
+        val root = installRootForLabel(label, home)
+        if (root != null) {
+            deleteRecursively(root)
+        } else if (isInstalled(installRoot(home))) {
+            deleteRecursively(installRoot(home))
+        }
+        if (wasActive) runCatching { Files.deleteIfExists(currentPointer(home)) }
+    }
+
     fun isWindows(osName: String = System.getProperty("os.name") ?: ""): Boolean =
         osName.lowercase().contains("win")
 
