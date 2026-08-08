@@ -763,12 +763,20 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                 if (openingPath != null) {
                     OpeningScreen(name = openingPath.fileName?.toString() ?: openingPath.toString())
                 } else if (showWelcome) {
-                    val recents = remember(showWelcome) { RecentProjects.load() }
+                    var recents by remember(showWelcome) { mutableStateOf(RecentProjects.load()) }
                     WelcomeScreen(
                         onOpenFolder = { frameRef.value?.let { openFolder(it) } },
                         onNewProject = { frameRef.value?.let { newProject(it) } },
                         recents = recents,
                         onOpenRecent = { openFolderPath(it) },
+                        onForgetRecent = { project ->
+                            RecentProjects.remove(project)
+                            recents = RecentProjects.load()
+                        },
+                        onClearRecents = {
+                            RecentProjects.clear()
+                            recents = emptyList()
+                        },
                         onDropPaths = { dropped ->
                             val folder = dropped.firstOrNull { java.nio.file.Files.isDirectory(it) }
                             if (folder != null) {

@@ -63,7 +63,23 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
 import page.editor.OpenTab
 import page.editor.TabBook
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ClearAll
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.KeyboardDoubleArrowLeft
+import androidx.compose.material.icons.outlined.KeyboardDoubleArrowRight
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.TabUnselected
+import androidx.compose.material.icons.outlined.VerticalSplit
 import page.ui.CompactContextMenuRepresentation
+import page.ui.IconContextMenuItem
 import java.nio.file.Path
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -317,34 +333,49 @@ private fun buildTabMenuItems(
     actions: TabContextActions,
 ): List<ContextMenuItem> {
     val items = mutableListOf<ContextMenuItem>()
-    items += ContextMenuItem("Close\tCtrl+W") { actions.onClose(index) }
+    items += IconContextMenuItem("Close\tCtrl+W", Icons.Outlined.Close) { actions.onClose(index) }
     if (bookSize > 1) {
-        items += ContextMenuItem("Close Others") { actions.onCloseOthers(index) }
-        if (index > 0) items += ContextMenuItem("Close Tabs to the Left") {
-            actions.onCloseToLeft(index)
+        items += IconContextMenuItem("Close Others", Icons.Outlined.TabUnselected) {
+            actions.onCloseOthers(index)
         }
-        if (index < bookSize - 1) items += ContextMenuItem("Close Tabs to the Right") {
-            actions.onCloseToRight(index)
+        if (index > 0) items += IconContextMenuItem(
+            "Close Tabs to the Left",
+            Icons.Outlined.KeyboardDoubleArrowLeft,
+        ) { actions.onCloseToLeft(index) }
+        if (index < bookSize - 1) items += IconContextMenuItem(
+            "Close Tabs to the Right",
+            Icons.Outlined.KeyboardDoubleArrowRight,
+        ) { actions.onCloseToRight(index) }
+        items += IconContextMenuItem("Close All", Icons.Outlined.ClearAll) { actions.onCloseAll() }
+        items += IconContextMenuItem("Close Unmodified", Icons.Outlined.DoneAll) {
+            actions.onCloseUnmodified()
         }
-        items += ContextMenuItem("Close All") { actions.onCloseAll() }
-        items += ContextMenuItem("Close Unmodified") { actions.onCloseUnmodified() }
     }
-    items += ContextMenuItem(if (tab.isPinned) "Unpin Tab" else "Pin Tab") {
-        actions.onTogglePin(index)
+    items += IconContextMenuItem(
+        label = if (tab.isPinned) "Unpin Tab" else "Pin Tab",
+        icon = Icons.Outlined.PushPin,
+    ) { actions.onTogglePin(index) }
+    items += IconContextMenuItem("Copy Path", Icons.Outlined.ContentCopy) {
+        actions.onCopyAbsolutePath(index)
     }
-    items += ContextMenuItem("Copy Path") { actions.onCopyAbsolutePath(index) }
-    items += ContextMenuItem("Copy Relative Path") { actions.onCopyRelativePath(index) }
-    items += ContextMenuItem("Show in Explorer") { actions.onShowInExplorer(index) }
+    items += IconContextMenuItem("Copy Relative Path", Icons.Outlined.Link) {
+        actions.onCopyRelativePath(index)
+    }
+    items += IconContextMenuItem("Show in Explorer", Icons.Outlined.FolderOpen) {
+        actions.onShowInExplorer(index)
+    }
     actions.onOpenInAtlas?.let { fn ->
-        items += ContextMenuItem("Open in Atlas") { fn(tab.path) }
+        items += IconContextMenuItem("Open in Atlas", Icons.Outlined.Hub) { fn(tab.path) }
     }
     actions.onMoveToOtherPane?.let { fn ->
-        items += ContextMenuItem("Move to Other Pane") { fn(index) }
+        items += IconContextMenuItem("Move to Other Pane", Icons.Outlined.SwapHoriz) { fn(index) }
     }
     actions.onSplit?.let { fn ->
-        items += ContextMenuItem("Split with This Tab") { fn(index) }
+        items += IconContextMenuItem("Split with This Tab", Icons.Outlined.VerticalSplit) { fn(index) }
     }
-    items += ContextMenuItem("Rename File…") { actions.onRename(index) }
+    items += IconContextMenuItem("Rename File…", Icons.Outlined.DriveFileRenameOutline) {
+        actions.onRename(index)
+    }
     return items
 }
 

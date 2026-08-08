@@ -8,6 +8,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1306,9 +1307,10 @@ private fun OutputLogBox(modifier: Modifier = Modifier, lines: List<String>, fai
                     androidx.compose.foundation.ContextMenuArea(
                         items = {
                             listOf(
-                                androidx.compose.foundation.ContextMenuItem("Copy error") {
-                                    clipboard.setText(AnnotatedString(failedMessage))
-                                },
+                                page.ui.IconContextMenuItem(
+                                    label = "Copy error",
+                                    icon = androidx.compose.material.icons.Icons.Outlined.ContentCopy,
+                                ) { clipboard.setText(AnnotatedString(failedMessage)) },
                             )
                         },
                     ) {

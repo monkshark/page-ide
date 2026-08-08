@@ -63,6 +63,33 @@ class RecentProjectsTest {
     }
 
     @Test
+    fun removeDropsOnlyThatProject() {
+        val a = project("a")
+        val b = project("b")
+        RecentProjects.push(a)
+        RecentProjects.push(b)
+        RecentProjects.remove(b)
+        assertEquals(listOf(a), RecentProjects.load())
+    }
+
+    @Test
+    fun removeIgnoresProjectsNotListed() {
+        val a = project("a")
+        val b = project("b")
+        RecentProjects.push(a)
+        RecentProjects.remove(b)
+        assertEquals(listOf(a), RecentProjects.load())
+    }
+
+    @Test
+    fun clearEmptiesTheList() {
+        RecentProjects.push(project("a"))
+        RecentProjects.push(project("b"))
+        RecentProjects.clear()
+        assertEquals(emptyList(), RecentProjects.load())
+    }
+
+    @Test
     fun missingDirectoriesAreDropped() {
         val a = project("a")
         val b = project("b")

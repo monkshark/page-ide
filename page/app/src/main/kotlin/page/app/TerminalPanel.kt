@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -354,8 +356,14 @@ private fun TerminalTabChip(
         androidx.compose.foundation.ContextMenuArea(
             items = {
                 listOf(
-                    androidx.compose.foundation.ContextMenuItem("Rename") { editing = true },
-                    androidx.compose.foundation.ContextMenuItem("Close") { onClose() },
+                    page.ui.IconContextMenuItem(
+                        label = "Rename",
+                        icon = androidx.compose.material.icons.Icons.Outlined.DriveFileRenameOutline,
+                    ) { editing = true },
+                    page.ui.IconContextMenuItem(
+                        label = "Close",
+                        icon = androidx.compose.material.icons.Icons.Outlined.Close,
+                    ) { onClose() },
                 )
             },
         ) {

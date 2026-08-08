@@ -64,8 +64,12 @@ import page.atlas.toNioPath
 import page.lsp.Diagnostic
 import page.lsp.DiagnosticPosition
 import page.lsp.DiagnosticSeverity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Link
 import page.ui.CompactContextMenuRepresentation
 import page.ui.Glass
+import page.ui.IconContextMenuItem
 import java.net.URI
 import java.nio.file.Path
 
@@ -286,10 +290,10 @@ private fun ProblemFileHeader(
     ContextMenuArea(
         items = {
             listOf(
-                ContextMenuItem("Copy diagnostics for this file") {
+                IconContextMenuItem("Copy diagnostics for this file", Icons.Outlined.ContentCopy) {
                     clipboard.setText(AnnotatedString(formatFileEntries(path, list)))
                 },
-                ContextMenuItem("Copy file path") {
+                IconContextMenuItem("Copy file path", Icons.Outlined.Link) {
                     clipboard.setText(AnnotatedString(path.toString()))
                 },
             )
@@ -364,11 +368,11 @@ private fun ProblemRow(
             val msgLabel = if (n <= 1) "Copy message" else "Copy $n messages"
             val locLabel = if (n <= 1) "Copy location + message" else "Copy $n locations + messages"
             listOf(
-                ContextMenuItem(msgLabel) {
+                IconContextMenuItem(msgLabel, Icons.Outlined.ContentCopy) {
                     val text = snap.joinToString("\n") { it.diagnostic.message }
                     if (text.isNotEmpty()) clipboard.setText(AnnotatedString(text))
                 },
-                ContextMenuItem(locLabel) {
+                IconContextMenuItem(locLabel, Icons.Outlined.Link) {
                     val text = snap.joinToString("\n") { formatEntry(it) }
                     if (text.isNotEmpty()) clipboard.setText(AnnotatedString(text))
                 },

@@ -71,7 +71,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import page.editor.FileTree
 import page.editor.TreeNode
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.NoteAdd
+import androidx.compose.material.icons.outlined.Undo
 import page.ui.CompactContextMenuRepresentation
+import page.ui.IconContextMenuItem
 import java.awt.datatransfer.DataFlavor
 import java.io.File
 import java.nio.file.Files
@@ -464,13 +470,29 @@ fun FileTreePanel(
                         ContextMenuArea(
                             items = {
                                 buildList {
-                                    add(ContextMenuItem("New file…") { onCreateFile(root) })
-                                    add(ContextMenuItem("New folder…") { onCreateFolder(root) })
+                                    add(
+                                        IconContextMenuItem("New file…", Icons.Outlined.NoteAdd) {
+                                            onCreateFile(root)
+                                        },
+                                    )
+                                    add(
+                                        IconContextMenuItem("New folder…", Icons.Outlined.CreateNewFolder) {
+                                            onCreateFolder(root)
+                                        },
+                                    )
                                     if (FileTreeClipboard.hasContentNow()) {
-                                        add(ContextMenuItem("Paste\tCtrl+V") { onPasteInto(root) })
+                                        add(
+                                            IconContextMenuItem("Paste\tCtrl+V", Icons.Outlined.ContentPaste) {
+                                                onPasteInto(root)
+                                            },
+                                        )
                                     }
                                     if (canUndo) {
-                                        add(ContextMenuItem("Undo\tCtrl+Z") { onUndo() })
+                                        add(
+                                            IconContextMenuItem("Undo\tCtrl+Z", Icons.Outlined.Undo) {
+                                                onUndo()
+                                            },
+                                        )
                                     }
                                 }
                             },

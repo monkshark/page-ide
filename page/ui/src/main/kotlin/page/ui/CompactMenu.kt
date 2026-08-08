@@ -163,6 +163,13 @@ fun CompactMenuSlot(
     }
 }
 
+class IconContextMenuItem(
+    label: String,
+    val icon: ImageVector? = null,
+    val danger: Boolean = false,
+    onClick: () -> Unit,
+) : ContextMenuItem(label, onClick)
+
 object CompactContextMenuRepresentation : ContextMenuRepresentation {
     @Composable
     override fun Representation(state: ContextMenuState, items: () -> List<ContextMenuItem>) {
@@ -178,9 +185,12 @@ object CompactContextMenuRepresentation : ContextMenuRepresentation {
                         val parts = item.label.split('\t', limit = 2)
                         val name = parts[0]
                         val shortcut = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+                        val decorated = item as? IconContextMenuItem
                         CompactMenuItem(
                             label = name,
                             trailing = shortcut,
+                            icon = decorated?.icon,
+                            danger = decorated?.danger ?: false,
                             onClick = {
                                 state.status = ContextMenuState.Status.Closed
                                 item.onClick()

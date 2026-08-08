@@ -35,16 +35,30 @@ object RecentProjects {
         runCatching {
             val normalized = project.toAbsolutePath().normalize()
             if (!Files.isDirectory(normalized)) return
-            val merged = (listOf(normalized) + load().filter { it != normalized }).take(MAX)
-            val path = storePath()
-            Files.createDirectories(path.parent)
-            Files.write(
-                path,
-                merged.map { it.toString() },
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE,
-            )
+            write((listOf(normalized) + load().filter { it != normalized }).take(MAX))
         }
+    }
+
+    fun remove(project: Path) {
+        runCatching {
+            val normalized = project.toAbsolutePath().normalize()
+            write(load().filter { it != normalized })
+        }
+    }
+
+    fun clear() {
+        runCatching { write(emptyList()) }
+    }
+
+    private fun write(projects: List<Path>) {
+        val path = storePath()
+        Files.createDirectories(path.parent)
+        Files.write(
+            path,
+            projects.map { it.toString() },
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE,
+        )
     }
 }
