@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-09-09T08:29:38.461Z",
+  "updatedAt": "2026-09-10T08:31:08.502Z",
   "packageName": "pyright",
-  "latest": "1.1.413",
+  "latest": "1.1.414",
   "versions": [
+    {
+      "version": "1.1.414",
+      "publishedAt": "2026-09-09T20:42:01.701Z"
+    },
     {
       "version": "1.1.413",
       "publishedAt": "2026-08-14T23:46:23.606Z"
@@ -198,10 +202,6 @@
     {
       "version": "1.1.365",
       "publishedAt": "2024-05-29T04:15:14.193Z"
-    },
-    {
-      "version": "1.1.364",
-      "publishedAt": "2024-05-22T02:05:48.376Z"
     }
   ]
 }
