@@ -44,6 +44,7 @@ internal fun OverviewInspector(
     onSelectModule: (String) -> Unit,
     onOpenFile: (FilePath) -> Unit,
     modifier: Modifier = Modifier,
+    onExploreFile: ((FilePath) -> Unit)? = null,
 ) {
     val dependsOn = remember(graph, module.id) { moduleDependsOn(graph, module.id) }
     val usedBy = remember(graph, module.id) { moduleUsedBy(graph, module.id) }
@@ -90,15 +91,21 @@ internal fun OverviewInspector(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
             )
             for (file in module.files.take(FILE_LIMIT)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = file.name,
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .weight(1f)
                         .clickable { onOpenFile(file.path) }
                         .padding(horizontal = 12.dp, vertical = 2.dp),
                 )
+                if (onExploreFile != null) Text(
+                    "Explore", fontSize = 9.sp, color = roles.dependency,
+                    modifier = Modifier.clickable { onExploreFile(file.path) }.padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+                }
             }
             if (module.files.size > FILE_LIMIT) {
                 Text(

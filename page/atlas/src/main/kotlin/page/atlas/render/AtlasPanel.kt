@@ -107,6 +107,7 @@ fun AtlasContent(
     activeFileId: String? = null,
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
+    onOpenLocation: (Path, Int) -> Unit = { path, _ -> onNodeClick(path) },
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
@@ -188,8 +189,8 @@ fun AtlasContent(
         searchIndex = (searchIndex + delta).mod(searchMatches.size)
         val node = searchMatches[searchIndex]
         atlasView.selectedId = node.id
-        atlasView.pendingFocusId = node.id
-        mapView.focusCenterId = node.id
+        atlasView.exploration.start(slice, node.id)
+        onViewTabChange(AtlasViewTab.FILE)
     }
     Column(
         modifier = Modifier
@@ -402,6 +403,12 @@ fun AtlasContent(
                     onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
                     onOpenFile = openFile,
                     modifier = Modifier.width(232.dp).fillMaxHeight(),
+                    onExploreFile = { path ->
+                        slice.nodes.firstOrNull { it.path == path }?.let {
+                            atlasView.exploration.start(slice, it.id)
+                            onViewTabChange(AtlasViewTab.FILE)
+                        }
+                    },
                 )
             }
             }
@@ -412,11 +419,12 @@ fun AtlasContent(
                         .firstOrNull { id -> id != null && slice.nodes.any { it.id == id } }
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                FileInsightPanel(
+                DependencyExplorationPanel(
                     slice = slice,
-                    focusId = insightFocus,
-                    onOpen = onNodeClick,
-                    onRefocus = { insightFocusOverride = it },
+                    initialFocusId = insightFocus,
+                    state = atlasView.exploration,
+                    onOpen = { onNodeClick(it); onClose() },
+                    onOpenLocation = { path, line -> onOpenLocation(path, line); onClose() },
                 )
             }
         } else {
@@ -430,7 +438,11 @@ fun AtlasContent(
                     slice = slice,
                     focusId = problemFocus,
                     onOpen = onNodeClick,
-                    onRefocus = { insightFocusOverride = it },
+                    onRefocus = {
+                        insightFocusOverride = it
+                        atlasView.exploration.start(slice, it)
+                        onViewTabChange(AtlasViewTab.FILE)
+                    },
                 )
             }
         }

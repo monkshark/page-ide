@@ -88,13 +88,13 @@ class ReducerTest {
     }
 
     @Test
-    fun `focus in atlas expands on relations tab`() {
+    fun `focus in atlas expands on exploration tab`() {
         val s = AppState().copy(
             layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.PROBLEMS),
         )
         val focused = reduce(s, IdeEvent.Panel.FocusInAtlas)
         assertEquals(ExpandedPanel.ATLAS, focused.layout.expandedPanel)
-        assertEquals(AtlasViewTab.MODULES, focused.layout.atlasViewTab)
+        assertEquals(AtlasViewTab.FILE, focused.layout.atlasViewTab)
     }
 
     @Test

@@ -62,32 +62,40 @@ From the whole-project graph it derives dependency cycles (`projectCycles`), per
 
 ---
 
-## render — two views
+## render — modules, exploration and problems
 
-The entry composable is `AtlasContent`. A chip at the top switches between two tabs.
+The entry composable is `AtlasContent`. Its header switches between three tabs.
 
 | Tab (`AtlasViewTab`) | Content |
 |---|---|
-| `RELATIONS` | `OverviewCanvas` — the node/edge graph. Zoom, pan, select, open file |
-| `ANALYSIS` | `DependencyInsightPanel` — dependencies, dependents, cycles as text insights |
+| `MODULES` — Modules | `OverviewCanvas` — module cards, folder drill-in, breadcrumbs and file navigation |
+| `FILE` — Explore | `DependencyExplorationPanel` — expand file relationships, inspect source evidence, trace paths and potential impact |
+| `PROBLEMS` — Problems | `AtlasProblemsPanel` — project cycles and highly depended-on files; select a file to explore it |
 
-The call graph is drawn by `CallGraphPanel` · `CallsView` as a separate view. `AtlasSearch` · `AtlasSearchBar` find nodes, and `VcsOverlay` overlays change status on the graph. View state lives in `AtlasViewState`.
+The call graph remains a separate side panel (`CallGraphPanel` · `CallsView`). Search matches file names and paths, including paths copied from an issue; Enter starts an exploration of the match. A module inspector's Explore action starts from one of its files without opening the editor.
+
+`DependencyExploration` owns directional expansion, stable grid positions, directed path tracing, cycle groups and reverse-dependency impact. The initial view shows up to three neighbors in each direction; further expansion adds up to four at a time, with an 80-node view cap and hidden counts. Selection never rearranges existing nodes. Pan, wheel zoom and Fit control the camera. `ExplorationViewState`, held by `AtlasViewState`, retains the selection, revealed nodes and camera while Atlas closes and reopens; Back restores earlier exploration states within the running IDE session.
+
+A → B means A uses B. Selecting a line, or Inspect source in the neighbor list, shows the actual relation kind and an analyzed source excerpt when available. Tree-sitter records a zero-based source line and the exact parsed statement in `FileAnalysis`; `ImportGraphProvider` carries that evidence through import resolution and inheritance promotion into `GraphEdge.evidence`. This is static analysis, not an execution trace or a guarantee that every runtime dependency was found. Impact highlights possible dependents, not guaranteed failures. The source excerpt is an analysis snapshot.
 
 ---
+
+The path picker searches destination file names and paths across the analyzed graph, including files not yet visible. A direction with no path produces an explicit empty result. Potential impact labels direct dependents and hop counts, with dashed indirect connections. Cycle cards list group members without inventing an order of calls or dependencies.
 
 ## IDE integration
 
 Atlas opens as an expanded panel (`ExpandedPanel.ATLAS`).
 
-- Editor context menu Show in Atlas — select the current file in the graph
-- Shortcut `FOCUS_IN_ATLAS` → `focusInAtlas(path)` — focus the active file in the Relations tab
+- Editor context menu Show in Atlas — start exploring the selected file
+- Shortcut `FOCUS_IN_ATLAS` → `focusInAtlas(path)` — focus the active file in Explore
+- Open file or Open source at line closes Atlas, opens the editor at the requested location, and retains the file relationship side panel
 - Tab switching and panel sizing flow through MVI events (`AtlasViewTabChanged` · `ResizeAtlas` · `FocusInAtlas`)
 
 ---
 
 ## export — snapshot
 
-`SnapshotExporter` writes the graph to a JSON snapshot. The Atlas widget in the docs viewer reads this snapshot to show the graph without a live IDE.
+`SnapshotExporter` writes the graph to a JSON snapshot. The Atlas widget in the docs viewer reads this snapshot to show the graph without a live IDE. Source excerpts are not exported; older snapshots and call graphs can have no relationship evidence.
 
 ---
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,53 +32,10 @@ import page.atlas.graph.CycleGroup
 import page.atlas.graph.GraphInsights
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.HubFile
-import page.atlas.graph.ImpactedFile
 import page.atlas.toNioPath
 import page.ui.EditorFontFamily
 
 private const val HUB_MIN_DEPENDENTS = 8
-
-@Composable
-fun FileInsightPanel(
-    slice: GraphSlice,
-    focusId: String?,
-    onOpen: (FilePath) -> Unit,
-    onRefocus: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val impact = remember(slice, focusId) {
-        focusId?.let { GraphInsights.impact(slice, it) } ?: emptyList()
-    }
-    val focusLabel = remember(slice, focusId) {
-        focusId?.let { id -> slice.nodes.firstOrNull { it.id == id }?.label }
-    }
-    val ranked = remember(impact) {
-        impact.sortedWith(compareBy({ it.depth }, { it.node.label.lowercase() }))
-    }
-    val neighbourhood = remember(slice, focusId) {
-        focusId?.let { GraphInsights.neighborhood(slice, it, limit = 12) }
-    }
-
-    Box(modifier.fillMaxSize().background(AtlasInk.canvas)) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(20.dp)) {
-            val wide = maxWidth >= 560.dp
-            if (wide) {
-                Row(horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                    ImpactColumn(ranked, focusLabel, onRefocus, onOpen, Modifier.weight(1f))
-                    NeighbourColumn(neighbourhood, onRefocus, onOpen, Modifier.weight(1f))
-                }
-            } else {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(28.dp),
-                ) {
-                    ImpactColumn(ranked, focusLabel, onRefocus, onOpen, Modifier.fillMaxWidth())
-                    NeighbourColumn(neighbourhood, onRefocus, onOpen, Modifier.fillMaxWidth())
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun AtlasProblemsPanel(
@@ -111,168 +67,6 @@ fun AtlasProblemsPanel(
 fun atlasProblemCount(slice: GraphSlice): Int =
     GraphInsights.cycleGroups(slice).size +
         GraphInsights.hubs(slice).count { it.dependents >= HUB_MIN_DEPENDENTS }
-
-@Composable
-private fun NeighbourColumn(
-    neighbourhood: page.atlas.graph.Neighborhood?,
-    onRefocus: (String) -> Unit,
-    onOpen: (FilePath) -> Unit,
-    modifier: Modifier,
-) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        if (neighbourhood == null) {
-            SectionLabel("NEIGHBOURS")
-            Text("Open a file to see what it touches", style = mono(13.sp, AtlasInk.dim))
-            return@Column
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("USED BY")
-                Pill(neighbourhood.incomingTotal.toString())
-            }
-            if (neighbourhood.incoming.isEmpty()) {
-                Text("Nothing imports this file", style = mono(12.sp, AtlasInk.dim))
-            } else {
-                for (n in neighbourhood.incoming) NeighbourRow(n, onRefocus, onOpen)
-            }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("DEPENDS ON")
-                Pill(neighbourhood.outgoingTotal.toString())
-            }
-            if (neighbourhood.outgoing.isEmpty()) {
-                Text("This file imports nothing in view", style = mono(12.sp, AtlasInk.dim))
-            } else {
-                for (n in neighbourhood.outgoing) NeighbourRow(n, onRefocus, onOpen)
-            }
-        }
-    }
-}
-
-@Composable
-private fun NeighbourRow(
-    neighbour: page.atlas.graph.Neighbor,
-    onRefocus: (String) -> Unit,
-    onOpen: (FilePath) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(AtlasInk.boxFill, RoundedCornerShape(11.dp))
-            .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(11.dp))
-            .pointerInput(neighbour.node.id) {
-                detectTapGestures(
-                    onTap = { onRefocus(neighbour.node.id) },
-                    onDoubleTap = { neighbour.node.path?.toNioPath()?.let(onOpen) },
-                )
-            }
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            ellipsizeMiddle(neighbour.node.label, 34),
-            style = mono(11.5.sp, AtlasInk.label),
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        Text(neighbour.weight.toString(), style = mono(9.sp, AtlasInk.sub), letterSpacing = 1f)
-    }
-}
-
-@Composable
-private fun ImpactColumn(
-    impact: List<ImpactedFile>,
-    focusLabel: String?,
-    onRefocus: (String) -> Unit,
-    onOpen: (FilePath) -> Unit,
-    modifier: Modifier,
-) {
-    val direct = impact.count { it.depth == 1 }
-    val indirect = impact.size - direct
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SectionLabel("IMPACT OF A CHANGE")
-            if (focusLabel != null) {
-                Text(ellipsizeMiddle(focusLabel, 44), style = mono(13.sp, AtlasInk.bright, FontWeight.Medium))
-            }
-        }
-        if (focusLabel == null) {
-            Text(
-                "Open a file to measure its blast radius",
-                style = mono(13.sp, AtlasInk.dim),
-            )
-        } else {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(impact.size.toString(), style = mono(48.sp, AtlasInk.bright, FontWeight.SemiBold))
-                Text(
-                    "files would change",
-                    style = mono(13.sp, AtlasInk.dim),
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                StatBox(direct, "DIRECT", AtlasInk.bright, Modifier.weight(1f))
-                StatBox(indirect, "INDIRECT", AtlasInk.label, Modifier.weight(1f))
-            }
-            if (impact.isNotEmpty()) {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for (entry in impact) {
-                        ImpactRow(entry, onRefocus, onOpen)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ImpactRow(entry: ImpactedFile, onRefocus: (String) -> Unit, onOpen: (FilePath) -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(AtlasInk.boxFill, RoundedCornerShape(11.dp))
-            .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(11.dp))
-            .pointerInput(entry.node.id) {
-                detectTapGestures(
-                    onTap = { onRefocus(entry.node.id) },
-                    onDoubleTap = { entry.node.path?.toNioPath()?.let(onOpen) },
-                )
-            }
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            ellipsizeMiddle(entry.node.label, 34),
-            style = mono(11.5.sp, AtlasInk.label),
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        Text(impactDepthLabel(entry.depth), style = mono(9.sp, AtlasInk.sub), letterSpacing = 1f)
-    }
-}
-
-private fun impactDepthLabel(depth: Int): String =
-    if (depth <= 1) "DIRECT" else "$depth HOPS"
-
-@Composable
-private fun StatBox(value: Int, label: String, valueColor: Color, modifier: Modifier) {
-    Column(
-        modifier
-            .background(AtlasInk.boxFill, RoundedCornerShape(11.dp))
-            .border(1.dp, Color(0x0DFFFFFF), RoundedCornerShape(11.dp))
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(value.toString(), style = mono(19.sp, valueColor, FontWeight.SemiBold))
-        Text(label, style = mono(9.sp, AtlasInk.sub), letterSpacing = 1f)
-    }
-}
 
 @Composable
 private fun ProblemsColumn(
@@ -323,7 +117,7 @@ private fun CycleCard(group: CycleGroup, onRefocus: (String) -> Unit) {
             Badge("HIGH", AtlasInk.cycle)
         }
         Text(
-            cycleChain(group),
+            cycleMembers(group),
             style = mono(9.5.sp, AtlasInk.label),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -385,9 +179,9 @@ private fun SectionLabel(text: String) {
     Text(text, style = mono(11.sp, AtlasInk.sub), letterSpacing = 2.5f)
 }
 
-private fun cycleChain(group: CycleGroup): String {
+private fun cycleMembers(group: CycleGroup): String {
     val labels = group.members.map { it.label.removeSuffix(".kt") }
-    return (labels + labels.first()).joinToString(" → ")
+    return labels.joinToString(" · ")
 }
 
 private fun problemsSummary(cycles: Int, hubs: Int): String {

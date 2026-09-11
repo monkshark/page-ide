@@ -3,21 +3,23 @@ package page.atlas.render
 import page.atlas.graph.GraphNode
 
 fun atlasSearchMatches(nodes: List<GraphNode>, query: String): List<GraphNode> {
-    val q = query.trim().lowercase()
+    val q = query.trim().replace('\\', '/').lowercase()
     if (q.isEmpty()) return emptyList()
     return nodes.asSequence()
         .filter { it.path != null }
         .mapNotNull { node ->
             val label = node.label.lowercase()
+            val path = node.path?.toString()?.replace('\\', '/')?.lowercase().orEmpty()
             val score = when {
                 label.startsWith(q) -> 0
                 q in label -> 1
-                isSubsequence(q, label) -> 2
+                q in path -> 2
+                isSubsequence(q, label) -> 3
                 else -> return@mapNotNull null
             }
             Triple(score, node.label.length, node)
         }
-        .sortedWith(compareBy({ it.first }, { it.second }, { it.third.label.lowercase() }))
+        .sortedWith(compareBy({ it.first }, { it.second }, { it.third.label.lowercase() }, { it.third.id }))
         .map { it.third }
         .toList()
 }

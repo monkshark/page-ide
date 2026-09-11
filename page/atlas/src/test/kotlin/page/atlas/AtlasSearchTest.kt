@@ -10,6 +10,12 @@ import page.atlas.render.atlasSearchMatches
 
 class AtlasSearchTest {
 
+    @Test
+    fun matchesFilePathsFromIssueReferences() {
+        val target = node("Session.kt").copy(path = FilePath.of("project/src/auth/Session.kt"))
+        assertEquals(listOf(target), atlasSearchMatches(listOf(target, node("Other.kt")), "src\\auth\\Session.kt"))
+    }
+
     private fun node(label: String, external: Boolean = false) = GraphNode(
         id = label,
         label = label,

@@ -860,6 +860,16 @@ internal fun IdeMainLayout(
                     }
                 },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+                onOpenLocation = { path, line ->
+                    onJumpToProblem(path, line, 0)
+                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path.toFilePath() }?.id
+                    if (fileId != null) {
+                        atlasFileSlice = atlasSlice
+                        onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
+                    } else {
+                        onEvent(IdeEvent.Panel.CollapsePanel)
+                    }
+                },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,
