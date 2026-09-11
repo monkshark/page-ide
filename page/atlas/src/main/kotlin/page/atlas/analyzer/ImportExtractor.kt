@@ -21,6 +21,7 @@ import org.treesitter.TreeSitterScala
 import org.treesitter.TreeSitterSwift
 import org.treesitter.TreeSitterTypescript
 import page.atlas.graph.EdgeKind
+import page.atlas.graph.SourceEvidence
 
 data class RawImport(
     val target: String,
@@ -50,6 +51,8 @@ data class FileAnalysis(
     val relations: List<RawRelation>,
     val declarations: FileDeclarations = FileDeclarations.EMPTY,
     val calls: List<CallSite> = emptyList(),
+    val importEvidence: Map<RawImport, SourceEvidence> = emptyMap(),
+    val relationEvidence: Map<RawRelation, SourceEvidence> = emptyMap(),
 ) {
     companion object {
         val EMPTY = FileAnalysis(emptyList(), emptyList())
@@ -57,6 +60,8 @@ data class FileAnalysis(
 }
 
 object ImportExtractor {
+
+    private data class Statement(val type: String, val text: String, val line: Int)
 
     private enum class Lang(
         val nodeTypes: Set<String>,
@@ -282,14 +287,22 @@ object ImportExtractor {
         val parser = parserFor(lang)
         val tree = synchronized(parser) { parser.parseString(null, text) } ?: return FileAnalysis.EMPTY
         val byteToChar = buildByteToChar(text)
-        val imports = mutableListOf<Pair<String, String>>()
-        val relations = mutableListOf<Pair<String, String>>()
+        val imports = mutableListOf<Statement>()
+        val relations = mutableListOf<Statement>()
         collect(TSTreeCursor(tree.rootNode), lang, text, byteToChar, imports, relations)
+        val parsedImports = imports.flatMap { statement ->
+            parse(lang, statement.type, statement.text).map { it to SourceEvidence(statement.line, statement.text) }
+        }
+        val parsedRelations = relations.flatMap { statement ->
+            parseRelation(lang, statement.type, statement.text).map { it to SourceEvidence(statement.line, statement.text) }
+        }
         return FileAnalysis(
-            imports.flatMap { (type, snippet) -> parse(lang, type, snippet) },
-            relations.flatMap { (type, snippet) -> parseRelation(lang, type, snippet) },
+            parsedImports.map { it.first },
+            parsedRelations.map { it.first },
             collectDeclarations(tree.rootNode, lang, text, byteToChar),
             collectCalls(tree.rootNode, lang, text, byteToChar),
+            parsedImports.asReversed().toMap(),
+            parsedRelations.asReversed().toMap(),
         )
     }
 
@@ -429,20 +442,20 @@ object ImportExtractor {
         lang: Lang,
         text: String,
         byteToChar: IntArray,
-        imports: MutableList<Pair<String, String>>,
-        relations: MutableList<Pair<String, String>>,
+        imports: MutableList<Statement>,
+        relations: MutableList<Statement>,
     ) {
         val node = c.currentNode()
         val type = node.type ?: ""
         if (type in lang.nodeTypes) {
-            imports += type to nodeText(node, text, byteToChar)
+            imports += Statement(type, nodeText(node, text, byteToChar), node.startPoint.row)
             return
         }
         if (type in lang.softImportTypes) {
-            softImportSnippet(node, type, text, byteToChar)?.let { imports += type to it }
+            softImportSnippet(node, type, text, byteToChar)?.let { imports += Statement(type, it, node.startPoint.row) }
         }
         if (type in lang.relationTypes) {
-            relations += type to nodeText(node, text, byteToChar)
+            relations += Statement(type, nodeText(node, text, byteToChar), node.startPoint.row)
         }
         if (c.gotoFirstChild()) {
             do {

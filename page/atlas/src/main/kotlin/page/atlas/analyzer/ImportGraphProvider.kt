@@ -10,6 +10,7 @@ import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
+import page.atlas.graph.SourceEvidence
 import page.atlas.toFilePath
 
 class ImportGraphProvider(root: Path) : CodeGraphProvider {
@@ -45,14 +46,15 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
+                val evidence = analysis.importEvidence.entries.firstOrNull { it.key.target == raw.target }?.value
                 val targets = ImportResolver.resolveAll(raw, file, index, declarations)
                 if (targets.isEmpty()) {
-                    linkImport(fileId, raw, null, nodes, queue, edges, imported)
+                    linkImport(fileId, raw, null, nodes, queue, edges, imported, evidence)
                 } else {
-                    for (target in targets) linkImport(fileId, raw, target, nodes, queue, edges, imported)
+                    for (target in targets) linkImport(fileId, raw, target, nodes, queue, edges, imported, evidence)
                 }
             }
-            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue)
+            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
         }
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
@@ -65,11 +67,12 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         queue: ArrayDeque<Pair<Path, String?>>,
         edges: LinkedHashMap<Pair<String, String>, GraphEdge>,
         imported: MutableList<Pair<RawImport, GraphNode>>,
+        evidence: SourceEvidence?,
     ) {
         val id = resolved?.let(::nodeId) ?: raw.target
         if (id == fileId) return
         val node = nodes[id] ?: addNode(nodes, queue, id, raw, resolved) ?: return
-        edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
+        edges.putIfAbsent(fileId to id, GraphEdge(fileId, id, evidence = evidence))
         imported += raw to node
     }
 
@@ -102,15 +105,16 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 else cachedAnalysis(file) ?: continue
             val imported = ArrayList<Pair<RawImport, GraphNode>>()
             for (raw in mergeByTarget(analysis.imports)) {
+                val evidence = analysis.importEvidence.entries.firstOrNull { it.key.target == raw.target }?.value
                 for (resolvedImport in ImportResolver.resolveAll(raw, file, index, declarations)) {
                     val id = nodeId(resolvedImport)
                     if (id == fileId) continue
                     val node = nodes[id] ?: continue
-                    edges.putIfAbsent(fileId to id, GraphEdge(fileId, id))
+                    edges.putIfAbsent(fileId to id, GraphEdge(fileId, id, evidence = evidence))
                     imported += raw to node
                 }
             }
-            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue)
+            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
         }
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
@@ -162,6 +166,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         nodes: LinkedHashMap<String, GraphNode>,
         edges: LinkedHashMap<Pair<String, String>, GraphEdge>,
         queue: ArrayDeque<Pair<Path, String?>>,
+        evidence: Map<RawRelation, SourceEvidence>,
     ) {
         for (relation in relations) {
             val simple = relation.typeName.substringAfterLast('.').substringAfterLast(':')
@@ -173,7 +178,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             val key = fileId to target.id
             val current = edges[key]
             if (current == null || rank(relation.kind) > rank(current.kind)) {
-                edges[key] = GraphEdge(fileId, target.id, relation.kind)
+                edges[key] = GraphEdge(fileId, target.id, relation.kind, evidence[relation])
             }
         }
     }
