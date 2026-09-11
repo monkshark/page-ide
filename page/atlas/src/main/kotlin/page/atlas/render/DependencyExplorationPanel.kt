@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -104,6 +105,9 @@ internal fun DependencyExplorationPanel(
             ExploreAction("Find cycles", selected = exploration.highlight == ExplorationHighlight.CYCLE) {
                 state.update(exploration.showCycle(slice))
             }
+            if (exploration.highlight != null || exploration.selectedEdge != null || exploration.message != null) {
+                ExploreAction("Clear highlight") { state.update(exploration.clearHighlight()) }
+            }
         }
         Divider()
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -126,6 +130,18 @@ internal fun DependencyExplorationPanel(
                             ExplorationBadge("Uses ${exploration.neighbors(slice, ExplorationDirection.USES).size}", roles.dependency)
                             if (hidden > 0) ExplorationBadge("$hidden more to explore", MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        if (state.trail.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Visited", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            for ((index, id) in state.trail.withIndex()) {
+                                if (index > 0) Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(byId[id]?.label ?: id, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    color = if (index == state.trail.lastIndex) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.widthIn(max = 140.dp).clip(RoundedCornerShape(4.dp))
+                                        .clickable(enabled = index != state.trail.lastIndex, role = Role.Button) { state.revisit(slice, index) }
+                                        .padding(horizontal = 4.dp, vertical = 5.dp))
+                            }
+                        }
                     }
                     exploration.message?.let {
                         Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp,
@@ -137,6 +153,11 @@ internal fun DependencyExplorationPanel(
                         onSelect = { state.update(state.exploration.select(slice, it)) },
                         onInspect = { state.update(state.exploration.inspect(slice, it)) },
                         modifier = Modifier.weight(1f).fillMaxWidth(),
+                        revealRequest = state.revealRequest,
+                        onRevealHandled = state::acknowledgeReveal,
+                        onExpand = { state.update(state.exploration.expand(slice, it)) },
+                        onCollapse = { state.update(state.exploration.collapse(it)) },
+                        onClear = { state.update(state.exploration.clearHighlight()) },
                     )
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -240,14 +261,14 @@ private fun ExplorationInspector(
                 ExploreAction("Explore source") { state.update(exploration.select(slice, edge.from)) }
                 ExploreAction("Explore target") { state.update(exploration.select(slice, edge.to)) }
             }
-            Divider()
         }
+        if (edge == null) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(focus.label, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
             Text(focus.path?.toString() ?: "External dependency · source unavailable", fontSize = 11.sp,
                 color = colors.onSurfaceVariant)
         }
-        focus.path?.let { path -> ExploreAction("Open file  ↗", accent = edge == null,
+        focus.path?.let { path -> ExploreAction("Open file  ↗", accent = true,
             modifier = Modifier.fillMaxWidth()) { onOpen(path.toNioPath()) } }
         ExploreAction(if (traceMode) "Cancel path selection" else "Trace a dependency path", selected = traceMode,
             modifier = Modifier.fillMaxWidth()) { traceMode = !traceMode }
@@ -316,6 +337,10 @@ private fun ExplorationInspector(
                 enabled = exploration.positions.size < page.atlas.interaction.DependencyExploration.MAX_VISIBLE) {
                 state.update(exploration.expand(slice, direction))
             }
+            if (exploration.canCollapse(direction)) ExploreAction("Collapse this branch") {
+                state.update(exploration.collapse(direction))
+            }
+        }
         }
         Divider()
         Text("Static relationships from the analyzed files. Unresolved or unsupported relationships may be missing.",

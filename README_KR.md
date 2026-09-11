@@ -34,7 +34,7 @@
 - JDK, Node, Python, Go, Rust, .NET, Dart, Swift, Clang, MSVC 를 IDE 안에서 설치합니다
 - 코드 액션에 diff 가 함께 뜹니다. 여러 파일을 건드리는 편집은 검토 패널에서 확인하고 적용합니다
 - import·호출·모듈 그래프를 빌드 메타데이터가 아니라 tree-sitter 로 그립니다
-- 파일 종속성을 방향별로 펼치고, 코드 근거와 순환·잠재적 영향 범위를 확인합니다
+- 파일 종속성을 방향별로 펼치고 접으며, 탐색 기록과 코드 미리보기로 순환·잠재적 영향 범위를 확인합니다
 - 분할 뷰, 폴딩, inlay hint, 테마 9종. 단축키는 전부 액션 테이블 하나에서 나옵니다
 
 <sub>Kotlin · Java · Python · TypeScript/JavaScript · Go · Rust · C/C++ · Swift · Dart/Flutter ·

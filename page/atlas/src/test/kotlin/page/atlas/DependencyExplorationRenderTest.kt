@@ -62,6 +62,12 @@ class DependencyExplorationRenderTest {
             val source = explorationRect(before.getValue("SessionStore"))
             val destination = explorationRect(before.getValue("Credentials"))
             val edgePoint = Offset((source.right + destination.left) / 2f, source.center.y) * state.camera.scale + state.camera.pan
+            scene.sendPointerEvent(PointerEventType.Move, edgePoint)
+            scene.render(80_000_000L).use { image ->
+                val output = Path.of("build/reports/atlas-exploration/hover.png")
+                Files.createDirectories(output.parent)
+                image.encodeToData()!!.use { data -> Files.write(output, data.bytes) }
+            }
             scene.sendPointerEvent(PointerEventType.Press, edgePoint)
             scene.sendPointerEvent(PointerEventType.Release, edgePoint)
             scene.render(96_000_000L).close()
@@ -80,10 +86,14 @@ class DependencyExplorationRenderTest {
             Triple("narrow", GlassPalette.Signature, 600),
             Triple("file-dark", GlassPalette.Signature, 1240),
             Triple("file-light", GlassPalette.SignatureLight, 1240),
+            Triple("history", GlassPalette.Signature, 1240),
         )) {
             val state = ExplorationViewState()
             state.start(slice, "SessionStore")
-            if (!name.startsWith("file-")) state.update(state.exploration.inspect(slice, slice.edges[3]))
+            if (name == "history") {
+                state.update(state.exploration.select(slice, "Credentials"))
+                state.update(state.exploration.select(slice, "SessionEvents"))
+            } else if (!name.startsWith("file-")) state.update(state.exploration.inspect(slice, slice.edges[3]))
             ImageComposeScene(width, 760) {
                 GlassTheme(palette) {
                     DependencyExplorationPanel(slice, "SessionStore", state, {}, { _, _ -> }, Modifier.fillMaxSize())

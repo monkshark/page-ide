@@ -10,6 +10,7 @@ enum class ExplorationDirection { USES, USED_BY }
 enum class ExplorationHighlight { PATH, CYCLE, IMPACT }
 
 data class ExplorationSlot(val column: Int, val row: Int)
+data class ExplorationBranch(val fileId: String, val direction: ExplorationDirection)
 
 data class DependencyExploration(
     val selectedId: String? = null,
@@ -18,13 +19,19 @@ data class DependencyExploration(
     val highlightedEdges: Set<GraphEdge> = emptySet(),
     val highlight: ExplorationHighlight? = null,
     val message: String? = null,
+    val branches: Map<ExplorationBranch, Set<String>> = emptyMap(),
+    val retainedIds: Set<String> = emptySet(),
 ) {
     fun select(slice: GraphSlice, id: String): DependencyExploration {
         if (slice.nodes.none { it.id == id }) return this
-        val base = if (positions.isEmpty()) copy(positions = mapOf(id to ExplorationSlot(0, 0)))
+        val base = if (positions.isEmpty()) copy(positions = mapOf(id to ExplorationSlot(0, 0)), retainedIds = setOf(id))
         else reveal(slice, listOf(id), selectedId, 1)
         if (id !in base.positions) return copy(message = "View limit reached. Use search to start a new exploration from this file.")
-        return base.copy(selectedId = id, selectedEdge = null, highlightedEdges = emptySet(), highlight = null, message = null)
+        val next = base.copy(selectedId = id, selectedEdge = null, highlightedEdges = emptySet(), highlight = null, message = null)
+        val visibleBranches = ExplorationDirection.entries.associate { direction ->
+            ExplorationBranch(id, direction) to next.neighbors(slice, direction).filterTo(linkedSetOf()) { it in next.positions }
+        }
+        return next.copy(branches = next.branches + visibleBranches)
     }
 
     fun neighbors(slice: GraphSlice, direction: ExplorationDirection): List<String> {
@@ -45,14 +52,46 @@ data class DependencyExploration(
     fun expand(slice: GraphSlice, direction: ExplorationDirection, count: Int = PAGE_SIZE): DependencyExploration {
         val ids = neighbors(slice, direction).filter { it !in positions }.take(count.coerceAtLeast(0))
         val column = if (direction == ExplorationDirection.USES) 1 else -1
-        val next = reveal(slice, ids, selectedId, column)
+        val next = reveal(slice, ids, selectedId, column, retainNew = false)
+        val key = selectedId?.let { ExplorationBranch(it, direction) } ?: return this
+        val shown = neighbors(slice, direction).filterTo(linkedSetOf()) { it in next.positions }
         return next.copy(
+            branches = next.branches + (key to ((branches[key].orEmpty() + shown))),
             selectedEdge = null,
             highlightedEdges = emptySet(),
             highlight = null,
             message = if (ids.any { it !in next.positions }) "Showing at most $MAX_VISIBLE files. Start from another file to explore further." else null,
         )
     }
+
+    fun canCollapse(direction: ExplorationDirection): Boolean {
+        val id = selectedId ?: return false
+        return branches[ExplorationBranch(id, direction)].orEmpty().isNotEmpty()
+    }
+
+    fun collapse(direction: ExplorationDirection): DependencyExploration {
+        val key = ExplorationBranch(selectedId ?: return this, direction)
+        if (key !in branches) return this
+        val remaining = branches - key
+        val keep = (retainedIds + listOfNotNull(selectedId)).filterTo(linkedSetOf()) { it in positions }
+        val queue = ArrayDeque(keep)
+        while (queue.isNotEmpty()) {
+            val id = queue.removeFirst()
+            for ((branch, targets) in remaining) {
+                if (branch.fileId != id) continue
+                for (target in targets) if (target in positions && keep.add(target)) queue.addLast(target)
+            }
+        }
+        return clearHighlight().copy(
+            positions = positions.filterKeys { it in keep },
+            branches = remaining.filterKeys { it.fileId in keep }.mapValues { (_, ids) -> ids.intersect(keep) },
+            message = if (positions.size == keep.size) "These files are still needed by another branch or an explicit exploration." else null,
+        )
+    }
+
+    fun clearHighlight(): DependencyExploration = copy(
+        selectedEdge = null, highlightedEdges = emptySet(), highlight = null, message = null,
+    )
 
     fun inspect(slice: GraphSlice, edge: GraphEdge): DependencyExploration {
         val current = slice.edges.firstOrNull { it.sameRelationship(edge) } ?: return this
@@ -125,6 +164,15 @@ data class DependencyExploration(
         val highlighted = slice.edges.filter { current -> highlightedEdges.any { current.sameRelationship(it) } }.toSet()
         return copy(
             positions = remaining,
+            retainedIds = retainedIds.intersect(remaining.keys),
+            branches = branches.filterKeys { it.fileId in remaining }.mapValues { (branch, targets) ->
+                targets.filterTo(linkedSetOf()) { target ->
+                    target in remaining && slice.edges.any { edge ->
+                        if (branch.direction == ExplorationDirection.USES) edge.from == branch.fileId && edge.to == target
+                        else edge.to == branch.fileId && edge.from == target
+                    }
+                }
+            },
             selectedId = selectedId?.takeIf { it in remaining } ?: remaining.keys.first(),
             selectedEdge = edge?.takeIf { selectionRemains && it.from in remaining && it.to in remaining },
             highlightedEdges = if (selectionRemains) highlighted.filter { it.from in remaining && it.to in remaining }.toSet() else emptySet(),
@@ -135,7 +183,7 @@ data class DependencyExploration(
         )
     }
 
-    private fun reveal(slice: GraphSlice, ids: List<String>, anchorId: String?, direction: Int): DependencyExploration {
+    private fun reveal(slice: GraphSlice, ids: List<String>, anchorId: String?, direction: Int, retainNew: Boolean = true): DependencyExploration {
         if (positions.size >= MAX_VISIBLE) return this
         val validIds = slice.nodes.mapTo(HashSet()) { it.id }
         val slots = positions.toMutableMap()
@@ -155,7 +203,7 @@ data class DependencyExploration(
             slots[id] = position
             occupied += position
         }
-        return copy(positions = slots)
+        return copy(positions = slots, retainedIds = if (retainNew) retainedIds + (slots.keys - positions.keys) else retainedIds)
     }
 
     companion object {

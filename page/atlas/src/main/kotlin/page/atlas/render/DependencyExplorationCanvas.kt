@@ -4,7 +4,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +24,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -42,6 +54,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import kotlin.math.hypot
 import kotlin.math.min
@@ -52,13 +67,14 @@ import page.atlas.graph.GraphSlice
 import page.atlas.interaction.DependencyExploration
 import page.atlas.interaction.ExplorationSlot
 import page.atlas.interaction.ExplorationHighlight
+import page.atlas.interaction.ExplorationDirection
 import page.ui.EditorFontFamily
 
 private const val CARD_WIDTH = 224f
 private const val CARD_HEIGHT = 84f
 
 internal fun explorationRect(slot: ExplorationSlot): Rect = Rect(
-    Offset(slot.column * 330f, slot.row * 138f), Size(CARD_WIDTH, CARD_HEIGHT),
+    Offset(slot.column * 330f, slot.row * 180f), Size(CARD_WIDTH, CARD_HEIGHT),
 )
 
 private data class ExplorationCurve(val start: Offset, val first: Offset, val second: Offset, val end: Offset) {
@@ -105,12 +121,20 @@ internal fun DependencyExplorationCanvas(
     onSelect: (String) -> Unit,
     onInspect: (GraphEdge) -> Unit,
     modifier: Modifier = Modifier,
+    revealRequest: ExplorationReveal? = null,
+    onRevealHandled: (ExplorationReveal) -> Unit = {},
+    onExpand: ((ExplorationDirection) -> Unit)? = null,
+    onCollapse: ((ExplorationDirection) -> Unit)? = null,
+    onClear: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val accent = colors.primary
     val roles = atlasRoleColors()
     val measurer = rememberTextMeasurer()
+    val graphFocus = remember { FocusRequester() }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
+    var hoverPosition by remember { mutableStateOf<Offset?>(null) }
+    var controlsSize by remember { mutableStateOf(IntSize.Zero) }
     val nodes = remember(slice, exploration.positions) { slice.nodes.filter { it.id in exploration.positions } }
     val rects = remember(exploration.positions) { exploration.positions.mapValues { explorationRect(it.value) } }
     val edges = remember(slice, rects) { slice.edges.filter { it.from in rects && it.to in rects } }
@@ -133,6 +157,18 @@ internal fun DependencyExplorationCanvas(
     val currentRects by rememberUpdatedState(rects)
     val currentCurves by rememberUpdatedState(curves)
     val currentSelection by rememberUpdatedState(exploration.selectedId)
+    val hoverWorld = hoverPosition?.let { (it - camera.pan) / camera.scale.coerceAtLeast(.01f) }
+    val hoveredNode = hoverWorld?.let { point -> nodes.lastOrNull { point in rects.getValue(it.id) } }
+    val hoveredEdge = if (hoveredNode != null) null else hoverWorld?.let { point ->
+        curves.entries.minByOrNull { it.value.distance(point) }
+            ?.takeIf { it.value.distance(point) <= 12f / camera.scale.coerceAtLeast(.01f) }?.key
+    }
+    LaunchedEffect(revealRequest, viewport) {
+        if (revealRequest != null && viewport.width > 0 && viewport.height > 0) {
+            revealExploration(camera, revealRequest.ids.mapNotNull { rects[it] }, viewport)
+            onRevealHandled(revealRequest)
+        }
+    }
     LaunchedEffect(viewport, camera.scale, rects) {
         if (camera.scale > 0f || viewport.width == 0 || viewport.height == 0 || rects.isEmpty()) return@LaunchedEffect
         val left = rects.values.minOf { it.left } - 48f
@@ -155,15 +191,25 @@ internal fun DependencyExplorationCanvas(
             )
         }
     }
+    Box(modifier.clipToBounds().onSizeChanged { viewport = it }) {
     Canvas(
-        modifier.clipToBounds().onSizeChanged { viewport = it }
+        Modifier.fillMaxSize()
             .semantics {
                 contentDescription = "Dependency graph. A to B means A uses B. Arrow keys select files."
-                customActions = nodes.map { node -> CustomAccessibilityAction("Explore ${node.label}") { onSelect(node.id); true } }
+                customActions = nodes.map { node -> CustomAccessibilityAction("Explore ${node.label}") { onSelect(node.id); true } } +
+                    ExplorationDirection.entries.flatMap { direction ->
+                        listOfNotNull(
+                            onExpand?.let { action -> CustomAccessibilityAction("Expand ${direction.name}") { action(direction); true } },
+                            onCollapse?.takeIf { exploration.canCollapse(direction) }?.let { action ->
+                                CustomAccessibilityAction("Collapse ${direction.name}") { action(direction); true }
+                            },
+                        )
+                    }
             }
             .onKeyEvent {
                 if (it.type != KeyEventType.KeyDown || currentNodes.isEmpty()) false
                 else when (it.key) {
+                    Key.Escape -> { onClear?.invoke(); onClear != null }
                     Key.DirectionRight, Key.DirectionDown, Key.DirectionLeft, Key.DirectionUp -> {
                         val direction = if (it.key == Key.DirectionLeft || it.key == Key.DirectionUp) -1 else 1
                         val index = currentNodes.indexOfFirst { node -> node.id == currentSelection }
@@ -172,9 +218,10 @@ internal fun DependencyExplorationCanvas(
                     }
                     else -> false
                 }
-            }.focusable()
+            }.focusRequester(graphFocus).focusable()
             .pointerInput(camera) {
                 detectTapGestures { position ->
+                    graphFocus.requestFocus()
                     val scale = camera.scale.takeIf { it > 0f } ?: return@detectTapGestures
                     val world = (position - camera.pan) / scale
                     val node = currentNodes.lastOrNull { world in currentRects.getValue(it.id) }
@@ -185,13 +232,18 @@ internal fun DependencyExplorationCanvas(
                 }
             }
             .pointerInput(camera) {
-                detectDragGestures { change, amount -> change.consume(); camera.pan += amount }
+                detectDragGestures { change, amount -> hoverPosition = null; change.consume(); camera.pan += amount }
             }
             .pointerInput(camera) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
+                        if (event.type == PointerEventType.Exit) hoverPosition = null
+                        if (event.type == PointerEventType.Move || event.type == PointerEventType.Enter) {
+                            hoverPosition = event.changes.firstOrNull()?.takeIf { !it.pressed }?.position
+                        }
                         if (event.type != PointerEventType.Scroll || camera.scale <= 0f) continue
+                        hoverPosition = null
                         val change = event.changes.firstOrNull() ?: continue
                         val old = camera.scale
                         val next = (old * 1.12f.pow(-change.scrollDelta.y)).coerceIn(.12f, 3f)
@@ -216,7 +268,7 @@ internal fun DependencyExplorationCanvas(
         val highlight = exploration.highlightedEdges
         withTransform({ translate(camera.pan.x, camera.pan.y); scale(camera.scale.coerceAtLeast(.01f), camera.scale.coerceAtLeast(.01f), Offset.Zero) }) {
             for ((edge, curve) in curves) {
-                val selected = edge == exploration.selectedEdge
+                val selected = edge == exploration.selectedEdge || edge == hoveredEdge
                 val emphasized = selected || if (highlight.isNotEmpty()) edge in highlight
                 else edge.from == exploration.selectedId || edge.to == exploration.selectedId
                 val color = when {
@@ -268,9 +320,10 @@ internal fun DependencyExplorationCanvas(
                 drawRoundRect(colors.onBackground.copy(alpha = .04f), rect.topLeft + Offset(0f, 3f), rect.size, CornerRadius(12f))
                 drawRoundRect(if (selected) lerp(colors.surface, accent, .08f) else colors.surface, rect.topLeft, rect.size, CornerRadius(12f))
                 drawRoundRect(
-                    when { selected -> accent; inHighlight -> highlightColor; else -> colors.outline.copy(alpha = .4f) },
+                    when { selected || node == hoveredNode -> accent; inHighlight -> highlightColor; else -> colors.outline.copy(alpha = .4f) },
                     rect.topLeft, rect.size, CornerRadius(12f), style = Stroke(if (selected) 1.8f else 1f),
                 )
+                if (camera.scale >= .8f) {
                 val iconOrigin = Offset(rect.left + 14f, rect.center.y - 17f)
                 drawRoundRect(nodeAccent.copy(alpha = .12f), iconOrigin, Size(30f, 34f), CornerRadius(8f))
                 val document = iconOrigin + Offset(9f, 8f)
@@ -289,6 +342,7 @@ internal fun DependencyExplorationCanvas(
                 val textTop = rect.top + (rect.height - textHeight) / 2f
                 drawText(title, topLeft = Offset(rect.left + 56f, textTop), alpha = if (emphasized) 1f else .7f)
                 drawText(path, topLeft = Offset(rect.left + 56f, textTop + title.size.height + textGap), alpha = if (emphasized) 1f else .7f)
+                }
                 if (selected) {
                     val selectedLabel = measurer.measure("Selected file", pathStyle.copy(color = accent, fontWeight = FontWeight.Medium))
                     drawText(selectedLabel, topLeft = Offset(rect.left + 4f, rect.top - selectedLabel.size.height - 10f))
@@ -299,5 +353,54 @@ internal fun DependencyExplorationCanvas(
                 }
             }
         }
+        if (camera.scale < .8f) {
+            for (node in nodes) {
+                val rect = rects.getValue(node.id)
+                val topLeft = rect.topLeft * camera.scale + camera.pan
+                val width = rect.width * camera.scale
+                if (width < 26f) continue
+                val label = measurer.measure(node.label, titleStyle.copy(fontSize = 12.sp, lineHeight = 16.sp, color = colors.onSurface),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = (width - 12f).toInt().coerceAtLeast(1)))
+                drawText(label, topLeft = topLeft + Offset(6f, (rect.height * camera.scale - label.size.height) / 2f))
+            }
+        }
+    }
+    val density = LocalDensity.current
+    val selectedRect = rects[exploration.selectedId]
+    if (selectedRect != null && onExpand != null && onCollapse != null) {
+        val screen = selectedRect.center * camera.scale + camera.pan
+        val width = controlsSize.width.toFloat()
+        val height = controlsSize.height.toFloat()
+        val bottom = selectedRect.bottom * camera.scale + camera.pan.y
+        if (screen.x in 0f..viewport.width.toFloat() && bottom in 0f..viewport.height.toFloat()) {
+            Row(Modifier.offset { IntOffset((screen.x - width / 2).coerceIn(0f, (viewport.width - width).coerceAtLeast(0f)).toInt(),
+                (bottom + 8f).coerceAtMost((viewport.height - height).coerceAtLeast(0f)).toInt()) }
+                .onSizeChanged { controlsSize = it }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (direction in listOf(ExplorationDirection.USED_BY, ExplorationDirection.USES)) {
+                    val hidden = exploration.neighbors(slice, direction).count { it !in exploration.positions }
+                    val name = if (direction == ExplorationDirection.USES) "Uses" else "Used by"
+                    val collapsible = exploration.canCollapse(direction)
+                    if (hidden > 0) ExploreAction("$name +${minOf(4, hidden)}", enabled = exploration.positions.size < DependencyExploration.MAX_VISIBLE,
+                        description = "Expand $name: $hidden hidden files") { onExpand(direction) }
+                    if (collapsible) ExploreAction("− $name", description = "Collapse $name") { onCollapse(direction) }
+                }
+            }
+        }
+    }
+    val tooltip = hoveredNode?.let { "${it.label}\n${it.path ?: "External dependency"}" } ?: hoveredEdge?.let { edge ->
+        val from = nodes.firstOrNull { it.id == edge.from }?.label ?: edge.from
+        val to = nodes.firstOrNull { it.id == edge.to }?.label ?: edge.to
+        "$from ${edge.kind.explorationLabel()} $to\nClick to inspect source"
+    }
+    if (tooltip != null && hoverPosition != null) {
+        val position = hoverPosition!!
+        val width = with(density) { 320.dp.toPx() }
+        val height = with(density) { 96.dp.toPx() }
+        Surface(Modifier.offset { IntOffset(position.x.coerceIn(0f, (viewport.width - width).coerceAtLeast(0f)).toInt(),
+            (position.y - height).coerceAtLeast(0f).toInt()) }.widthIn(max = 320.dp), shape = RoundedCornerShape(8.dp),
+            color = colors.surface, shadowElevation = 6.dp) {
+            Text(tooltip, modifier = Modifier.padding(12.dp), fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurface)
+        }
+    }
     }
 }
