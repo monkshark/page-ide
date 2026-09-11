@@ -78,10 +78,12 @@ class DependencyExplorationRenderTest {
             Triple("dark", GlassPalette.Signature, 1240),
             Triple("light", GlassPalette.SignatureLight, 1240),
             Triple("narrow", GlassPalette.Signature, 600),
+            Triple("file-dark", GlassPalette.Signature, 1240),
+            Triple("file-light", GlassPalette.SignatureLight, 1240),
         )) {
             val state = ExplorationViewState()
             state.start(slice, "SessionStore")
-            state.update(state.exploration.inspect(slice, slice.edges[3]))
+            if (!name.startsWith("file-")) state.update(state.exploration.inspect(slice, slice.edges[3]))
             ImageComposeScene(width, 760) {
                 GlassTheme(palette) {
                     DependencyExplorationPanel(slice, "SessionStore", state, {}, { _, _ -> }, Modifier.fillMaxSize())

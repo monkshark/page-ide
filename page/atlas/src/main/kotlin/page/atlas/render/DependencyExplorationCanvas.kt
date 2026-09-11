@@ -54,11 +54,11 @@ import page.atlas.interaction.ExplorationSlot
 import page.atlas.interaction.ExplorationHighlight
 import page.ui.EditorFontFamily
 
-private const val CARD_WIDTH = 196f
-private const val CARD_HEIGHT = 76f
+private const val CARD_WIDTH = 224f
+private const val CARD_HEIGHT = 84f
 
 internal fun explorationRect(slot: ExplorationSlot): Rect = Rect(
-    Offset(slot.column * 290f, slot.row * 120f), Size(CARD_WIDTH, CARD_HEIGHT),
+    Offset(slot.column * 330f, slot.row * 138f), Size(CARD_WIDTH, CARD_HEIGHT),
 )
 
 private data class ExplorationCurve(val start: Offset, val first: Offset, val second: Offset, val end: Offset) {
@@ -135,23 +135,23 @@ internal fun DependencyExplorationCanvas(
     val currentSelection by rememberUpdatedState(exploration.selectedId)
     LaunchedEffect(viewport, camera.scale, rects) {
         if (camera.scale > 0f || viewport.width == 0 || viewport.height == 0 || rects.isEmpty()) return@LaunchedEffect
-        val left = rects.values.minOf { it.left } - 90f
-        val top = rects.values.minOf { it.top } - 90f
-        val right = rects.values.maxOf { it.right } + 90f
-        val bottom = rects.values.maxOf { it.bottom } + 90f
+        val left = rects.values.minOf { it.left } - 48f
+        val top = rects.values.minOf { it.top } - 48f
+        val right = rects.values.maxOf { it.right } + 48f
+        val bottom = rects.values.maxOf { it.bottom } + 48f
         camera.scale = min(viewport.width / (right - left), viewport.height / (bottom - top)).coerceIn(.15f, 2f)
         camera.pan = Offset(viewport.width / 2f, viewport.height / 2f) -
             Offset((left + right) / 2f, (top + bottom) / 2f) * camera.scale
     }
-    val titleStyle = TextStyle(fontFamily = EditorFontFamily, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    val pathStyle = TextStyle(fontFamily = EditorFontFamily, fontSize = 9.sp)
+    val titleStyle = TextStyle(fontFamily = EditorFontFamily, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+    val pathStyle = TextStyle(fontSize = 11.sp, lineHeight = 15.sp)
     val labels = remember(nodes, colors, measurer) {
         nodes.associate { node -> node.id to (
             measurer.measure(node.label, titleStyle.copy(color = colors.onSurface), maxLines = 1,
-                overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 168)) to
+                overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 154)) to
                 measurer.measure(node.path?.parent?.fileName?.toString() ?: "External dependency",
                     pathStyle.copy(color = colors.onSurfaceVariant), maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 168))
+                    overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 154))
             )
         }
     }
@@ -203,6 +203,14 @@ internal fun DependencyExplorationCanvas(
             },
     ) {
         drawRect(colors.background)
+        val grid = 24f
+        val gridX = ((camera.pan.x % grid) + grid) % grid
+        val gridY = ((camera.pan.y % grid) + grid) % grid
+        for (x in 0..(size.width / grid).toInt()) {
+            for (y in 0..(size.height / grid).toInt()) {
+                drawCircle(colors.onSurfaceVariant.copy(alpha = .12f), .8f, Offset(gridX + x * grid, gridY + y * grid))
+            }
+        }
         val relatedIds = edges.filter { it.from == exploration.selectedId || it.to == exploration.selectedId }
             .flatMapTo(HashSet()) { listOf(it.from, it.to) }
         val highlight = exploration.highlightedEdges
@@ -214,7 +222,8 @@ internal fun DependencyExplorationCanvas(
                 val color = when {
                     selected -> accent
                     edge in highlight -> highlightColor
-                    emphasized -> accent.copy(alpha = .7f)
+                    edge.to == exploration.selectedId -> roles.usedBy.copy(alpha = .8f)
+                    edge.from == exploration.selectedId -> roles.dependency.copy(alpha = .8f)
                     else -> colors.outlineVariant.copy(alpha = .4f)
                 }
                 val path = Path().apply {
@@ -235,7 +244,7 @@ internal fun DependencyExplorationCanvas(
                     val right = curve.end - unit * 8f - side * 3.5f
                     lineTo(left.x, left.y); lineTo(right.x, right.y); close()
                 }, color)
-                if (emphasized) {
+                if (selected || edge in highlight) {
                     val label = measurer.measure(edge.kind.explorationLabel(), pathStyle.copy(color = color))
                     val at = curve.point(.5f) - Offset(label.size.width / 2f, label.size.height + 5f)
                     drawRoundRect(colors.background, at - Offset(3f, 1f), Size(label.size.width + 6f, label.size.height + 2f), CornerRadius(3f))
@@ -247,14 +256,43 @@ internal fun DependencyExplorationCanvas(
                 val selected = node.id == exploration.selectedId
                 val inHighlight = highlight.any { it.from == node.id || it.to == node.id }
                 val emphasized = selected || inHighlight || node.id in relatedIds
-                drawRoundRect(if (selected) lerp(colors.surface, accent, .14f) else colors.surface, rect.topLeft, rect.size, CornerRadius(10f))
+                val nodeAccent = when {
+                    selected -> accent
+                    inHighlight -> highlightColor
+                    edges.any { it.from == node.id && it.to == exploration.selectedId } -> roles.usedBy
+                    edges.any { it.from == exploration.selectedId && it.to == node.id } -> roles.dependency
+                    else -> colors.onSurfaceVariant
+                }
+                if (selected) drawRoundRect(accent.copy(alpha = .08f), rect.topLeft - Offset(5f, 5f),
+                    Size(rect.width + 10f, rect.height + 10f), CornerRadius(17f))
+                drawRoundRect(colors.onBackground.copy(alpha = .04f), rect.topLeft + Offset(0f, 3f), rect.size, CornerRadius(12f))
+                drawRoundRect(if (selected) lerp(colors.surface, accent, .08f) else colors.surface, rect.topLeft, rect.size, CornerRadius(12f))
                 drawRoundRect(
-                    when { selected -> accent; inHighlight -> highlightColor; else -> colors.outlineVariant },
-                    rect.topLeft, rect.size, CornerRadius(10f), style = Stroke(if (selected) 1.8f else 1f),
+                    when { selected -> accent; inHighlight -> highlightColor; else -> colors.outline.copy(alpha = .4f) },
+                    rect.topLeft, rect.size, CornerRadius(12f), style = Stroke(if (selected) 1.8f else 1f),
                 )
+                val iconOrigin = Offset(rect.left + 14f, rect.center.y - 17f)
+                drawRoundRect(nodeAccent.copy(alpha = .12f), iconOrigin, Size(30f, 34f), CornerRadius(8f))
+                val document = iconOrigin + Offset(9f, 8f)
+                drawPath(Path().apply {
+                    moveTo(document.x, document.y); lineTo(document.x + 8f, document.y)
+                    lineTo(document.x + 13f, document.y + 5f); lineTo(document.x + 13f, document.y + 18f)
+                    lineTo(document.x, document.y + 18f); close()
+                    moveTo(document.x + 8f, document.y); lineTo(document.x + 8f, document.y + 5f)
+                    lineTo(document.x + 13f, document.y + 5f)
+                }, nodeAccent, style = Stroke(1.2f))
+                drawLine(nodeAccent, document + Offset(3f, 10f), document + Offset(10f, 10f), 1.2f)
+                drawLine(nodeAccent, document + Offset(3f, 14f), document + Offset(8f, 14f), 1.2f)
                 val (title, path) = labels.getValue(node.id)
-                drawText(title, topLeft = rect.topLeft + Offset(14f, 17f), alpha = if (emphasized) 1f else .6f)
-                drawText(path, topLeft = rect.topLeft + Offset(14f, 43f), alpha = if (emphasized) 1f else .6f)
+                val textGap = 4f
+                val textHeight = title.size.height + textGap + path.size.height
+                val textTop = rect.top + (rect.height - textHeight) / 2f
+                drawText(title, topLeft = Offset(rect.left + 56f, textTop), alpha = if (emphasized) 1f else .7f)
+                drawText(path, topLeft = Offset(rect.left + 56f, textTop + title.size.height + textGap), alpha = if (emphasized) 1f else .7f)
+                if (selected) {
+                    val selectedLabel = measurer.measure("Selected file", pathStyle.copy(color = accent, fontWeight = FontWeight.Medium))
+                    drawText(selectedLabel, topLeft = Offset(rect.left + 4f, rect.top - selectedLabel.size.height - 10f))
+                }
                 impactDepths[node.id]?.let { depth ->
                     drawText(measurer.measure(if (depth == 1) "Direct dependent" else "$depth hops away",
                         pathStyle.copy(color = highlightColor)), topLeft = Offset(rect.left + 8f, rect.bottom + 5f))
