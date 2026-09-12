@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-09-03T08:11:15.081Z",
+  "updatedAt": "2026-09-11T08:11:37.007Z",
   "owner": "haskell",
   "repo": "haskell-language-server",
   "releases": [
+    {
+      "tag": "2.15.0.0",
+      "publishedAt": "2026-09-03T09:59:38Z"
+    },
     {
       "tag": "2.14.0.0",
       "publishedAt": "2026-04-27T06:51:45Z"
