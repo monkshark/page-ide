@@ -17,7 +17,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
     private val index = WorkspaceIndex(root)
     private val cache = HashMap<String, CachedAnalysis>()
-    private val declarations = DeclarationIndex(index) { cachedAnalysis(it) }
+    private val declarationCache = HashMap<String, CachedDeclarations>()
+    private val declarations = DeclarationIndex(index) { cachedDeclarations(it) }
 
     val staticCalls: StaticCallHierarchySource by lazy {
         StaticCallHierarchySource(index) { cachedAnalysis(it) }
@@ -26,8 +27,11 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     private var cachedDigest: DependencyDigest = DependencyDigest.EMPTY
 
     private data class CachedAnalysis(val mtime: Long, val analysis: FileAnalysis)
+    private data class CachedDeclarations(val mtime: Long, val declarations: FileDeclarations)
 
-    override fun nodesForFile(path: Path, text: String): GraphSlice {
+    override fun nodesForFile(path: Path, text: String): GraphSlice = index.withSnapshot { computeFile(path, text) }
+
+    private fun computeFile(path: Path, text: String): GraphSlice {
         if (!ImportExtractor.supports(path)) return GraphSlice.EMPTY
         val activePath = path.toAbsolutePath().normalize()
         val activeId = activePath.toString()
@@ -83,10 +87,29 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         activePath: Path?,
         activeText: String?,
         onProgress: (Int, Int) -> Unit,
+    ): GraphSlice = computeProject(activePath, activeText, onProgress) {}
+
+    fun analyzeProject(
+        activePath: Path?,
+        activeText: String?,
+        onProgress: (ProjectAnalysisProgress) -> Unit,
+    ): GraphSlice = computeProject(activePath, activeText, { _, _ -> }, onProgress)
+
+    private fun computeProject(
+        activePath: Path?,
+        activeText: String?,
+        onProgress: (Int, Int) -> Unit,
+        onStage: (ProjectAnalysisProgress) -> Unit,
     ): GraphSlice {
-        index.refreshIfStale()
+        onStage(ProjectAnalysisProgress(ProjectAnalysisStage.DISCOVERING))
+        return index.withSnapshot {
         val files = index.files().filter { ImportExtractor.supports(it) }.take(PROJECT_MAX_NODES)
-        if (files.isEmpty()) return GraphSlice.EMPTY
+        if (files.isEmpty()) return@withSnapshot GraphSlice.EMPTY
+        if (files.any { ImportResolver.requiresDeclarations(it) }) {
+            declarations.refreshIfStale { done, total ->
+                onStage(ProjectAnalysisProgress(ProjectAnalysisStage.DECLARATIONS, done, total))
+            }
+        }
         val activeId = activePath?.toAbsolutePath()?.normalize()?.toString()
         val nodes = LinkedHashMap<String, GraphNode>()
         val edges = LinkedHashMap<Pair<String, String>, GraphEdge>()
@@ -97,26 +120,32 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved.toFilePath(), kind)
         }
         val queue = ArrayDeque<Pair<Path, String?>>()
+        onStage(ProjectAnalysisProgress(ProjectAnalysisStage.RELATIONSHIPS, 0, files.size))
         for ((done, file) in files.withIndex()) {
             onProgress(done, files.size)
-            val fileId = nodeId(file)
-            val analysis =
-                if (fileId == activeId && activeText != null) ImportExtractor.analyze(file, activeText)
-                else cachedAnalysis(file) ?: continue
-            val imported = ArrayList<Pair<RawImport, GraphNode>>()
-            for (raw in mergeByTarget(analysis.imports)) {
-                val evidence = analysis.importEvidence.entries.firstOrNull { it.key.target == raw.target }?.value
-                for (resolvedImport in ImportResolver.resolveAll(raw, file, index, declarations)) {
-                    val id = nodeId(resolvedImport)
-                    if (id == fileId) continue
-                    val node = nodes[id] ?: continue
-                    edges.putIfAbsent(fileId to id, GraphEdge(fileId, id, evidence = evidence))
-                    imported += raw to node
+            try {
+                val fileId = nodeId(file)
+                val analysis =
+                    if (fileId == activeId && activeText != null) ImportExtractor.analyze(file, activeText)
+                    else cachedAnalysis(file) ?: continue
+                val imported = ArrayList<Pair<RawImport, GraphNode>>()
+                for (raw in mergeByTarget(analysis.imports)) {
+                    val evidence = analysis.importEvidence.entries.firstOrNull { it.key.target == raw.target }?.value
+                    for (resolvedImport in ImportResolver.resolveAll(raw, file, index, declarations)) {
+                        val id = nodeId(resolvedImport)
+                        if (id == fileId) continue
+                        val node = nodes[id] ?: continue
+                        edges.putIfAbsent(fileId to id, GraphEdge(fileId, id, evidence = evidence))
+                        imported += raw to node
+                    }
                 }
+                applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
+            } finally {
+                onStage(ProjectAnalysisProgress(ProjectAnalysisStage.RELATIONSHIPS, done + 1, files.size))
             }
-            applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
         }
-        return GraphSlice(nodes.values.toList(), edges.values.toList())
+        GraphSlice(nodes.values.toList(), edges.values.toList())
+        }
     }
 
     fun dependencyDigest(): DependencyDigest {
@@ -232,6 +261,18 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         "dart" -> listOf("dart")
         "swift" -> listOf("swift")
         else -> null
+    }
+
+    private fun cachedDeclarations(file: Path): FileAnalysis? {
+        val key = nodeId(file)
+        val mtime = try { Files.getLastModifiedTime(file).toMillis() } catch (_: Exception) { return null }
+        cache[key]?.takeIf { it.mtime == mtime }?.let { return FileAnalysis.EMPTY.copy(declarations = it.analysis.declarations) }
+        declarationCache[key]?.takeIf { it.mtime == mtime }?.let { return FileAnalysis.EMPTY.copy(declarations = it.declarations) }
+        val text = try { Files.readString(file) } catch (_: Exception) { return null }
+        val result = ImportExtractor.analyzeDeclarations(file, text)
+        if (declarationCache.size >= 20_000) declarationCache.clear()
+        declarationCache[key] = CachedDeclarations(mtime, result)
+        return FileAnalysis.EMPTY.copy(declarations = result)
     }
 
     private fun cachedAnalysis(file: Path): FileAnalysis? {

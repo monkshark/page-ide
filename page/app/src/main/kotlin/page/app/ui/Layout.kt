@@ -186,7 +186,7 @@ internal fun IdeMainLayout(
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasOverviewState: OverviewViewState = remember { OverviewViewState() },
-    atlasLoadProgress: Float? = null,
+    atlasLoadProgress: page.atlas.analyzer.ProjectAnalysisProgress? = null,
     atlasFileRole: FileRole? = null,
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     onAtlasFocusActive: (() -> Unit)? = null,

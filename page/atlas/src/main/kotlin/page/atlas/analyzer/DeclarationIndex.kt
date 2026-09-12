@@ -13,11 +13,11 @@ class DeclarationIndex(
     private var fqnToDecls: Map<String, List<Pair<Path, SymbolDecl>>> = emptyMap()
     private var fileToDecls: Map<Path, List<SymbolDecl>> = emptyMap()
 
-    fun refreshIfStale() {
+    fun refreshIfStale(onProgress: (Int, Int) -> Unit = { _, _ -> }) {
         workspace.refreshIfStale()
         val revision = workspace.revision()
         if (revision == builtRevision) return
-        build(revision)
+        build(revision, onProgress)
     }
 
     fun fileForFqn(fqn: String): Path? = fqnToFiles[fqn]?.singleOrNull()
@@ -32,31 +32,36 @@ class DeclarationIndex(
     fun declarationsInFile(file: Path): List<SymbolDecl> =
         fileToDecls[file.toAbsolutePath().normalize()] ?: emptyList()
 
-    private fun build(revision: Long) {
+    private fun build(revision: Long, onProgress: (Int, Int) -> Unit) {
         val fqn = HashMap<String, MutableList<Path>>()
         val packages = HashMap<String, MutableList<Path>>()
         val fqnDecls = HashMap<String, MutableList<Pair<Path, SymbolDecl>>>()
         val fileDecls = HashMap<Path, List<SymbolDecl>>()
-        for (file in workspace.files()) {
-            if (!ImportExtractor.supports(file)) continue
-            val declarations = analyze(file)?.declarations ?: continue
-            if (declarations.symbols.isEmpty()) continue
-            val normalized = file.toAbsolutePath().normalize()
-            if (declarations.packageName.isNotEmpty()) {
-                packages.getOrPut(declarations.packageName) { mutableListOf() }.add(normalized)
-            }
-            for (symbol in declarations.symbols) {
-                val key =
-                    if (declarations.packageName.isEmpty()) symbol else "${declarations.packageName}.$symbol"
-                fqn.getOrPut(key) { mutableListOf() }.add(normalized)
-            }
-            if (declarations.locations.isNotEmpty()) {
-                fileDecls[normalized] = declarations.locations
-                for (decl in declarations.locations) {
-                    val key =
-                        if (declarations.packageName.isEmpty()) decl.name else "${declarations.packageName}.${decl.name}"
-                    fqnDecls.getOrPut(key) { mutableListOf() }.add(normalized to decl)
+        val files = workspace.files().filter { ImportExtractor.supportsDeclarations(it) }
+        onProgress(0, files.size)
+        for ((position, file) in files.withIndex()) {
+            try {
+                val declarations = analyze(file)?.declarations ?: continue
+                if (declarations.symbols.isEmpty()) continue
+                val normalized = file.toAbsolutePath().normalize()
+                if (declarations.packageName.isNotEmpty()) {
+                    packages.getOrPut(declarations.packageName) { mutableListOf() }.add(normalized)
                 }
+                for (symbol in declarations.symbols) {
+                    val key =
+                        if (declarations.packageName.isEmpty()) symbol else "${declarations.packageName}.$symbol"
+                    fqn.getOrPut(key) { mutableListOf() }.add(normalized)
+                }
+                if (declarations.locations.isNotEmpty()) {
+                    fileDecls[normalized] = declarations.locations
+                    for (decl in declarations.locations) {
+                        val key =
+                            if (declarations.packageName.isEmpty()) decl.name else "${declarations.packageName}.${decl.name}"
+                        fqnDecls.getOrPut(key) { mutableListOf() }.add(normalized to decl)
+                    }
+                }
+            } finally {
+                onProgress(position + 1, files.size)
             }
         }
         fqnToFiles = fqn

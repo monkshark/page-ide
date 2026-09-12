@@ -100,7 +100,7 @@ fun AtlasContent(
     mapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     overviewState: OverviewViewState = remember { OverviewViewState() },
-    loadProgress: Float? = null,
+    loadProgress: page.atlas.analyzer.ProjectAnalysisProgress? = null,
     vcsMarks: Map<String, VcsMark> = emptyMap(),
     vcsEnabled: Boolean = true,
     onVcsEnabledChange: (Boolean) -> Unit = {},
@@ -266,14 +266,21 @@ fun AtlasContent(
         if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = when {
-                        progress != null -> "Analyzing project… ${(progress * 100).toInt()}%"
+                        progress != null -> progress.label
                         else -> "No source files"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (progress != null) {
+                    if (progress.total > 0) androidx.compose.material3.LinearProgressIndicator(
+                        progress = { (progress.completed.toFloat() / progress.total).coerceIn(0f, 1f) }, modifier = Modifier.width(240.dp),
+                    ) else androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.width(240.dp))
+                }
+                }
             }
         } else if (viewTab == AtlasViewTab.MODULES) {
             var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }

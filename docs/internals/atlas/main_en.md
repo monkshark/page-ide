@@ -45,6 +45,10 @@ An extracted import is just a string; it has to be linked to a real file before 
 
 `DeclarationIndex` collects symbol declaration sites, and `StaticCallHierarchySource` gathers static call relations that back the call graph.
 
+Declaration indexing uses `ImportExtractor.analyzeDeclarations`, which collects package names, top-level symbols and source locations without walking import, inheritance or call expressions. Files without supported declarations are excluded. `ImportGraphProvider` keeps declaration results separately from full file analysis and reuses unchanged results by modification time. A workspace snapshot prevents TTL-triggered rescans during one graph computation.
+
+`analyzeProject` reports discovery, declaration indexing and dependency connection through `ProjectAnalysisProgress`. The UI shows the current phase and completed-file count, including the initial declaration pass, then indicates active-file analysis. First opening starts without the edit debounce; subsequent refreshes retain the debounce. Cancellation propagates instead of being converted into an empty graph. The existing `nodesForProject` callback remains available for per-file progress consumers.
+
 ---
 
 ## graph — model and queries

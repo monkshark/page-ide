@@ -45,6 +45,10 @@ Java · Kotlin · Python · JavaScript · TypeScript · Go · Rust · Dart · C 
 
 `DeclarationIndex`는 심볼 선언 위치를, `StaticCallHierarchySource`는 정적 호출 관계를 모아 호출 그래프의 바탕이 된다.
 
+선언 인덱싱은 `ImportExtractor.analyzeDeclarations`로 패키지명·최상위 심볼·줄 번호만 수집하며 import·상속·호출 구문을 순회하지 않는다. 선언 수집을 지원하지 않는 파일은 제외한다. `ImportGraphProvider`는 선언 결과를 전체 파일 분석과 별도로 캐시하고 수정 시간이 같은 결과를 재사용한다. 한 번의 그래프 계산에서는 작업 공간 스냅샷을 유지해 TTL 만료에 따른 재검색을 막는다.
+
+`analyzeProject`는 `ProjectAnalysisProgress`로 파일 검색·선언 인덱싱·종속성 연결 단계를 알린다. UI는 초기 선언 분석부터 단계와 완료 파일 수를 표시하고, 이후 활성 파일 분석 상태를 보여준다. 처음 열 때는 편집용 지연 없이 시작하며 이후 갱신에는 지연을 유지한다. 취소는 빈 그래프로 바꾸지 않고 호출부로 전파한다. 기존 `nodesForProject`의 파일별 진행률 콜백도 유지한다.
+
 ---
 
 ## graph — 모델과 질의

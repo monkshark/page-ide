@@ -264,6 +264,16 @@ object ImportExtractor {
 
     fun supports(path: Path): Boolean = extOf(path) in langs || extOf(path) in SFC_EXTS
 
+    fun supportsDeclarations(path: Path): Boolean = langs[extOf(path)]?.declTypes?.isNotEmpty() == true
+
+    fun analyzeDeclarations(path: Path, text: String): FileDeclarations {
+        val lang = langs[extOf(path)] ?: return FileDeclarations.EMPTY
+        if (lang.declTypes.isEmpty() || text.isBlank()) return FileDeclarations.EMPTY
+        val parser = parserFor(lang)
+        val tree = synchronized(parser) { parser.parseString(null, text) } ?: return FileDeclarations.EMPTY
+        return collectDeclarations(tree.rootNode, lang, text, buildByteToChar(text))
+    }
+
     fun supportsStaticCalls(path: Path): Boolean {
         val lang = langs[extOf(path)] ?: return false
         return lang.callTypes.isNotEmpty() && lang.declTypes.isNotEmpty()

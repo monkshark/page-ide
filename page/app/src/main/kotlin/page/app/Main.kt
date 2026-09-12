@@ -103,6 +103,7 @@ import page.editor.SearchState
 import page.editor.SyntaxLexers
 import page.editor.TabBook
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -437,38 +438,32 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
 
     val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
     var atlasSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
-    var atlasLoadProgress by remember { mutableStateOf<Float?>(null) }
+    var atlasLoadProgress by remember { mutableStateOf<page.atlas.analyzer.ProjectAnalysisProgress?>(null) }
     val atlasProjectMode = layoutUiState.atlasProjectMode
     val atlasViewTab = layoutUiState.atlasViewTab
     val atlasExpanded = layoutUiState.expandedPanel == page.app.mvi.ExpandedPanel.ATLAS
     LaunchedEffect(atlasExpanded, atlasProjectMode, atlasViewTab, atlasProvider, focusedActivePath, focusedActiveText) {
-        val projectScope = true
-        if (!atlasExpanded || atlasProvider == null ||
-            (!projectScope && !atlasProjectMode && focusedActivePath == null)
-        ) {
+        if (!atlasExpanded || atlasProvider == null) {
             atlasSlice = GraphSlice.EMPTY
             atlasLoadProgress = null
             return@LaunchedEffect
         }
-        kotlinx.coroutines.delay(300)
         val reportProgress = atlasSlice.nodes.isEmpty()
-        val onProgress: (Int, Int) -> Unit = { done, total ->
-            if (reportProgress && total > 0) atlasLoadProgress = done.toFloat() / total
+        if (reportProgress) atlasLoadProgress = page.atlas.analyzer.ProjectAnalysisProgress(page.atlas.analyzer.ProjectAnalysisStage.DISCOVERING)
+        else kotlinx.coroutines.delay(300)
+        val analysisContext = kotlinx.coroutines.currentCoroutineContext()
+        val onProgress: (page.atlas.analyzer.ProjectAnalysisProgress) -> Unit = { progress ->
+            analysisContext.ensureActive()
+            if (reportProgress) atlasLoadProgress = progress
         }
         atlasSlice = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
-                when {
-                    projectScope -> {
-                        val project = atlasProvider.nodesForProject(focusedActivePath, focusedActiveText, onProgress)
-                        val file = focusedActivePath
-                            ?.let { atlasProvider.nodesForFile(it, focusedActiveText) }
-                            ?: GraphSlice.EMPTY
-                        page.atlas.graph.GraphQueries.merge(project, file)
-                    }
-                    atlasProjectMode -> atlasProvider.nodesForProject(focusedActivePath, focusedActiveText, onProgress)
-                    else -> atlasProvider.nodesForFile(focusedActivePath!!, focusedActiveText)
-                }
+                val project = atlasProvider.analyzeProject(focusedActivePath, focusedActiveText, onProgress)
+                onProgress(page.atlas.analyzer.ProjectAnalysisProgress(page.atlas.analyzer.ProjectAnalysisStage.ACTIVE_FILE))
+                val file = focusedActivePath?.let { atlasProvider.nodesForFile(it, focusedActiveText) } ?: GraphSlice.EMPTY
+                page.atlas.graph.GraphQueries.merge(project, file)
             }.getOrElse { t ->
+                if (t is kotlinx.coroutines.CancellationException) throw t
                 println("[atlas] slice computation failed: ${t::class.simpleName}: ${t.message}")
                 GraphSlice.EMPTY
             }

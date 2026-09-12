@@ -11,8 +11,18 @@ class WorkspaceIndex(private val root: Path) {
 
     private var files: List<Path> = emptyList()
     private var lastScan = 0L
+    private var snapshotDepth = 0
 
+    @Synchronized
+    fun <T> withSnapshot(block: () -> T): T {
+        refreshIfStale()
+        snapshotDepth++
+        return try { block() } finally { snapshotDepth-- }
+    }
+
+    @Synchronized
     fun refreshIfStale(ttlMs: Long = 30_000) {
+        if (snapshotDepth > 0) return
         val now = System.currentTimeMillis()
         if (files.isNotEmpty() && now - lastScan < ttlMs) return
         lastScan = now
@@ -59,13 +69,15 @@ class WorkspaceIndex(private val root: Path) {
 
 object ImportResolver {
 
+    fun requiresDeclarations(path: Path): Boolean = extOf(path) in setOf("java", "kt", "kts", "scala", "sc", "cs", "php")
+
     fun resolveAll(
         raw: RawImport,
         activeFile: Path,
         index: WorkspaceIndex,
         declIndex: DeclarationIndex? = null,
     ): List<Path> {
-        if (raw.wildcard && declIndex != null) {
+        if (raw.wildcard && declIndex != null && requiresDeclarations(activeFile)) {
             declIndex.refreshIfStale()
             val members = declIndex.filesInPackage(raw.target)
             if (members.isNotEmpty()) {
