@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import page.atlas.graph.GraphSlice
 
 class AtlasViewState {
+    val exploration = ExplorationViewState()
     var yaw by mutableStateOf(0.6f)
     var pitch by mutableStateOf(0.5f)
     var zoomUser by mutableStateOf(1f)
@@ -24,6 +25,7 @@ class AtlasViewState {
             pendingFocusId = null
             sliceKey = slice
             selectedId = pending
+            exploration.start(slice, pending)
             return
         }
         if (sliceKey == slice) return

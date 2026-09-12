@@ -34,6 +34,7 @@ toolchains it needs by itself. The name is what it is built around — **P**air,
 - Toolchains installed in-app — JDK, Node, Python, Go, Rust, .NET, Dart, Swift, Clang, MSVC
 - Code actions with an inline diff, and a review panel for edits that span several files
 - Import, call, and module graphs drawn from tree-sitter rather than build metadata
+- File dependency exploration with expandable and collapsible branches, source previews, visit history, cycles, and potential impact
 - Split panes, folding, inlay hints, nine themes, and one action table behind every shortcut
 
 <sub>Kotlin · Java · Python · TypeScript/JavaScript · Go · Rust · C/C++ · Swift · Dart/Flutter ·

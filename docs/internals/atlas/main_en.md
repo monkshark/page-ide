@@ -45,6 +45,10 @@ An extracted import is just a string; it has to be linked to a real file before 
 
 `DeclarationIndex` collects symbol declaration sites, and `StaticCallHierarchySource` gathers static call relations that back the call graph.
 
+Declaration indexing uses `ImportExtractor.analyzeDeclarations`, which collects package names, top-level symbols and source locations without walking import, inheritance or call expressions. Files without supported declarations are excluded. `ImportGraphProvider` keeps declaration results separately from full file analysis and reuses unchanged results by modification time. A workspace snapshot prevents TTL-triggered rescans during one graph computation.
+
+`analyzeProject` reports discovery, declaration indexing and dependency connection through `ProjectAnalysisProgress`. The UI shows the current phase and completed-file count, including the initial declaration pass, then indicates active-file analysis. First opening starts without the edit debounce; subsequent refreshes retain the debounce. Cancellation propagates instead of being converted into an empty graph. The existing `nodesForProject` callback remains available for per-file progress consumers.
+
 ---
 
 ## graph — model and queries
@@ -62,32 +66,46 @@ From the whole-project graph it derives dependency cycles (`projectCycles`), per
 
 ---
 
-## render — two views
+## render — modules, exploration and problems
 
-The entry composable is `AtlasContent`. A chip at the top switches between two tabs.
+The entry composable is `AtlasContent`. Its header switches between three tabs.
 
 | Tab (`AtlasViewTab`) | Content |
 |---|---|
-| `RELATIONS` | `OverviewCanvas` — the node/edge graph. Zoom, pan, select, open file |
-| `ANALYSIS` | `DependencyInsightPanel` — dependencies, dependents, cycles as text insights |
+| `MODULES` — Modules | `OverviewCanvas` — module cards, folder drill-in, breadcrumbs and file navigation |
+| `FILE` — Explore | `DependencyExplorationPanel` — expand file relationships, inspect source evidence, trace paths and potential impact |
+| `PROBLEMS` — Problems | `AtlasProblemsPanel` — project cycles and highly depended-on files; select a file to explore it |
 
-The call graph is drawn by `CallGraphPanel` · `CallsView` as a separate view. `AtlasSearch` · `AtlasSearchBar` find nodes, and `VcsOverlay` overlays change status on the graph. View state lives in `AtlasViewState`.
+The call graph remains a separate side panel (`CallGraphPanel` · `CallsView`). Search matches file names and paths, including paths copied from an issue; Enter starts an exploration of the match. A module inspector's Explore action starts from one of its files without opening the editor.
+
+`DependencyExploration` owns directional expansion, stable grid positions, directed path tracing, cycle groups and reverse-dependency impact. The initial view shows up to three neighbors in each direction; further expansion adds up to four at a time, with an 80-node view cap and hidden counts. Selection never rearranges existing nodes. Pan, wheel zoom and Fit control the camera. `ExplorationViewState`, held by `AtlasViewState`, retains the selection, revealed nodes and camera while Atlas closes and reopens; Back restores earlier exploration states within the running IDE session.
+
+A → B means A uses B. Selecting a line, or View source in the neighbor list, shows the actual relation kind and an analyzed source excerpt when available. Tree-sitter records a zero-based source line and the exact parsed statement in `FileAnalysis`; `ImportGraphProvider` carries that evidence through import resolution and inheritance promotion into `GraphEdge.evidence`. This is static analysis, not an execution trace or a guarantee that every runtime dependency was found. Impact highlights possible dependents, not guaranteed failures. The source excerpt is an analysis snapshot.
+
+Explore uses file cards with vertically centered labels, a selection ring and a Selected file label. Uses and Used by counts share the colors of outgoing and incoming relationships. Controls beneath the selected card expand or collapse each direction. Branch ownership preserves files still reachable through another open branch, the start file and explicitly revealed path or impact files. Remaining cards keep their coordinates when a branch closes.
+
+`ExplorationViewport` brings newly revealed or selected files into view with the smallest required pan, reducing zoom when the group cannot fit. A visibility request is consumed once so reopening Atlas preserves subsequent manual camera movement. Below 80% zoom, cards hide icons and paths and render file names at a fixed screen text size, with ellipsis when necessary. Hovering reveals the full file label and path; hovering a connection highlights it and previews its source, relation kind and target without selecting it.
+
+The inspector shows either file details or connection details. Connection details group source and destination, source preview and the primary open-source action. Visited lists file selections in visit order, not dependency order; selecting an earlier entry returns to it, and Back restores the previous trail and camera. Clear highlight, or Escape with graph focus, removes inspection and highlighting without collapsing the graph. Below 880 dp, the inspector moves beneath the graph with its own scrollbar. Fit view and zoom controls stay beside the visible-file count. Both light and dark palettes use the existing Glass theme.
 
 ---
+
+The path picker searches destination file names and paths across the analyzed graph, including files not yet visible. A direction with no path produces an explicit empty result. Potential impact labels direct dependents and hop counts, with dashed indirect connections. Cycle cards list group members without inventing an order of calls or dependencies.
 
 ## IDE integration
 
 Atlas opens as an expanded panel (`ExpandedPanel.ATLAS`).
 
-- Editor context menu Show in Atlas — select the current file in the graph
-- Shortcut `FOCUS_IN_ATLAS` → `focusInAtlas(path)` — focus the active file in the Relations tab
+- Editor context menu Show in Atlas — start exploring the selected file
+- Shortcut `FOCUS_IN_ATLAS` → `focusInAtlas(path)` — focus the active file in Explore
+- Open file or Open source at line closes Atlas, opens the editor at the requested location, and retains the file relationship side panel
 - Tab switching and panel sizing flow through MVI events (`AtlasViewTabChanged` · `ResizeAtlas` · `FocusInAtlas`)
 
 ---
 
 ## export — snapshot
 
-`SnapshotExporter` writes the graph to a JSON snapshot. The Atlas widget in the docs viewer reads this snapshot to show the graph without a live IDE.
+`SnapshotExporter` writes the graph to a JSON snapshot. The Atlas widget in the docs viewer reads this snapshot to show the graph without a live IDE. Source excerpts are not exported; older snapshots and call graphs can have no relationship evidence.
 
 ---
 

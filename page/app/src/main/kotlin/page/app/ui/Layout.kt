@@ -186,7 +186,7 @@ internal fun IdeMainLayout(
     atlasMapView: MapViewState = remember { MapViewState() },
     atlasView: AtlasViewState = remember { AtlasViewState() },
     atlasOverviewState: OverviewViewState = remember { OverviewViewState() },
-    atlasLoadProgress: Float? = null,
+    atlasLoadProgress: page.atlas.analyzer.ProjectAnalysisProgress? = null,
     atlasFileRole: FileRole? = null,
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     onAtlasFocusActive: (() -> Unit)? = null,
@@ -860,6 +860,16 @@ internal fun IdeMainLayout(
                     }
                 },
                 onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
+                onOpenLocation = { path, line ->
+                    onJumpToProblem(path, line, 0)
+                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path.toFilePath() }?.id
+                    if (fileId != null) {
+                        atlasFileSlice = atlasSlice
+                        onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
+                    } else {
+                        onEvent(IdeEvent.Panel.CollapsePanel)
+                    }
+                },
                 projectMode = ui.atlasProjectMode,
                 onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
                 viewTab = ui.atlasViewTab,

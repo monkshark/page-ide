@@ -13,10 +13,13 @@ data class GraphNode(
     val kind: NodeKind,
 )
 
+data class SourceEvidence(val line: Int, val text: String)
+
 data class GraphEdge(
     val from: String,
     val to: String,
     val kind: EdgeKind = EdgeKind.IMPORT,
+    val evidence: SourceEvidence? = null,
 )
 
 data class GraphSlice(

@@ -161,7 +161,7 @@ private fun reduceLayout(s: LayoutState, e: IdeEvent.Panel): LayoutState = when 
         if (s.expandedPanel == ExpandedPanel.ATLAS) s.copy(expandedPanel = ExpandedPanel.NONE)
         else s.copy(expandedPanel = ExpandedPanel.ATLAS)
     IdeEvent.Panel.CloseAtlas -> s.copy(atlasOpen = false)
-    IdeEvent.Panel.FocusInAtlas -> s.copy(expandedPanel = ExpandedPanel.ATLAS, atlasViewTab = AtlasViewTab.MODULES)
+    IdeEvent.Panel.FocusInAtlas -> s.copy(expandedPanel = ExpandedPanel.ATLAS, atlasViewTab = AtlasViewTab.FILE)
     IdeEvent.Panel.ShowAtlasCalls -> s.copy(atlasOpen = true, expandedPanel = ExpandedPanel.NONE)
     is IdeEvent.Panel.ShowAtlasFile -> s.copy(atlasFileFocus = e.fileId, expandedPanel = ExpandedPanel.NONE)
     IdeEvent.Panel.CloseAtlasFile -> s.copy(atlasFileFocus = null)
