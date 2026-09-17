@@ -1,8 +1,16 @@
 {
-  "updatedAt": "2026-09-16T08:57:22.387Z",
+  "updatedAt": "2026-09-17T09:02:22.889Z",
   "packageName": "bash-language-server",
-  "latest": "5.6.0",
+  "latest": "5.7.1",
   "versions": [
+    {
+      "version": "5.7.1",
+      "publishedAt": "2026-09-16T17:11:03.571Z"
+    },
+    {
+      "version": "5.7.0",
+      "publishedAt": "2026-09-16T13:07:48.885Z"
+    },
     {
       "version": "5.6.0",
       "publishedAt": "2025-04-13T21:25:27.098Z"
@@ -194,14 +202,6 @@
     {
       "version": "4.2.1",
       "publishedAt": "2023-01-02T20:41:16.093Z"
-    },
-    {
-      "version": "4.2.0",
-      "publishedAt": "2023-01-02T19:27:31.454Z"
-    },
-    {
-      "version": "4.1.3",
-      "publishedAt": "2022-12-20T08:44:56.041Z"
     }
   ]
 }
