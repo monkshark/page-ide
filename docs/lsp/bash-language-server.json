@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-09-17T09:02:22.889Z",
+  "updatedAt": "2026-09-18T08:37:04.317Z",
   "packageName": "bash-language-server",
-  "latest": "5.7.1",
+  "latest": "5.8.0",
   "versions": [
+    {
+      "version": "5.8.0",
+      "publishedAt": "2026-09-17T09:03:33.215Z"
+    },
     {
       "version": "5.7.1",
       "publishedAt": "2026-09-16T17:11:03.571Z"
@@ -198,10 +202,6 @@
     {
       "version": "4.2.2",
       "publishedAt": "2023-01-04T20:42:05.404Z"
-    },
-    {
-      "version": "4.2.1",
-      "publishedAt": "2023-01-02T20:41:16.093Z"
     }
   ]
 }
