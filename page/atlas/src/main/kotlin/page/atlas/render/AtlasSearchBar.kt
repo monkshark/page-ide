@@ -25,6 +25,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -66,6 +69,7 @@ internal fun AtlasSearchBar(
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .semantics { contentDescription = "Search files in Atlas" }
                     .focusRequester(focusRequester)
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -75,8 +79,7 @@ internal fun AtlasSearchBar(
                                 true
                             }
                             Key.Escape -> {
-                                onClose()
-                                true
+                                if (query.isNotEmpty()) { onClose(); true } else false
                             }
                             else -> false
                         }
@@ -91,11 +94,12 @@ internal fun AtlasSearchBar(
             },
             style = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant),
         )
-        Text(
-            text = "Close",
+        if (query.isNotEmpty()) Text(
+            text = "×",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.clickable { onClose() }.padding(2.dp),
+            modifier = Modifier.semantics { contentDescription = "Clear file search" }
+                .clickable(role = Role.Button) { onClose() }.padding(4.dp),
         )
     }
 }

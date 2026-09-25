@@ -23,6 +23,19 @@ import page.shared.path.FilePath
 
 class DependencyExplorationTest {
     @Test
+    fun `reading a path connection keeps the route and layout intact`() {
+        val slice = graph("root" to "a", "a" to "b", "b" to "root")
+        val route = DependencyExploration.start(slice, "root").traceTo(slice, "b")
+        val reading = route.inspect(slice, slice.edges.first(), preserveHighlight = true)
+        assertEquals(route.highlightedEdges, reading.highlightedEdges)
+        assertEquals(route.highlight, reading.highlight)
+        assertEquals(route.positions, reading.positions)
+        assertEquals(slice.edges.first(), reading.selectedEdge)
+        assertNull(reading.clearHighlight().highlight)
+        assertNull(route.inspect(slice, slice.edges.first()).highlight)
+    }
+
+    @Test
     fun `collapse removes descendants while preserving the other direction and coordinates`() {
         val slice = graph("caller" to "root", "root" to "a", "a" to "b", "b" to "c")
         val state = DependencyExploration.start(slice, "root").select(slice, "a")

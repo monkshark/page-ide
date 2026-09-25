@@ -19,6 +19,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -32,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,6 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -113,10 +120,6 @@ fun AtlasContent(
     val selectedId = atlasView.selectedId
     val overviewView = overviewState.camera
     var overviewSelection by overviewState.selectionState
-    val openFile: (FilePath) -> Unit = { path ->
-        onNodeClick(path.toNioPath())
-        onClose()
-    }
     LaunchedEffect(slice) {
         val path = overviewSelection.drillPath
         if (path.isNotEmpty()) {
@@ -192,6 +195,7 @@ fun AtlasContent(
         atlasView.exploration.start(slice, node.id)
         onViewTabChange(AtlasViewTab.FILE)
     }
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onSurface) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -213,26 +217,18 @@ fun AtlasContent(
                 } else {
                     false
                 }
-            }
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.type == PointerEventType.Press) {
-                            runCatching { contentFocus.requestFocus() }
-                        }
-                    }
-                }
             },
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp)
-                .padding(start = 10.dp, end = 8.dp),
+                .height(48.dp)
+                .padding(start = 18.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
+            Text("Atlas", fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(end = 18.dp), color = MaterialTheme.colorScheme.onSurface)
             val problemCount = remember(slice) { atlasProblemCount(slice) }
             for (tab in AtlasViewTab.entries) {
                 ModeChip(
@@ -284,10 +280,22 @@ fun AtlasContent(
             }
         } else if (viewTab == AtlasViewTab.MODULES) {
             var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }
-            val selectedModuleForSide = overviewSelection.moduleId
-                ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.MODULE }
-                ?.let { id -> moduleGraph.nodes.firstOrNull { it.id == id } }
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Architecture", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                Text("Select a module · Double-click to look inside", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ExploreAction("Fit view") { overviewView.scale = 0f }
+                if (overviewSelection.drillPath.isNotEmpty()) ExploreAction("↑ Parent") { requestDrillOut(overviewSelection.drillPath.size - 1) }
+            }
+            Divider()
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+            val exploreFile: (FilePath) -> Unit = { path ->
+                slice.nodes.firstOrNull { it.path == path }?.let {
+                    atlasView.exploration.start(slice, it.id)
+                    onViewTabChange(AtlasViewTab.FILE)
+                }
+            }
+            Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -302,7 +310,7 @@ fun AtlasContent(
                     view = overviewView,
                     selection = overviewSelection,
                     onSelectionChange = { overviewSelection = it },
-                    onOpenFile = openFile,
+                    onOpenFile = exploreFile,
                     roles = atlasRoleColors(),
                     onDrillFrom = { rect, drilled ->
                         drillFrom = drilled.node.id to rect
@@ -402,21 +410,6 @@ fun AtlasContent(
                     )
                 }
             }
-            if (selectedModuleForSide != null) {
-                Divider(vertical = true)
-                OverviewInspector(
-                    graph = moduleGraph,
-                    module = selectedModuleForSide,
-                    onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
-                    onOpenFile = openFile,
-                    modifier = Modifier.width(232.dp).fillMaxHeight(),
-                    onExploreFile = { path ->
-                        slice.nodes.firstOrNull { it.path == path }?.let {
-                            atlasView.exploration.start(slice, it.id)
-                            onViewTabChange(AtlasViewTab.FILE)
-                        }
-                    },
-                )
             }
             }
         } else if (viewTab == AtlasViewTab.FILE) {
@@ -432,6 +425,7 @@ fun AtlasContent(
                     state = atlasView.exploration,
                     onOpen = { onNodeClick(it); onClose() },
                     onOpenLocation = { path, line -> onOpenLocation(path, line); onClose() },
+                    onOverview = { onViewTabChange(AtlasViewTab.MODULES) },
                 )
             }
         } else {
@@ -444,15 +438,27 @@ fun AtlasContent(
                 AtlasProblemsPanel(
                     slice = slice,
                     focusId = problemFocus,
-                    onOpen = onNodeClick,
+                    onOpen = { onNodeClick(it); onClose() },
+                    onOpenLocation = { path, line -> onOpenLocation(path, line); onClose() },
                     onRefocus = {
                         insightFocusOverride = it
                         atlasView.exploration.start(slice, it)
                         onViewTabChange(AtlasViewTab.FILE)
                     },
+                    onExploreCycle = {
+                        atlasView.exploration.start(slice, it)
+                        atlasView.exploration.update(atlasView.exploration.exploration.showCycle(slice))
+                        onViewTabChange(AtlasViewTab.FILE)
+                    },
+                    onExploreImpact = {
+                        atlasView.exploration.start(slice, it)
+                        atlasView.exploration.update(atlasView.exploration.exploration.showImpact(slice))
+                        onViewTabChange(AtlasViewTab.FILE)
+                    },
                 )
             }
         }
+    }
     }
 }
 
@@ -667,33 +673,38 @@ internal fun HeaderAction(label: String, accent: Boolean = false, onClick: () ->
 private fun ModeChip(label: String, selected: Boolean, badge: String? = null, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val colors = MaterialTheme.colorScheme
     val bg = when {
-        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         hovered -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         else -> Color.Transparent
     }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(7.dp))
+            .height(48.dp)
             .background(bg)
+            .drawBehind {
+                if (selected) drawLine(colors.primary, Offset(10.dp.toPx(), size.height - 2.dp.toPx()),
+                    Offset(size.width - 10.dp.toPx(), size.height - 2.dp.toPx()), strokeWidth = 2.dp.toPx())
+            }
+            .semantics { this.selected = selected }
             .hoverable(interaction)
-            .clickable(interactionSource = interaction, indication = null) { onClick() }
-            .padding(horizontal = 9.dp, vertical = 4.dp),
+            .clickable(interactionSource = interaction, indication = null, role = Role.Tab) { onClick() }
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (selected) colors.onSurface else colors.onSurfaceVariant,
         )
         if (badge != null) {
             Text(
                 text = badge,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error,
+                color = colors.onSurfaceVariant,
             )
         }
     }
