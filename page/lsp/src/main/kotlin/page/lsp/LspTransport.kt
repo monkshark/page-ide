@@ -26,12 +26,22 @@ class ProcessTransport(
     private val process: Process,
     private val onStderrLine: (String) -> Unit = { System.err.println("[lsp] $it") },
 ) : LspTransport {
+    private val processJob = try {
+        WindowsProcessJob.attach(process)
+    } catch (error: Throwable) {
+        runCatching { stopProcess() }
+        throw error
+    }
+
     override val input: InputStream = process.inputStream
     override val output: OutputStream = process.outputStream
     val errorStream: InputStream = process.errorStream
 
     override val exit: java.util.concurrent.CompletableFuture<Int> =
-        process.onExit().thenApply { it.exitValue() }
+        process.onExit().thenApply {
+            processJob?.close()
+            it.exitValue()
+        }
 
     private val stderrPump: Thread = Thread({
         try {
@@ -46,6 +56,7 @@ class ProcessTransport(
     }
 
     override fun close() {
+        processJob?.close()
         stopProcess()
         runCatching { stderrPump.interrupt() }
         closeStreams()

@@ -9,6 +9,8 @@ import java.io.PipedOutputStream
 class LspTestHarness(initialSettings: Any? = null) {
     val fakeServer = FakeLanguageServer()
     val client: LspClient
+    @Volatile var transportClosed = false
+        private set
     private val transport: LspTransport
     private val serverLauncher: Launcher<LanguageClient>
 
@@ -18,7 +20,7 @@ class LspTestHarness(initialSettings: Any? = null) {
         val serverToClient = PipedOutputStream()
         val clientFromServer = PipedInputStream(serverToClient, BUFFER)
 
-        transport = StreamTransport(clientFromServer, clientToServer)
+        transport = StreamTransport(clientFromServer, clientToServer) { transportClosed = true }
         client = LspClient(transport, initialSettings = initialSettings)
 
         serverLauncher = LSPLauncher.createServerLauncher(fakeServer, serverFromClient, serverToClient)

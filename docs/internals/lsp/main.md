@@ -60,7 +60,9 @@ interface LanguageBackend {
 
 ## LspTransport — 프로세스 stdio
 
-`ProcessTransport`는 서버 프로세스의 stdin/stdout을 클라이언트에 잇고, stderr는 데몬 스레드로 퍼 올려 로그로 흘린다. 종료 시 프로세스 트리를 정리하는데, Windows에서는 `taskkill /F /T`로 자식까지 강제 종료하고, 그 외 OS에서는 자손 프로세스를 destroy한다. 서버가 좀비로 남지 않게 하는 지점이다.
+`ProcessTransport`는 서버 프로세스의 stdin/stdout을 클라이언트에 잇고, stderr는 데몬 스레드로 퍼 올려 로그로 흘린다. Windows에서는 서버와 자손을 `KILL_ON_JOB_CLOSE`가 설정된 전용 Job Object에 넣는다. PAGE가 강제로 종료되어 정리 코드가 실행되지 않아도 운영체제가 서버 트리를 종료한다. 이미 생성된 자손도 같은 Job에 연결한다. 정상 종료에서는 Job을 먼저 닫고, 남은 프로세스는 `taskkill /F /T`로 정리한다. 그 외 OS에서는 자손 프로세스를 destroy한다.
+
+`LspClient.shutdown()`은 서버 응답을 최대 2초 기다린 뒤 응답 여부와 관계없이 transport를 닫는다. 종료 중인 Kotlin 서버가 분석 완료를 기다리더라도 PAGE가 무기한 응답을 기다리지 않는다. 초기화 전 종료에서도 이미 생성된 transport를 닫는다.
 
 순서가 중요하다. 프로세스를 먼저 죽이고 그다음에 파이프를 닫는다. 반대로 하면 lsp4j 리스너가 read로 물려 있는 stdout을 닫게 되고, Windows에서는 그 `close()`가 돌아오지 않는다. 서버를 멈추는 모든 경로(삭제·재시작·앱 종료)가 이 한 줄에서 멈춰 선다. 닫기 자체도 데몬 스레드에서 2초만 기다려, 어떤 경우에도 호출자를 붙잡지 않는다.
 

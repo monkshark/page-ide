@@ -60,7 +60,9 @@ Asynchronous notifications from the server flow to listeners: subscribe with `on
 
 ## LspTransport — process stdio
 
-`ProcessTransport` wires the server process's stdin/stdout to the client, and pumps stderr on a daemon thread into the log. On close it cleans up the process tree: on Windows it force-kills children with `taskkill /F /T`, and on other systems it destroys descendant processes. This is what keeps servers from lingering as zombies.
+`ProcessTransport` wires the server process's stdin/stdout to the client, and pumps stderr on a daemon thread into the log. On Windows, the server and its descendants belong to a dedicated Job Object with `KILL_ON_JOB_CLOSE`. The operating system terminates the server tree even when PAGE is forcibly stopped without running cleanup code. Descendants created before assignment are attached to the same job. Normal close releases the job first, then uses `taskkill /F /T` for any remaining process. Other systems destroy descendant processes.
+
+`LspClient.shutdown()` waits at most two seconds for the server response, then closes the transport regardless of the response. A Kotlin server waiting for analysis to finish cannot leave PAGE waiting indefinitely for its reply. Shutdown before initialization also closes the transport that has already been created.
 
 The order matters. The process dies first, the pipes close second. The other way round means closing a stdout that the lsp4j listener is parked on, and on Windows that `close()` never returns — every path that stops a server (removal, restart, shutdown) stalls on that one line. The close itself also runs on a daemon thread with a two-second bound, so it can never hold its caller.
 
