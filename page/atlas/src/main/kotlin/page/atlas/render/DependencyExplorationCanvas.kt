@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -68,13 +69,12 @@ import page.atlas.interaction.DependencyExploration
 import page.atlas.interaction.ExplorationSlot
 import page.atlas.interaction.ExplorationHighlight
 import page.atlas.interaction.ExplorationDirection
-import page.ui.EditorFontFamily
 
-private const val CARD_WIDTH = 224f
-private const val CARD_HEIGHT = 84f
+private const val CARD_WIDTH = 236f
+private const val CARD_HEIGHT = 54f
 
 internal fun explorationRect(slot: ExplorationSlot): Rect = Rect(
-    Offset(slot.column * 330f, slot.row * 180f), Size(CARD_WIDTH, CARD_HEIGHT),
+    Offset(slot.column * 364f, slot.row * 66f), Size(CARD_WIDTH, CARD_HEIGHT),
 )
 
 private data class ExplorationCurve(val start: Offset, val first: Offset, val second: Offset, val end: Offset) {
@@ -134,9 +134,19 @@ internal fun DependencyExplorationCanvas(
     val graphFocus = remember { FocusRequester() }
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var hoverPosition by remember { mutableStateOf<Offset?>(null) }
-    var controlsSize by remember { mutableStateOf(IntSize.Zero) }
     val nodes = remember(slice, exploration.positions) { slice.nodes.filter { it.id in exploration.positions } }
     val rects = remember(exploration.positions) { exploration.positions.mapValues { explorationRect(it.value) } }
+    val directionGroups = remember(slice, exploration.positions, exploration.selectedId) {
+        val selectedSlot = exploration.positions[exploration.selectedId]
+        ExplorationDirection.entries.associateWith { direction ->
+            val column = selectedSlot?.column?.plus(if (direction == ExplorationDirection.USES) 1 else -1)
+            val visible = exploration.neighbors(slice, direction).mapNotNull { id ->
+                exploration.positions[id]?.let { slot -> slot to rects.getValue(id) }
+            }
+            val columnSize = exploration.positions.values.count { it.column == column }
+            if (visible.size == columnSize && visible.all { it.first.column == column }) visible.map { it.second } else emptyList()
+        }
+    }
     val edges = remember(slice, rects) { slice.edges.filter { it.from in rects && it.to in rects } }
     val curves = remember(edges, rects) {
         edges.associateWith { explorationCurve(rects.getValue(it.from), rects.getValue(it.to)) }
@@ -171,23 +181,24 @@ internal fun DependencyExplorationCanvas(
     }
     LaunchedEffect(viewport, camera.scale, rects) {
         if (camera.scale > 0f || viewport.width == 0 || viewport.height == 0 || rects.isEmpty()) return@LaunchedEffect
-        val left = rects.values.minOf { it.left } - 48f
-        val top = rects.values.minOf { it.top } - 48f
-        val right = rects.values.maxOf { it.right } + 48f
-        val bottom = rects.values.maxOf { it.bottom } + 48f
-        camera.scale = min(viewport.width / (right - left), viewport.height / (bottom - top)).coerceIn(.15f, 2f)
+        val left = rects.values.minOf { it.left } - 32f
+        val top = rects.values.minOf { it.top } - 88f
+        val right = rects.values.maxOf { it.right } + 32f
+        val bottom = rects.values.maxOf { it.bottom } + 32f
+        camera.scale = min(viewport.width / (right - left), viewport.height / (bottom - top)).coerceIn(.15f, 1.05f)
         camera.pan = Offset(viewport.width / 2f, viewport.height / 2f) -
             Offset((left + right) / 2f, (top + bottom) / 2f) * camera.scale
     }
-    val titleStyle = TextStyle(fontFamily = EditorFontFamily, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
-    val pathStyle = TextStyle(fontSize = 11.sp, lineHeight = 15.sp)
-    val labels = remember(nodes, colors, measurer) {
+    val titleStyle = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+    val pathStyle = TextStyle(fontSize = 12.sp, lineHeight = 16.sp)
+    val labels = remember(nodes, colors, measurer, exploration.selectedId) {
         nodes.associate { node -> node.id to (
-            measurer.measure(node.label, titleStyle.copy(color = colors.onSurface), maxLines = 1,
-                overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 154)) to
+            measurer.measure(node.label, titleStyle.copy(color = colors.onSurface,
+                fontWeight = if (node.id == exploration.selectedId) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1,
+                overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = (CARD_WIDTH - 50f).toInt())) to
                 measurer.measure(node.path?.parent?.fileName?.toString() ?: "External dependency",
                     pathStyle.copy(color = colors.onSurfaceVariant), maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = 154))
+                    overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = (CARD_WIDTH - 50f).toInt()))
             )
         }
     }
@@ -209,7 +220,11 @@ internal fun DependencyExplorationCanvas(
             .onKeyEvent {
                 if (it.type != KeyEventType.KeyDown || currentNodes.isEmpty()) false
                 else when (it.key) {
-                    Key.Escape -> { onClear?.invoke(); onClear != null }
+                    Key.Escape -> {
+                        val hasSelection = exploration.selectedEdge != null || exploration.highlight != null || exploration.message != null
+                        if (hasSelection) onClear?.invoke()
+                        hasSelection && onClear != null
+                    }
                     Key.DirectionRight, Key.DirectionDown, Key.DirectionLeft, Key.DirectionUp -> {
                         val direction = if (it.key == Key.DirectionLeft || it.key == Key.DirectionUp) -1 else 1
                         val index = currentNodes.indexOfFirst { node -> node.id == currentSelection }
@@ -255,18 +270,30 @@ internal fun DependencyExplorationCanvas(
             },
     ) {
         drawRect(colors.background)
-        val grid = 24f
-        val gridX = ((camera.pan.x % grid) + grid) % grid
-        val gridY = ((camera.pan.y % grid) + grid) % grid
-        for (x in 0..(size.width / grid).toInt()) {
-            for (y in 0..(size.height / grid).toInt()) {
-                drawCircle(colors.onSurfaceVariant.copy(alpha = .12f), .8f, Offset(gridX + x * grid, gridY + y * grid))
-            }
-        }
         val relatedIds = edges.filter { it.from == exploration.selectedId || it.to == exploration.selectedId }
             .flatMapTo(HashSet()) { listOf(it.from, it.to) }
         val highlight = exploration.highlightedEdges
         withTransform({ translate(camera.pan.x, camera.pan.y); scale(camera.scale.coerceAtLeast(.01f), camera.scale.coerceAtLeast(.01f), Offset.Zero) }) {
+            for ((direction, neighbors) in directionGroups) {
+                if (neighbors.isNotEmpty()) {
+                    val left = neighbors.minOf { it.left } - 12f
+                    val right = neighbors.maxOf { it.right } + 12f
+                    val top = neighbors.minOf { it.top } - 64f
+                    val bottom = neighbors.maxOf { it.bottom } + 12f
+                    drawRoundRect(lerp(colors.background, colors.surface, .5f), Offset(left, top),
+                        Size(right - left, bottom - top), CornerRadius(8f))
+                    if (camera.scale >= .8f) {
+                    val label = measurer.measure(if (direction == ExplorationDirection.USES) "Dependencies" else "Dependents",
+                        titleStyle.copy(color = colors.onSurface, fontWeight = FontWeight.SemiBold))
+                    drawText(label, topLeft = Offset(left + 16f, top + 12f))
+                    val hint = measurer.measure(if (direction == ExplorationDirection.USES) "Files this file uses" else "Files that use this file",
+                        pathStyle.copy(color = colors.onSurfaceVariant))
+                    drawText(hint, topLeft = Offset(left + 16f, top + 34f))
+                    }
+                    drawLine(colors.outline.copy(alpha = .25f), Offset(left + 12f, top + 60f),
+                        Offset(right - 12f, top + 60f), 1f)
+                }
+            }
             for ((edge, curve) in curves) {
                 val selected = edge == exploration.selectedEdge || edge == hoveredEdge
                 val emphasized = selected || if (highlight.isNotEmpty()) edge in highlight
@@ -274,16 +301,17 @@ internal fun DependencyExplorationCanvas(
                 val color = when {
                     selected -> accent
                     edge in highlight -> highlightColor
-                    edge.to == exploration.selectedId -> roles.usedBy.copy(alpha = .8f)
-                    edge.from == exploration.selectedId -> roles.dependency.copy(alpha = .8f)
-                    else -> colors.outlineVariant.copy(alpha = .4f)
+                    highlight.isNotEmpty() -> colors.onSurfaceVariant.copy(alpha = .18f)
+                    edge.to == exploration.selectedId -> colors.onSurfaceVariant.copy(alpha = .55f)
+                    edge.from == exploration.selectedId -> colors.onSurfaceVariant.copy(alpha = .55f)
+                    else -> colors.onSurfaceVariant.copy(alpha = .1f)
                 }
                 val path = Path().apply {
                     moveTo(curve.start.x, curve.start.y)
                     cubicTo(curve.first.x, curve.first.y, curve.second.x, curve.second.y, curve.end.x, curve.end.y)
                 }
                 drawPath(path, color, style = Stroke(
-                    width = if (selected) 2.8f else if (emphasized) 1.8f else 1f,
+                    width = if (selected) 2f else if (emphasized) 1.35f else 1f,
                     pathEffect = if ((impactDepths[edge.from] ?: 0) > 1) PathEffect.dashPathEffect(floatArrayOf(6f, 4f)) else null,
                 ))
                 val tangent = curve.end - curve.point(.96f)
@@ -311,41 +339,34 @@ internal fun DependencyExplorationCanvas(
                 val nodeAccent = when {
                     selected -> accent
                     inHighlight -> highlightColor
-                    edges.any { it.from == node.id && it.to == exploration.selectedId } -> roles.usedBy
-                    edges.any { it.from == exploration.selectedId && it.to == node.id } -> roles.dependency
                     else -> colors.onSurfaceVariant
                 }
-                if (selected) drawRoundRect(accent.copy(alpha = .08f), rect.topLeft - Offset(5f, 5f),
-                    Size(rect.width + 10f, rect.height + 10f), CornerRadius(17f))
-                drawRoundRect(colors.onBackground.copy(alpha = .04f), rect.topLeft + Offset(0f, 3f), rect.size, CornerRadius(12f))
-                drawRoundRect(if (selected) lerp(colors.surface, accent, .08f) else colors.surface, rect.topLeft, rect.size, CornerRadius(12f))
-                drawRoundRect(
-                    when { selected || node == hoveredNode -> accent; inHighlight -> highlightColor; else -> colors.outline.copy(alpha = .4f) },
-                    rect.topLeft, rect.size, CornerRadius(12f), style = Stroke(if (selected) 1.8f else 1f),
-                )
+                if (selected) {
+                    drawRoundRect(lerp(colors.background, accent, .12f), rect.topLeft - Offset(0f, 9f),
+                        Size(rect.width, rect.height + 18f), CornerRadius(7f))
+                    drawRoundRect(accent, Offset(rect.left, rect.top + 4f), Size(3f, rect.height - 8f), CornerRadius(1.5f))
+                } else if (node == hoveredNode || inHighlight) {
+                    drawRoundRect(lerp(colors.background, nodeAccent, .08f), rect.topLeft, rect.size, CornerRadius(5f))
+                } else {
+                    drawLine(colors.outline.copy(alpha = .14f), Offset(rect.left + 38f, rect.bottom),
+                        Offset(rect.right - 8f, rect.bottom), 1f)
+                }
                 if (camera.scale >= .8f) {
-                val iconOrigin = Offset(rect.left + 14f, rect.center.y - 17f)
-                drawRoundRect(nodeAccent.copy(alpha = .12f), iconOrigin, Size(30f, 34f), CornerRadius(8f))
-                val document = iconOrigin + Offset(9f, 8f)
-                drawPath(Path().apply {
-                    moveTo(document.x, document.y); lineTo(document.x + 8f, document.y)
-                    lineTo(document.x + 13f, document.y + 5f); lineTo(document.x + 13f, document.y + 18f)
-                    lineTo(document.x, document.y + 18f); close()
-                    moveTo(document.x + 8f, document.y); lineTo(document.x + 8f, document.y + 5f)
-                    lineTo(document.x + 13f, document.y + 5f)
-                }, nodeAccent, style = Stroke(1.2f))
-                drawLine(nodeAccent, document + Offset(3f, 10f), document + Offset(10f, 10f), 1.2f)
-                drawLine(nodeAccent, document + Offset(3f, 14f), document + Offset(8f, 14f), 1.2f)
+                val type = node.label.substringAfterLast('.', "").take(3).uppercase().ifEmpty { "·" }
+                val typeLabel = measurer.measure(type, TextStyle(fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = nodeAccent))
+                val typeBox = Rect(Offset(rect.left + 10f, rect.center.y - 12f), Size(24f, 24f))
+                drawRoundRect(nodeAccent.copy(alpha = .09f), typeBox.topLeft, typeBox.size, CornerRadius(4f))
+                drawText(typeLabel, topLeft = typeBox.center - Offset(typeLabel.size.width / 2f, typeLabel.size.height / 2f))
                 val (title, path) = labels.getValue(node.id)
-                val textGap = 4f
+                val textGap = 2f
                 val textHeight = title.size.height + textGap + path.size.height
                 val textTop = rect.top + (rect.height - textHeight) / 2f
-                drawText(title, topLeft = Offset(rect.left + 56f, textTop), alpha = if (emphasized) 1f else .7f)
-                drawText(path, topLeft = Offset(rect.left + 56f, textTop + title.size.height + textGap), alpha = if (emphasized) 1f else .7f)
+                drawText(title, topLeft = Offset(rect.left + 44f, textTop), alpha = if (emphasized) 1f else .75f)
+                drawText(path, topLeft = Offset(rect.left + 44f, textTop + title.size.height + textGap), alpha = if (emphasized) 1f else .65f)
                 }
-                if (selected) {
-                    val selectedLabel = measurer.measure("Selected file", pathStyle.copy(color = accent, fontWeight = FontWeight.Medium))
-                    drawText(selectedLabel, topLeft = Offset(rect.left + 4f, rect.top - selectedLabel.size.height - 10f))
+                if (selected && camera.scale >= .8f) {
+                    val selectedLabel = measurer.measure("Exploring", pathStyle.copy(color = accent, fontWeight = FontWeight.Medium))
+                    drawText(selectedLabel, topLeft = Offset(rect.left + 2f, rect.top - selectedLabel.size.height - 20f))
                 }
                 impactDepths[node.id]?.let { depth ->
                     drawText(measurer.measure(if (depth == 1) "Direct dependent" else "$depth hops away",
@@ -354,6 +375,13 @@ internal fun DependencyExplorationCanvas(
             }
         }
         if (camera.scale < .8f) {
+            for ((direction, neighbors) in directionGroups) {
+                if (neighbors.isEmpty()) continue
+                val label = measurer.measure(if (direction == ExplorationDirection.USES) "Dependencies" else "Dependents",
+                    TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.onSurfaceVariant))
+                val origin = Offset(neighbors.minOf { it.left } + 4f, neighbors.minOf { it.top } - 45f)
+                drawText(label, topLeft = origin * camera.scale + camera.pan)
+            }
             for (node in nodes) {
                 val rect = rects.getValue(node.id)
                 val topLeft = rect.topLeft * camera.scale + camera.pan
@@ -367,22 +395,18 @@ internal fun DependencyExplorationCanvas(
     }
     val density = LocalDensity.current
     val selectedRect = rects[exploration.selectedId]
-    if (selectedRect != null && onExpand != null && onCollapse != null) {
-        val screen = selectedRect.center * camera.scale + camera.pan
-        val width = controlsSize.width.toFloat()
-        val height = controlsSize.height.toFloat()
-        val bottom = selectedRect.bottom * camera.scale + camera.pan.y
-        if (screen.x in 0f..viewport.width.toFloat() && bottom in 0f..viewport.height.toFloat()) {
-            Row(Modifier.offset { IntOffset((screen.x - width / 2).coerceIn(0f, (viewport.width - width).coerceAtLeast(0f)).toInt(),
-                (bottom + 8f).coerceAtMost((viewport.height - height).coerceAtLeast(0f)).toInt()) }
-                .onSizeChanged { controlsSize = it }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (selectedRect != null && onExpand != null && onCollapse != null && exploration.selectedEdge == null) {
+        Surface(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+            color = colors.surface, shape = RoundedCornerShape(8.dp)) {
+            Row(Modifier.padding(horizontal = 6.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (direction in listOf(ExplorationDirection.USED_BY, ExplorationDirection.USES)) {
                     val hidden = exploration.neighbors(slice, direction).count { it !in exploration.positions }
                     val name = if (direction == ExplorationDirection.USES) "Uses" else "Used by"
                     val collapsible = exploration.canCollapse(direction)
-                    if (hidden > 0) ExploreAction("$name +${minOf(4, hidden)}", enabled = exploration.positions.size < DependencyExploration.MAX_VISIBLE,
+                    if (hidden > 0) ExploreAction("${if (direction == ExplorationDirection.USES) "Dependencies" else "Dependents"} +${minOf(4, hidden)}", enabled = exploration.positions.size < DependencyExploration.MAX_VISIBLE,
                         description = "Expand $name: $hidden hidden files") { onExpand(direction) }
-                    if (collapsible) ExploreAction("− $name", description = "Collapse $name") { onCollapse(direction) }
+                    if (collapsible) ExploreAction(if (hidden > 0) "−" else if (direction == ExplorationDirection.USES) "− Dependencies" else "− Dependents",
+                        description = "Collapse $name") { onCollapse(direction) }
                 }
             }
         }

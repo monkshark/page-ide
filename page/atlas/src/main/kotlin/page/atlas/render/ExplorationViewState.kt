@@ -21,14 +21,14 @@ class ExplorationViewState {
 
     private data class Entry(val exploration: DependencyExploration, val pan: Offset, val scale: Float, val trail: List<String>)
 
-    fun update(next: DependencyExploration) {
+    fun update(next: DependencyExploration, reveal: Boolean = true) {
         if (next == exploration) return
         if (exploration.selectedId != null) {
             history = (history + Entry(exploration, camera.pan, camera.scale, trail)).takeLast(40)
         }
         val added = next.positions.keys - exploration.positions.keys
         val changedSelection = next.selectedId != exploration.selectedId
-        if (added.isNotEmpty() || changedSelection) {
+        if (reveal && (added.isNotEmpty() || changedSelection)) {
             revealRequest = ExplorationReveal(++revealSequence, added + listOfNotNull(next.selectedId))
         }
         if (changedSelection) next.selectedId?.let { trail = (trail + it).takeLast(40) }

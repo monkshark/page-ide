@@ -18,16 +18,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +41,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -58,7 +65,6 @@ import page.atlas.graph.EdgeKind
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
-import page.atlas.interaction.ExplorationDirection
 import page.atlas.interaction.ExplorationHighlight
 import page.atlas.toNioPath
 import page.ui.EditorFontFamily
@@ -78,113 +84,258 @@ internal fun DependencyExplorationPanel(
     onOpen: (Path) -> Unit,
     onOpenLocation: (Path, Int) -> Unit,
     modifier: Modifier = Modifier,
+    onOverview: (() -> Unit)? = null,
 ) {
     LaunchedEffect(slice) { state.onSliceChanged(slice, initialFocusId) }
     val exploration = state.exploration
     val byId = remember(slice) { slice.nodes.associateBy { it.id } }
     val focus = byId[exploration.selectedId]
+    var contextOpen by remember { mutableStateOf(false) }
+    var analysisMenuOpen by remember { mutableStateOf(false) }
+    var traceMode by remember(focus?.id) { mutableStateOf(false) }
     if (focus == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Choose a file using search to explore its relationships.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
-    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground) {
-    ProvideTextStyle(TextStyle(fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.sp)) {
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ExploreAction("← Back", state.canGoBack) { state.back(slice) }
-            ExploreAction("Focus on file") { state.start(slice, focus.id) }
-            ExploreAction("Change impact", selected = exploration.highlight == ExplorationHighlight.IMPACT) {
-                state.update(exploration.showImpact(slice))
-            }
-            ExploreAction("Find cycles", selected = exploration.highlight == ExplorationHighlight.CYCLE) {
-                state.update(exploration.showCycle(slice))
-            }
-            if (exploration.highlight != null || exploration.selectedEdge != null || exploration.message != null) {
-                ExploreAction("Clear highlight") { state.update(exploration.clearHighlight()) }
-            }
-        }
-        Divider()
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val wide = maxWidth >= 880.dp
-            val graph: @Composable (Modifier) -> Unit = { graphModifier ->
-                Column(graphModifier) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = if (wide) 18.dp else 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(if (wide) 8.dp else 6.dp)) {
-                        if (wide) Text("DEPENDENCY EXPLORER", fontSize = 10.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(focus.label, fontSize = 21.sp, lineHeight = 27.sp, fontWeight = FontWeight.SemiBold,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("Select a file to explore. Select a connection to see the source.", fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        val hidden = exploration.neighbors(slice, ExplorationDirection.USES)
-                            .plus(exploration.neighbors(slice, ExplorationDirection.USED_BY)).distinct().count { it !in exploration.positions }
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val roles = atlasRoleColors()
-                            ExplorationBadge("Used by ${exploration.neighbors(slice, ExplorationDirection.USED_BY).size}", roles.usedBy)
-                            ExplorationBadge("Uses ${exploration.neighbors(slice, ExplorationDirection.USES).size}", roles.dependency)
-                            if (hidden > 0) ExplorationBadge("$hidden more to explore", MaterialTheme.colorScheme.onSurfaceVariant)
+    val colors = MaterialTheme.colorScheme
+    Surface(modifier.fillMaxSize(), color = colors.background, contentColor = colors.onBackground) {
+        ProvideTextStyle(TextStyle(fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.sp)) {
+            Box(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ExploreAction("←", state.canGoBack, description = "Back") { state.back(slice) }
+                        if (onOverview != null) ExploreAction("Map", description = "Project map", onClick = onOverview)
+                        Text("/", color = colors.outline)
+                        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                            Text(focus.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(focus.path?.parent?.toString() ?: "External dependency", fontSize = 12.sp,
+                                color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        if (state.trail.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Visited", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            for ((index, id) in state.trail.withIndex()) {
-                                if (index > 0) Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(byId[id]?.label ?: id, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    color = if (index == state.trail.lastIndex) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.widthIn(max = 140.dp).clip(RoundedCornerShape(4.dp))
-                                        .clickable(enabled = index != state.trail.lastIndex, role = Role.Button) { state.revisit(slice, index) }
-                                        .padding(horizontal = 4.dp, vertical = 5.dp))
+                        focus.path?.let { path ->
+                            ExploreAction("↗", description = "Open selected file") { onOpen(path.toNioPath()) }
+                        }
+                        ExploreAction("Change impact", selected = exploration.highlight == ExplorationHighlight.IMPACT) {
+                            traceMode = false
+                            state.update(exploration.showImpact(slice))
+                        }
+                        Box {
+                            ExploreAction("•••", description = "Analysis tools") { analysisMenuOpen = true }
+                            DropdownMenu(expanded = analysisMenuOpen, onDismissRequest = { analysisMenuOpen = false }) {
+                                DropdownMenuItem(text = { Text("Trace path") }, onClick = {
+                                    analysisMenuOpen = false
+                                    traceMode = true
+                                }, modifier = Modifier.semantics { contentDescription = "Trace path" })
+                                DropdownMenuItem(text = { Text("Find cycles") }, onClick = {
+                                    analysisMenuOpen = false
+                                    traceMode = false
+                                    state.update(exploration.showCycle(slice))
+                                })
+                                DropdownMenuItem(text = { Text("Focus here") }, onClick = {
+                                    analysisMenuOpen = false
+                                    traceMode = false
+                                    state.start(slice, focus.id)
+                                })
+                                Divider()
+                                DropdownMenuItem(text = { Text("Code context") }, onClick = {
+                                    analysisMenuOpen = false
+                                    contextOpen = true
+                                }, modifier = Modifier.semantics { contentDescription = "Code context" })
                             }
                         }
                     }
-                    exploration.message?.let {
-                        Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp,
-                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary.copy(alpha = .1f))
-                                .padding(horizontal = 16.dp, vertical = 9.dp))
+                    Divider()
+                    if (state.trail.size > 1) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            for ((index, id) in state.trail.withIndex()) {
+                                if (index > 0) Text("›", color = colors.outline)
+                                Text(byId[id]?.label ?: id, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    color = if (index == state.trail.lastIndex) colors.onSurface else colors.onSurfaceVariant,
+                                    modifier = Modifier.widthIn(max = 160.dp).clip(RoundedCornerShape(4.dp))
+                                        .clickable(enabled = index != state.trail.lastIndex, role = Role.Button) { state.revisit(slice, index) }
+                                        .padding(horizontal = 6.dp, vertical = 5.dp))
+                            }
+                        }
                     }
-                    DependencyExplorationCanvas(
-                        slice, exploration, state.camera,
-                        onSelect = { state.update(state.exploration.select(slice, it)) },
-                        onInspect = { state.update(state.exploration.inspect(slice, it)) },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        revealRequest = state.revealRequest,
-                        onRevealHandled = state::acknowledgeReveal,
-                        onExpand = { state.update(state.exploration.expand(slice, it)) },
-                        onCollapse = { state.update(state.exploration.collapse(it)) },
-                        onClear = { state.update(state.exploration.clearHighlight()) },
-                    )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${exploration.positions.size} of ${slice.nodes.size} files shown", fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        ExploreAction("Fit view") { state.camera.scale = 0f }
+                    if (traceMode) {
+                        TraceDestination(slice, focus, onChoose = {
+                            state.update(exploration.traceTo(slice, it))
+                            traceMode = false
+                        }, onClose = { traceMode = false })
+                        Divider()
+                    }
+                    if (exploration.message != null || exploration.highlightedEdges.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(exploration.message.orEmpty(), fontSize = 12.sp, color = colors.onSurfaceVariant,
+                                modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (exploration.highlightedEdges.isNotEmpty()) {
+                                ExploreAction("Read connections") {
+                                    state.update(exploration.inspect(slice, exploration.highlightedEdges.first(), preserveHighlight = true))
+                                }
+                            }
+                            ExploreAction("×", description = "Clear highlight") { state.update(exploration.clearHighlight()) }
+                        }
+                    }
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                        val previewHeight = minOf(210.dp, maxHeight * .42f)
+                        Column(Modifier.fillMaxSize()) {
+                            DependencyExplorationCanvas(
+                                slice, exploration, state.camera,
+                                onSelect = { state.update(state.exploration.select(slice, it)) },
+                                onInspect = { state.update(state.exploration.inspect(slice, it, preserveHighlight = true)) },
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                revealRequest = state.revealRequest,
+                                onRevealHandled = state::acknowledgeReveal,
+                                onExpand = { state.update(state.exploration.expand(slice, it), reveal = false) },
+                                onCollapse = { state.update(state.exploration.collapse(it)) },
+                                onClear = {
+                                    state.update(if (state.exploration.selectedEdge != null) state.exploration.copy(selectedEdge = null)
+                                        else state.exploration.clearHighlight())
+                                },
+                            )
+                            exploration.selectedEdge?.let { edge ->
+                                Divider()
+                                ConnectionPreview(slice, edge, state, onOpen, onOpenLocation,
+                                    Modifier.fillMaxWidth().height(previewHeight))
+                            }
+                        }
+                    }
+                    Divider()
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${exploration.positions.size} / ${slice.nodes.size} files", fontSize = 12.sp,
+                            color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text("Select a connection to read its source", fontSize = 12.sp,
+                            color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(2f))
+                        ExploreAction("Fit", description = "Fit view") { state.camera.scale = 0f }
                         ExploreAction("−", description = "Zoom out") { zoomExploration(state, .8f) }
-                        Text("${(state.camera.scale * 100).toInt()}%", fontSize = 10.sp, fontFamily = EditorFontFamily)
+                        Text("${(state.camera.scale * 100).toInt()}%", fontSize = 11.sp)
                         ExploreAction("+", description = "Zoom in") { zoomExploration(state, 1.25f) }
                     }
                 }
-            }
-            val inspector: @Composable (Modifier) -> Unit = { inspectorModifier ->
-                ExplorationInspector(slice, focus, state, onOpen, onOpenLocation, inspectorModifier)
-            }
-            if (wide) Row(Modifier.fillMaxSize()) {
-                graph(Modifier.weight(1f).fillMaxHeight())
-                Divider(vertical = true)
-                inspector(Modifier.width(320.dp).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize()) {
-                graph(Modifier.weight(1f).fillMaxWidth())
-                Divider()
-                inspector(Modifier.height(260.dp).fillMaxWidth())
+                if (contextOpen) CodeBundlePanel(slice, focus.id, exploration.positions.keys, onClose = { contextOpen = false })
             }
         }
     }
+}
+
+@Composable
+private fun TraceDestination(
+    slice: GraphSlice,
+    focus: GraphNode,
+    onChoose: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var query by remember(focus.id) { mutableStateOf("") }
+    val colors = MaterialTheme.colorScheme
+    val inputFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { inputFocus.requestFocus() }
+    Column(Modifier.fillMaxWidth().background(colors.surface).onPreviewKeyEvent {
+        if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { onClose(); true } else false
+    }.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Trace path", fontWeight = FontWeight.Medium)
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(5.dp)).background(colors.background)
+                .border(1.dp, colors.outline.copy(alpha = .5f), RoundedCornerShape(5.dp)).padding(10.dp)) {
+                if (query.isEmpty()) Text("Destination file or path", color = colors.onSurfaceVariant)
+                BasicTextField(query, onValueChange = { query = it }, singleLine = true,
+                    textStyle = TextStyle(fontSize = 12.sp, color = colors.onSurface),
+                    cursorBrush = SolidColor(colors.primary),
+                    modifier = Modifier.fillMaxWidth().focusRequester(inputFocus).semantics { contentDescription = "Find path destination" })
+            }
+            ExploreAction("×", description = "Cancel path selection", onClick = onClose)
+        }
+        val candidates = (if (query.isBlank()) slice.nodes else atlasSearchMatches(slice.nodes, query)).filter { it.id != focus.id }
+        Column(Modifier.fillMaxWidth().height(132.dp).verticalScroll(rememberScrollState())) {
+            if (candidates.isEmpty()) Text("No matching destination.", modifier = Modifier.padding(vertical = 12.dp))
+            for (node in candidates.take(12)) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).clickable(role = Role.Button) { onChoose(node.id) }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(node.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(node.path?.parent?.toString().orEmpty(), color = colors.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+            }
+            if (candidates.size > 12) Text("More matches. Refine your search.", color = colors.onSurfaceVariant)
+        }
     }
+}
+
+@Composable
+private fun ConnectionPreview(
+    slice: GraphSlice,
+    edge: GraphEdge,
+    state: ExplorationViewState,
+    onOpen: (Path) -> Unit,
+    onOpenLocation: (Path, Int) -> Unit,
+    modifier: Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val source = slice.nodes.firstOrNull { it.id == edge.from }
+    val target = slice.nodes.firstOrNull { it.id == edge.to }
+    val evidence = edge.evidence
+    val steps = state.exploration.highlightedEdges.toList().ifEmpty {
+        slice.edges.filter { it.from in state.exploration.positions && it.to in state.exploration.positions }
+    }
+    val index = steps.indexOf(edge)
+    val scroll = rememberScrollState()
+    LaunchedEffect(edge) { scroll.scrollTo(0) }
+    Column(modifier.background(colors.surface).semantics { contentDescription = "Connection source preview" }.onPreviewKeyEvent {
+        if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
+            state.update(state.exploration.copy(selectedEdge = null)); true
+        } else false
+    }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("${source?.label ?: edge.from} → ${target?.label ?: edge.to}",
+                    fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${edge.kind.explorationLabel()} · ${evidence?.let { "line ${it.line + 1}" } ?: "source location unavailable"}",
+                    fontSize = 12.sp, color = colors.onSurfaceVariant)
+            }
+            ExploreAction("←", index > 0, description = "Previous connection") {
+                state.update(state.exploration.inspect(slice, steps[index - 1], preserveHighlight = true))
+            }
+            Text("${index + 1} / ${steps.size}", color = colors.onSurfaceVariant, fontSize = 11.sp)
+            ExploreAction("→", index >= 0 && index < steps.lastIndex, description = "Next connection") {
+                state.update(state.exploration.inspect(slice, steps[index + 1], preserveHighlight = true))
+            }
+            source?.path?.let { path ->
+                ExploreAction("Open ↗", description = "Open connection in editor") {
+                    if (evidence != null) onOpenLocation(path.toNioPath(), evidence.line)
+                    else onOpen(path.toNioPath())
+                }
+            }
+            ExploreAction("×", description = "Close source preview") {
+                state.update(state.exploration.copy(selectedEdge = null))
+            }
+        }
+        Divider()
+        Box(Modifier.weight(1f).fillMaxWidth().background(colors.background)) {
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (evidence == null) {
+                        Text("No source location is available for this relationship.", color = colors.onSurfaceVariant)
+                    } else {
+                        Text(evidence.text.take(2400), fontFamily = EditorFontFamily, fontSize = 13.sp, lineHeight = 21.sp)
+                        if (evidence.text.length > 2400) Text("Excerpt shortened. Open the file to read more.", color = colors.onSurfaceVariant)
+                    }
+                    source?.path?.let { Text(it.toString(), fontSize = 12.sp, color = colors.onSurfaceVariant) }
+                }
+            }
+            VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+        }
     }
 }
 
@@ -195,159 +346,6 @@ private fun zoomExploration(state: ExplorationViewState, factor: Float) {
     val selected = state.exploration.positions[state.exploration.selectedId]?.let(::explorationRect)?.center ?: Offset.Zero
     state.camera.pan += selected * (old - next)
     state.camera.scale = next
-}
-
-@Composable
-private fun ExplorationInspector(
-    slice: GraphSlice,
-    focus: GraphNode,
-    state: ExplorationViewState,
-    onOpen: (Path) -> Unit,
-    onOpenLocation: (Path, Int) -> Unit,
-    modifier: Modifier,
-) {
-    val exploration = state.exploration
-    val edge = exploration.selectedEdge
-    val byId = remember(slice) { slice.nodes.associateBy { it.id } }
-    var listLimit by remember(focus.id) { mutableStateOf(8) }
-    var traceMode by remember(focus.id) { mutableStateOf(false) }
-    var traceQuery by remember(focus.id) { mutableStateOf("") }
-    val colors = MaterialTheme.colorScheme
-    val scroll = rememberScrollState()
-    Box(modifier.background(colors.surface)) {
-    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(if (edge == null) "FILE DETAILS" else "CONNECTION DETAILS", fontSize = 10.sp,
-            letterSpacing = 1.sp, fontWeight = FontWeight.Medium, color = colors.onSurfaceVariant)
-        if (edge != null) {
-            val source = byId[edge.from]
-            val target = byId[edge.to]
-            Column(Modifier.fillMaxWidth().background(colors.primary.copy(alpha = .06f), RoundedCornerShape(12.dp))
-                .border(1.dp, colors.primary.copy(alpha = .18f), RoundedCornerShape(12.dp)).padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(source?.label ?: edge.from, fontFamily = EditorFontFamily, fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium)
-                Text("↓  ${edge.kind.explorationLabel()}", fontSize = 12.sp, color = colors.primary)
-                Text(target?.label ?: edge.to, fontFamily = EditorFontFamily, fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium)
-            }
-            val evidence = edge.evidence
-            if (evidence != null) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                    .background(colors.background).border(1.dp, colors.outline.copy(alpha = .3f), RoundedCornerShape(10.dp))) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Source preview", fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text("L${evidence.line + 1}", fontSize = 11.sp, color = colors.onSurfaceVariant)
-                    }
-                    Divider()
-                    SelectionContainer {
-                        Text(evidence.text.take(2400), fontFamily = EditorFontFamily, fontSize = 12.sp, lineHeight = 19.sp,
-                            modifier = Modifier.fillMaxWidth().padding(12.dp))
-                    }
-                }
-                if (evidence.text.length > 2400) Text("Source excerpt shortened. Open the file to read more.", fontSize = 10.sp)
-                source?.path?.let { path ->
-                    Text(path.toString(), fontSize = 11.sp, color = colors.onSurfaceVariant)
-                    ExploreAction("Open source · line ${evidence.line + 1}  ↗", accent = true, modifier = Modifier.fillMaxWidth()) {
-                        onOpenLocation(path.toNioPath(), evidence.line)
-                    }
-                }
-            } else {
-                Text("This relationship has no source location in the current analysis.", fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                source?.path?.let { path -> ExploreAction("Open source file") { onOpen(path.toNioPath()) } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ExploreAction("Explore source") { state.update(exploration.select(slice, edge.from)) }
-                ExploreAction("Explore target") { state.update(exploration.select(slice, edge.to)) }
-            }
-        }
-        if (edge == null) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(focus.label, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
-            Text(focus.path?.toString() ?: "External dependency · source unavailable", fontSize = 11.sp,
-                color = colors.onSurfaceVariant)
-        }
-        focus.path?.let { path -> ExploreAction("Open file  ↗", accent = true,
-            modifier = Modifier.fillMaxWidth()) { onOpen(path.toNioPath()) } }
-        ExploreAction(if (traceMode) "Cancel path selection" else "Trace a dependency path", selected = traceMode,
-            modifier = Modifier.fillMaxWidth()) { traceMode = !traceMode }
-        if (traceMode) {
-            Text("Find a destination. The path follows dependency direction.", fontSize = 12.sp, color = colors.onSurfaceVariant)
-            Box(Modifier.fillMaxWidth().background(colors.background, RoundedCornerShape(8.dp))
-                .border(1.dp, colors.primary.copy(alpha = .5f), RoundedCornerShape(8.dp)).padding(12.dp)) {
-                if (traceQuery.isEmpty()) Text("Destination file or path", fontSize = 12.sp, color = colors.onSurfaceVariant)
-                BasicTextField(traceQuery, onValueChange = { traceQuery = it }, singleLine = true,
-                    textStyle = TextStyle(fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurface),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), modifier = Modifier.fillMaxWidth())
-            }
-            val candidates = if (traceQuery.isBlank()) exploration.positions.keys.mapNotNull { byId[it] }
-            else atlasSearchMatches(slice.nodes, traceQuery)
-            val destinations = candidates.filter { it.id != focus.id }
-            if (destinations.isEmpty()) Text("No matching destination. Try another file name or path.", fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            for (node in destinations.take(12)) {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) {
-                    state.update(exploration.traceTo(slice, node.id)); traceMode = false
-                }.padding(10.dp)) {
-                    Text(node.label, fontSize = 12.sp, color = colors.primary)
-                    Text(node.path?.parent?.toString().orEmpty(), fontSize = 11.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariant)
-                }
-            }
-            if (destinations.size > 12) Text("${destinations.size} matches. Refine the destination search.", fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        for (direction in ExplorationDirection.entries) {
-            val ids = exploration.neighbors(slice, direction)
-            val hidden = ids.count { it !in exploration.positions }
-            Divider()
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (direction == ExplorationDirection.USES) "Uses" else "Used by", fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                ExplorationBadge(ids.size.toString(), if (direction == ExplorationDirection.USES) atlasRoleColors().dependency else atlasRoleColors().usedBy)
-            }
-            if (ids.isEmpty()) Text("No relationships found in this analysis.", fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            for (id in ids.take(listLimit)) {
-                val node = byId.getValue(id)
-                Column(Modifier.fillMaxWidth().background(colors.background.copy(alpha = .65f), RoundedCornerShape(10.dp))
-                    .padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(node.label, fontFamily = EditorFontFamily, fontSize = 12.sp, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).clickable(role = Role.Button) {
-                            state.update(exploration.select(slice, id))
-                        }.padding(vertical = 4.dp))
-                    val relationships = slice.edges.filter {
-                        if (direction == ExplorationDirection.USES) it.from == focus.id && it.to == id
-                        else it.to == focus.id && it.from == id
-                    }
-                    for (relationship in relationships) {
-                        Text("${relationship.kind.explorationLabel()} · view source  ↗", fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).clickable(role = Role.Button) {
-                                val visible = exploration.select(slice, id).copy(selectedId = focus.id)
-                                state.update(visible.inspect(slice, relationship))
-                            }.padding(vertical = 6.dp))
-                    }
-                }
-            }
-            if (ids.size > listLimit) ExploreAction("Show ${minOf(8, ids.size - listLimit)} more in list") { listLimit += 8 }
-            if (hidden > 0) ExploreAction("Add ${minOf(4, hidden)} to graph · $hidden hidden",
-                enabled = exploration.positions.size < page.atlas.interaction.DependencyExploration.MAX_VISIBLE) {
-                state.update(exploration.expand(slice, direction))
-            }
-            if (exploration.canCollapse(direction)) ExploreAction("Collapse this branch") {
-                state.update(exploration.collapse(direction))
-            }
-        }
-        }
-        Divider()
-        Text("Static relationships from the analyzed files. Unresolved or unsupported relationships may be missing.",
-            fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 8.dp))
-    }
 }
 
 @Composable
@@ -367,22 +365,16 @@ internal fun ExploreAction(
         accent -> colors.primary
         selected -> lerp(colors.surface, colors.primary, .14f)
         hovered && enabled -> lerp(colors.surface, colors.onSurface, .07f)
-        else -> colors.surface
+        else -> Color.Transparent
     }
     val foreground = if (accent) colors.onPrimary else if (selected) colors.primary else colors.onSurface
-    Box(modifier.defaultMinSize(minWidth = 34.dp, minHeight = 34.dp).clip(RoundedCornerShape(8.dp))
-        .background(fill.copy(alpha = if (enabled) 1f else .45f))
-        .border(1.dp, if (accent || selected) colors.primary.copy(alpha = .5f) else colors.outline.copy(alpha = .35f), RoundedCornerShape(8.dp))
+    Box(modifier.defaultMinSize(minWidth = 30.dp, minHeight = 30.dp).clip(RoundedCornerShape(6.dp))
+        .background(fill.copy(alpha = fill.alpha * if (enabled) 1f else .45f))
+        .border(1.dp, if (selected) colors.primary.copy(alpha = .25f) else Color.Transparent, RoundedCornerShape(6.dp))
         .semantics { contentDescription = description; this.selected = selected }
         .hoverable(interaction, enabled).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+        .padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
         Text(label, style = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
             color = foreground.copy(alpha = if (enabled) 1f else .4f))
     }
-}
-
-@Composable
-private fun ExplorationBadge(label: String, color: Color) {
-    Text(label, style = TextStyle(fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium), color = color,
-        modifier = Modifier.background(color.copy(alpha = .1f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
 }

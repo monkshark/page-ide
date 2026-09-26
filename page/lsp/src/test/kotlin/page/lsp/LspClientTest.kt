@@ -11,6 +11,31 @@ import kotlin.test.assertTrue
 class LspClientTest {
 
     @Test
+    fun `shutdown closes transport when server never acknowledges`() {
+        val harness = LspTestHarness()
+        try {
+            harness.client.start().get(5, TimeUnit.SECONDS)
+            harness.fakeServer.shutdownResponse = java.util.concurrent.CompletableFuture()
+            val shutdown = harness.client.shutdown()
+            assertTrue(shutdown === harness.client.shutdown())
+            shutdown.get(8, TimeUnit.SECONDS)
+            assertTrue(harness.fakeServer.shutdownCalled)
+            assertTrue(harness.transportClosed)
+            assertEquals(LspState.EXITED, harness.client.state)
+        } finally {
+            harness.client.forceClose()
+        }
+    }
+
+    @Test
+    fun `shutdown before initialization closes the spawned transport`() {
+        val harness = LspTestHarness()
+        harness.client.shutdown().get(5, TimeUnit.SECONDS)
+        assertTrue(harness.transportClosed)
+        assertEquals(LspState.EXITED, harness.client.state)
+    }
+
+    @Test
     fun `initialize handshake completes and state becomes INITIALIZED`() {
         val harness = LspTestHarness()
         try {

@@ -98,6 +98,7 @@ class FakeLanguageServer : LanguageServer {
     @Volatile var outgoingCallsResponse: MutableList<CallHierarchyOutgoingCall>? = null
     @Volatile var advertiseCompletionResolve: Boolean = true
     @Volatile var shutdownCalled = false
+    @Volatile var shutdownResponse: CompletableFuture<Any> = CompletableFuture.completedFuture(null)
     @Volatile var exitCalled = false
 
     private val textDocService = object : TextDocumentService {
@@ -211,7 +212,7 @@ class FakeLanguageServer : LanguageServer {
 
     override fun shutdown(): CompletableFuture<Any> {
         shutdownCalled = true
-        return CompletableFuture.completedFuture<Any>(null)
+        return shutdownResponse
     }
 
     override fun exit() {

@@ -62,8 +62,8 @@ import page.shared.path.FilePath
 
 private const val CARD_W = 132f
 private const val EXTERNAL_W = 156f
-private const val CARD_MIN_H = 52f
-private const val CARD_MAX_H = 128f
+private const val CARD_MIN_H = 60f
+private const val CARD_MAX_H = 84f
 private const val EXTERNAL_H = 50f
 private const val CARD_GAP = 14f
 private const val MAX_ROWS_PER_COL = 6
@@ -711,9 +711,9 @@ fun OverviewCanvas(
                 touchesFocus -> roles.dependency.copy(alpha = 0.85f)
                 focusId != null -> labelColor.copy(alpha = 0.05f)
                 inCycle -> roles.cycle.copy(alpha = 0.55f)
-                else -> roles.dependency.copy(alpha = 0.22f)
+                else -> labelColor.copy(alpha = 0.4f)
             }
-            val drawHead = onPathEdge || out || incoming || touchesFocus || (inCycle && focusId == null && !onPath)
+            val drawHead = onPathEdge || out || incoming || touchesFocus || (focusId == null && !onPath)
             val weightStroke = (0.8f + ln(edge.weight.toFloat()) * 0.6f).coerceAtMost(4f)
             val stroke = when {
                 onPathEdge -> weightStroke + 1.2f
@@ -770,9 +770,9 @@ fun OverviewCanvas(
         } else if (selectedId != null) {
             "blue = uses · teal = used by · red = hub · amber = cycle"
         } else {
-            "columns = dependency depth · size = files · red = hub · amber = cycle"
+            "A → B means A uses B · Select a module to trace connections"
         }
-        val legendStyle = bodyStyle.copy(fontSize = 9.sp, color = labelColor.copy(alpha = 0.6f))
+        val legendStyle = bodyStyle.copy(fontSize = 10.sp, color = labelColor.copy(alpha = 0.8f))
         val legendY = if (scene.hiddenCount > 0) size.height - 38f else size.height - 22f
         drawText(textMeasurer.measure(AnnotatedString(legend), legendStyle), topLeft = Offset(14f, legendY))
 
@@ -817,19 +817,13 @@ fun DrawScope.drawOverviewCard(
     val a = alpha * (if (dim) 0.4f else 1f)
     if (a <= 0.01f || s <= 0f) return
     val k = s
-    val corner = CornerRadius(8f * k)
+    val corner = CornerRadius(6f * k)
     val topLeft = Offset(left, top)
     val sz = Size(w, h)
 
     if (!external) {
-        drawRoundRect(color = surface.copy(alpha = a), topLeft = topLeft, size = sz, cornerRadius = corner)
-        val fillBase = if (selected) lerp(cardFill, primary, 0.12f) else cardFill
-        val brush = Brush.verticalGradient(
-            colors = listOf(lerp(fillBase, Color.White, 0.06f), lerp(fillBase, Color.Black, 0.04f)),
-            startY = top,
-            endY = top + h,
-        )
-        drawRoundRect(brush = brush, alpha = a, topLeft = topLeft, size = sz, cornerRadius = corner)
+        val fillBase = if (selected) lerp(surface, primary, 0.06f) else surface
+        drawRoundRect(color = fillBase.copy(alpha = a), topLeft = topLeft, size = sz, cornerRadius = corner)
     }
 
     val borderColor: Color
@@ -839,9 +833,8 @@ fun DrawScope.drawOverviewCard(
         external -> { borderColor = roles.neutral.copy(alpha = 0.6f * a); borderW = 1f * k; dashed = true }
         selected -> { borderColor = primary.copy(alpha = a); borderW = 1.6f * k; dashed = false }
         pathEnd -> { borderColor = roles.path.copy(alpha = 0.7f * a); borderW = 1.4f * k; dashed = false }
-        isHub -> { borderColor = roles.hub.copy(alpha = 0.55f * a); borderW = 1.3f * k; dashed = false }
-        inCycle -> { borderColor = roles.cycle.copy(alpha = 0.7f * a); borderW = 1.3f * k; dashed = false }
-        else -> { borderColor = outline.copy(alpha = a); borderW = 1.2f * k; dashed = false }
+        inCycle -> { borderColor = roles.cycle.copy(alpha = 0.5f * a); borderW = 1f * k; dashed = false }
+        else -> { borderColor = outline.copy(alpha = .5f * a); borderW = 1f * k; dashed = false }
     }
     val inset = borderW / 2f
     val borderStyle = if (dashed) {
@@ -853,7 +846,7 @@ fun DrawScope.drawOverviewCard(
         color = borderColor,
         topLeft = Offset(left + inset, top + inset),
         size = Size(w - borderW, h - borderW),
-        cornerRadius = CornerRadius((8f * k - inset).coerceAtLeast(2f * k)),
+        cornerRadius = CornerRadius((6f * k - inset).coerceAtLeast(2f * k)),
         style = borderStyle,
     )
 
@@ -876,9 +869,9 @@ fun DrawScope.drawOverviewCard(
 
     if (w < 56f) return
 
-    val fontK = s / density
+    val fontK = (s / density).coerceAtLeast(1f)
     val titleStyle = TextStyle(fontSize = (12f * fontK).sp, fontWeight = FontWeight.W600, color = onSurface)
-    val bodyStyle = TextStyle(fontSize = (9f * fontK).sp, color = labelColor)
+    val bodyStyle = TextStyle(fontSize = (10f * fontK).sp, color = labelColor)
     val titleMax = (w - 39f * k).coerceAtLeast(1f)
     val titleLayout = measurer.measure(
         text = AnnotatedString(title),
@@ -887,29 +880,12 @@ fun DrawScope.drawOverviewCard(
         maxLines = 1,
         constraints = Constraints(maxWidth = titleMax.toInt()),
     )
-    drawText(titleLayout, color = onSurface.copy(alpha = a), topLeft = Offset(left + 13f * k, top + 7f * k))
-
-    if (!external) {
-        val bandTop = top + 31f * k
-        val bandBot = top + h - 31f * k
-        if (bandBot - bandTop > 13f * k) {
-            val trackW = w - 24f * k
-            val bh = 3.6f * k
-            val gap = 6.5f * k
-            val barX = left + 13f * k
-            val cy = (bandTop + bandBot) / 2f
-            val trackColor = labelColor.copy(alpha = 0.16f * a)
-            fun bar(y: Float, ratio: Float, color: Color) {
-                drawRoundRect(color = trackColor, topLeft = Offset(barX, y), size = Size(trackW, bh), cornerRadius = CornerRadius(bh / 2f))
-                if (ratio > 0f) {
-                    val len = (trackW * ratio).coerceAtLeast(bh)
-                    drawRoundRect(color = color.copy(alpha = a), topLeft = Offset(barX, y), size = Size(len, bh), cornerRadius = CornerRadius(bh / 2f))
-                }
-            }
-            bar(cy - bh - gap / 2f, min(1f, usedBy / 12f), roles.usedBy)
-            bar(cy + gap / 2f, min(1f, uses / 12f), primary)
-        }
-    }
+    val bodyHeight = measurer.measure("Files", bodyStyle).size.height
+    val lines = if (s < .8f) 0 else if (showStats && !external) 2 else 1
+    val textHeight = titleLayout.size.height + if (lines == 0) 0f else 6f * k + bodyHeight * lines + (lines - 1) * 3f * k
+    val textTop = top + (h - textHeight) / 2f
+    drawText(titleLayout, color = onSurface.copy(alpha = a), topLeft = Offset(left + 13f * k, textTop))
+    if (lines == 0) return
 
     val faint = labelColor.copy(alpha = 0.7f * a)
     fun drawSegs(segs: List<Pair<String, Color>>, baseY: Float) {
@@ -920,11 +896,12 @@ fun DrawScope.drawOverviewCard(
             x += l.size.width
         }
     }
-    val line1Y = top + h - 16f * k
+    val bodyTop = textTop + titleLayout.size.height + 6f * k
+    val line1Y = bodyTop + (lines - 1) * (bodyHeight + 3f * k)
     when {
         external -> drawSegs(listOf("external" to roles.neutral.copy(alpha = a)), line1Y)
         showStats -> {
-            drawSegs(listOf("$files files" to faint), top + h - 28f * k)
+            drawSegs(listOf("$files files" to faint), bodyTop)
             drawSegs(
                 listOf(
                     "used by $usedBy" to roles.usedBy.copy(alpha = a),

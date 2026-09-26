@@ -20,6 +20,10 @@ import page.atlas.render.DependencyExplorationCanvas
 import page.atlas.render.DependencyExplorationPanel
 import page.atlas.render.ExplorationViewState
 import page.atlas.render.explorationRect
+import page.atlas.render.AtlasContent
+import page.atlas.render.AtlasViewTab
+import page.atlas.render.AtlasViewState
+import page.atlas.render.CodeBundlePanel
 import page.shared.path.FilePath
 import page.ui.GlassPalette
 import page.ui.GlassTheme
@@ -35,6 +39,41 @@ class DependencyExplorationRenderTest {
         GraphEdge("SessionEvents", "RefreshSession", evidence = SourceEvidence(3, "import session.RefreshSession")),
         GraphEdge("RefreshSession", "SessionStore", evidence = SourceEvidence(3, "import session.SessionStore")),
     ))
+
+    @Test
+    fun `project map renders in dark light and compact workspaces`() {
+        val modules = GraphSlice(nodes.mapIndexed { index, node ->
+            node.copy(path = FilePath.of("/northstar/${listOf("interface", "tests", "session", "storage", "session", "session")[index]}/${node.label}"))
+        }, slice.edges)
+        val output = Path.of("build/reports/atlas-exploration")
+        Files.createDirectories(output)
+        val sourceRoot = output.resolve("sources")
+        Files.createDirectories(sourceRoot)
+        val savedSlice = slice.copy(nodes = nodes.map { node ->
+            val path = sourceRoot.resolve(node.label)
+            Files.writeString(path, "package session\n\nclass ${node.id}\n")
+            node.copy(path = FilePath.of(path.toAbsolutePath().toString()))
+        })
+        for ((name, palette, width) in listOf(
+            Triple("map-dark", GlassPalette.Signature, 1240),
+            Triple("map-light", GlassPalette.SignatureLight, 1240),
+            Triple("map-narrow", GlassPalette.Signature, 600),
+            Triple("context", GlassPalette.Signature, 1240),
+            Triple("context-narrow", GlassPalette.Signature, 600),
+        )) {
+            ImageComposeScene(width, 760) {
+                GlassTheme(palette) {
+                    if (name.startsWith("context")) CodeBundlePanel(savedSlice, "SessionStore", nodes.mapTo(hashSetOf()) { it.id }, {})
+                    else AtlasContent(modules, {}, {}, viewTab = AtlasViewTab.MODULES)
+                }
+            }.use { scene ->
+                repeat(8) { scene.render(it * 200_000_000L).close() }
+                scene.render(2_000_000_000L).use { image ->
+                    image.encodeToData()!!.use { data -> Files.write(output.resolve("$name.png"), data.bytes) }
+                }
+            }
+        }
+    }
 
     @Test
     fun `canvas hit testing respects the current pan and scale`() {
@@ -87,16 +126,26 @@ class DependencyExplorationRenderTest {
             Triple("file-dark", GlassPalette.Signature, 1240),
             Triple("file-light", GlassPalette.SignatureLight, 1240),
             Triple("history", GlassPalette.Signature, 1240),
+            Triple("workspace-dark", GlassPalette.Signature, 1240),
+            Triple("workspace-light", GlassPalette.SignatureLight, 1240),
+            Triple("path-dark", GlassPalette.Signature, 1240),
+            Triple("path-light", GlassPalette.SignatureLight, 1240),
+            Triple("path-narrow", GlassPalette.Signature, 600),
         )) {
-            val state = ExplorationViewState()
+            val atlasState = AtlasViewState()
+            val state = atlasState.exploration
             state.start(slice, "SessionStore")
-            if (name == "history") {
+            if (name.startsWith("path-")) {
+                state.update(state.exploration.traceTo(slice, "RefreshSession"))
+                state.update(state.exploration.inspect(slice, state.exploration.highlightedEdges.first(), preserveHighlight = true))
+            } else if (name == "history") {
                 state.update(state.exploration.select(slice, "Credentials"))
                 state.update(state.exploration.select(slice, "SessionEvents"))
-            } else if (!name.startsWith("file-")) state.update(state.exploration.inspect(slice, slice.edges[3]))
+            } else if (!name.startsWith("file-") && !name.startsWith("workspace-")) state.update(state.exploration.inspect(slice, slice.edges[3]))
             ImageComposeScene(width, 760) {
                 GlassTheme(palette) {
-                    DependencyExplorationPanel(slice, "SessionStore", state, {}, { _, _ -> }, Modifier.fillMaxSize())
+                    if (name.startsWith("workspace-")) AtlasContent(slice, {}, {}, viewTab = AtlasViewTab.FILE, atlasView = atlasState)
+                    else DependencyExplorationPanel(slice, "SessionStore", state, {}, { _, _ -> }, Modifier.fillMaxSize())
                 }
             }.use { scene ->
                 repeat(4) { scene.render(it * 16_000_000L).close() }

@@ -93,10 +93,11 @@ data class DependencyExploration(
         selectedEdge = null, highlightedEdges = emptySet(), highlight = null, message = null,
     )
 
-    fun inspect(slice: GraphSlice, edge: GraphEdge): DependencyExploration {
+    fun inspect(slice: GraphSlice, edge: GraphEdge, preserveHighlight: Boolean = false): DependencyExploration {
         val current = slice.edges.firstOrNull { it.sameRelationship(edge) } ?: return this
         if (current.from !in positions || current.to !in positions) return this
-        return copy(selectedEdge = current, highlightedEdges = emptySet(), highlight = null, message = null)
+        return if (preserveHighlight) copy(selectedEdge = current)
+        else copy(selectedEdge = current, highlightedEdges = emptySet(), highlight = null, message = null)
     }
 
     fun traceTo(slice: GraphSlice, target: String): DependencyExploration {

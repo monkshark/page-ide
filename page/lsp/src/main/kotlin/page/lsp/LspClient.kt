@@ -64,6 +64,7 @@ class LspClient(
 
     private var server: LanguageServer? = null
     private var listening: Future<Void>? = null
+    private var shutdownFuture: CompletableFuture<Unit>? = null
 
     private val diagnosticsListeners = ConcurrentLinkedQueue<(PublishDiagnosticsParams) -> Unit>()
     private val logListeners = ConcurrentLinkedQueue<(MessageParams) -> Unit>()
@@ -127,23 +128,31 @@ class LspClient(
         }
     }
 
+    @Synchronized
     fun shutdown(): CompletableFuture<Unit> {
+        shutdownFuture?.let { return it }
         val current = stateRef.get()
-        if (current == LspState.EXITED || current == LspState.NOT_STARTED) {
+        if (current == LspState.EXITED) {
             return CompletableFuture.completedFuture(Unit)
         }
         stateRef.set(LspState.SHUTTING_DOWN)
         val srv = server ?: run {
-            stateRef.set(LspState.EXITED)
+            forceClose()
             return CompletableFuture.completedFuture(Unit)
         }
-        return srv.shutdown().handle { _, _ ->
+        val response = try {
+            srv.shutdown()
+        } catch (_: Throwable) {
+            forceClose()
+            return CompletableFuture.completedFuture(Unit)
+        }
+        return response.orTimeout(2, java.util.concurrent.TimeUnit.SECONDS).handleAsync { _, _ ->
             try { srv.exit() } catch (_: Throwable) {}
             try { listening?.cancel(true) } catch (_: Throwable) {}
             try { transport.close() } catch (_: Throwable) {}
             stateRef.set(LspState.EXITED)
             Unit
-        }
+        }.also { shutdownFuture = it }
     }
 
     fun forceClose() {
