@@ -188,6 +188,10 @@ internal fun IdeMainLayout(
     atlasOverviewState: OverviewViewState = remember { OverviewViewState() },
     atlasLoadProgress: page.atlas.analyzer.ProjectAnalysisProgress? = null,
     atlasFileRole: FileRole? = null,
+    atlasNeighbours: page.atlas.graph.FileNeighbours? = null,
+    projectMap: page.atlas.graph.ProjectMap? = null,
+    summaryVisible: Boolean = false,
+    onSummaryVisibleChange: (Boolean) -> Unit = {},
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     onAtlasFocusActive: (() -> Unit)? = null,
     atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
@@ -563,8 +567,8 @@ internal fun IdeMainLayout(
                     )
                 }
                 PillarPill(
-                    atlasActive = ui.expandedPanel == ExpandedPanel.ATLAS,
-                    onAtlasToggle = { onEvent(IdeEvent.Panel.ToggleAtlas) },
+                    atlasActive = summaryVisible && projectMap != null,
+                    onAtlasToggle = { onSummaryVisibleChange(!summaryVisible) },
                     currentPalette = palette,
                     onSelectPalette = onSelectPalette,
                     onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
@@ -709,7 +713,9 @@ internal fun IdeMainLayout(
             onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
             onRuntimeClick = { id -> runtimeDialogOpen = id },
             fileRole = atlasFileRole,
-            onUsedByClick = onAtlasFocusActive,
+            neighbours = atlasNeighbours,
+            groupOf = { path -> projectMap?.partOf(path)?.name },
+            onOpenFile = onOpenFile,
         )
     }
     AnimatedVisibility(
@@ -843,49 +849,14 @@ internal fun IdeMainLayout(
             runtimeDialogOpen = null
         }
     }
-    when (ui.expandedPanel) {
-        ExpandedPanel.ATLAS -> ExpandedPanelOverlay(
-            onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
-        ) {
-            AtlasContent(
-                slice = atlasSlice,
-                onNodeClick = { path ->
-                    onOpenFile(path)
-                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path.toFilePath() }?.id
-                    if (fileId != null) {
-                        atlasFileSlice = atlasSlice
-                        onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
-                    } else {
-                        onEvent(IdeEvent.Panel.CollapsePanel)
-                    }
-                },
-                onClose = { onEvent(IdeEvent.Panel.CollapsePanel) },
-                onOpenLocation = { path, line ->
-                    onJumpToProblem(path, line, 0)
-                    val fileId = atlasSlice.nodes.firstOrNull { it.path == path.toFilePath() }?.id
-                    if (fileId != null) {
-                        atlasFileSlice = atlasSlice
-                        onEvent(IdeEvent.Panel.ShowAtlasFile(fileId))
-                    } else {
-                        onEvent(IdeEvent.Panel.CollapsePanel)
-                    }
-                },
-                projectMode = ui.atlasProjectMode,
-                onProjectModeChange = { onEvent(IdeEvent.Panel.AtlasProjectModeChanged(it)) },
-                viewTab = ui.atlasViewTab,
-                onViewTabChange = { onEvent(IdeEvent.Panel.AtlasViewTabChanged(it)) },
-                mapView = atlasMapView,
-                atlasView = atlasView,
-                overviewState = atlasOverviewState,
-                loadProgress = atlasLoadProgress,
-                vcsMarks = atlasVcsMarks,
-                vcsEnabled = ui.atlasVcsOverlay,
-                onVcsEnabledChange = { onEvent(IdeEvent.Panel.AtlasVcsOverlayChanged(it)) },
-                activeFileId = atlasActiveId,
-                followActive = ui.atlasFollowActive,
-                onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
-            )
+    val summaryMap = projectMap
+    if (summaryVisible && summaryMap != null && summaryMap.parts.isNotEmpty()) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(top = 48.dp, end = 16.dp), contentAlignment = Alignment.TopEnd) {
+            ProjectSummaryCard(summaryMap, onDismiss = { onSummaryVisibleChange(false) })
         }
+    }
+    when (ui.expandedPanel) {
+        ExpandedPanel.ATLAS -> Unit
         ExpandedPanel.NONE -> Unit
     }
     }

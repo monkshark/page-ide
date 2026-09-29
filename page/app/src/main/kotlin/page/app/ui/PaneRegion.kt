@@ -217,9 +217,6 @@ internal fun PaneRegion(
                     onShowCallGraph = active?.path
                         ?.takeIf { activeCtrl?.supportsCallHierarchy == true || ImportExtractor.supportsStaticCalls(it) }
                         ?.let { p -> { line, ch -> onShowCallGraph(p, line, ch) } },
-                    onShowInAtlas = active?.path
-                        ?.takeIf { ImportExtractor.supports(it) }
-                        ?.let { p -> { onShowInAtlas(p) } },
                     onRequestInlayHints = active?.path
                         ?.takeIf { activeCtrl?.status?.value == LspController.Status.READY }
                         ?.let { p ->

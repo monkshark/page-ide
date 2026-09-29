@@ -62,7 +62,9 @@ internal fun GlobalStatusBar(
     onTodoToggle: () -> Unit,
     onRuntimeClick: ((String) -> Unit)?,
     fileRole: FileRole? = null,
-    onUsedByClick: (() -> Unit)? = null,
+    neighbours: page.atlas.graph.FileNeighbours? = null,
+    groupOf: (java.nio.file.Path) -> String? = { null },
+    onOpenFile: (java.nio.file.Path) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val pane = editor.focused()
@@ -147,7 +149,13 @@ internal fun GlobalStatusBar(
                     label = "warnings",
                     onClick = onProblemsToggle,
                 )
-                if (fileRole != null) StructureChips(role = fileRole, onClick = onUsedByClick)
+                if (fileRole != null) StructureChips(
+                    role = fileRole,
+                    fileName = active?.path?.fileName?.toString() ?: "",
+                    neighbours = neighbours,
+                    groupOf = groupOf,
+                    onOpenFile = onOpenFile,
+                )
             }
             TodoStatusBadge(
                 count = todoCount,
@@ -474,29 +482,48 @@ private fun TodoStatusBadge(
 }
 
 @Composable
-private fun StructureChips(role: FileRole, onClick: (() -> Unit)?) {
+private fun StructureChips(
+    role: FileRole,
+    fileName: String,
+    neighbours: page.atlas.graph.FileNeighbours?,
+    groupOf: (java.nio.file.Path) -> String?,
+    onOpenFile: (java.nio.file.Path) -> Unit,
+) {
+    var open by remember(fileName) { mutableStateOf<StructureView?>(null) }
     val countText = if (role.truncated) "${role.dependents}+" else "${role.dependents}"
-    if (role.inCycle) {
-        StructureChip(
-            color = Glass.colors.warn,
-            label = "In cycle",
-            tooltip = "This file is part of a dependency cycle. Click to inspect in Atlas.",
-            onClick = onClick,
-        )
-    }
-    when {
-        role.isHub -> StructureChip(
-            color = Glass.colors.primary,
-            label = "Hub · used by $countText",
-            tooltip = "$countText files depend on this file — a structural hub. Click to inspect in Atlas.",
-            onClick = onClick,
-        )
-        role.dependents > 0 -> StructureChip(
-            color = null,
-            label = "Used by $countText",
-            tooltip = "$countText files import this file. Click to inspect in Atlas.",
-            onClick = onClick,
-        )
+    val canOpen = neighbours != null
+    Box {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (role.inCycle) {
+                StructureChip(
+                    color = Glass.colors.warn,
+                    label = "In cycle",
+                    tooltip = "This file is part of a dependency loop. Click to see the loop.",
+                    onClick = if (canOpen) ({ open = if (open == StructureView.CYCLE) null else StructureView.CYCLE }) else null,
+                )
+            }
+            val usedLabel = if (role.isHub) "Hub · used by $countText" else "Used by $countText"
+            if (role.isHub || role.dependents > 0) {
+                StructureChip(
+                    color = if (role.isHub) Glass.colors.primary else null,
+                    label = usedLabel,
+                    tooltip = "$countText files import this file. Click to see which.",
+                    onClick = if (canOpen) ({ open = if (open == StructureView.USED_BY || open == StructureView.USES) null else StructureView.USED_BY }) else null,
+                )
+            }
+        }
+        val view = open
+        if (view != null && neighbours != null) {
+            StructurePopover(
+                view = view,
+                fileName = fileName,
+                neighbours = neighbours,
+                groupOf = groupOf,
+                onViewChange = { open = it },
+                onOpen = { open = null; onOpenFile(it) },
+                onDismiss = { open = null },
+            )
+        }
     }
 }
 
