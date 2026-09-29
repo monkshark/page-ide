@@ -74,7 +74,7 @@ class AtlasWorkspaceUiTest {
         onNodeWithContentDescription("Change impact").assertIsDisplayed()
         runOnIdle { assertEquals("store", state.exploration.exploration.selectedId); assertFalse(opened) }
         onNodeWithContentDescription("Project map").performClick()
-        onNodeWithText("Architecture").assertIsDisplayed()
+        onNodeWithText("Open a folder to see its map.").assertIsDisplayed()
         onNodeWithText("Project structure").assertDoesNotExist()
         onNodeWithContentDescription("Clear file search").performClick()
         onNodeWithContentDescription("Clear file search").assertDoesNotExist()

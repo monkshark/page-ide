@@ -884,6 +884,7 @@ internal fun IdeMainLayout(
                 activeFileId = atlasActiveId,
                 followActive = ui.atlasFollowActive,
                 onFollowActiveChange = { onEvent(IdeEvent.Panel.AtlasFollowActiveChanged(it)) },
+                projectRoot = workspace.rootDir,
             )
         }
         ExpandedPanel.NONE -> Unit

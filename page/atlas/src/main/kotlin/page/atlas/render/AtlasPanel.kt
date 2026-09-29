@@ -115,6 +115,7 @@ fun AtlasContent(
     followActive: Boolean = false,
     onFollowActiveChange: (Boolean) -> Unit = {},
     onOpenLocation: (Path, Int) -> Unit = { path, _ -> onNodeClick(path) },
+    projectRoot: Path? = null,
 ) {
     LaunchedEffect(slice, atlasView.pendingFocusId) { atlasView.onSliceChanged(slice) }
     val selectedId = atlasView.selectedId
@@ -259,7 +260,15 @@ fun AtlasContent(
             PanelCloseButton(onClose)
         }
         Divider()
-        if (slice.nodes.isEmpty()) {
+        if (viewTab == AtlasViewTab.MODULES) {
+            ProjectMapView(
+                root = projectRoot,
+                slice = slice,
+                activeFile = activeFileId?.let { id -> runCatching { Path.of(id) }.getOrNull() },
+                onOpenFile = { onNodeClick(it); onClose() },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        } else if (slice.nodes.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val progress = loadProgress
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -277,140 +286,6 @@ fun AtlasContent(
                     ) else androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.width(240.dp))
                 }
                 }
-            }
-        } else if (viewTab == AtlasViewTab.MODULES) {
-            var overviewBoxPos by remember { mutableStateOf(Offset.Zero) }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Architecture", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                Text("Select a module · Double-click to look inside", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                ExploreAction("Fit view") { overviewView.scale = 0f }
-                if (overviewSelection.drillPath.isNotEmpty()) ExploreAction("↑ Parent") { requestDrillOut(overviewSelection.drillPath.size - 1) }
-            }
-            Divider()
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-            val exploreFile: (FilePath) -> Unit = { path ->
-                slice.nodes.firstOrNull { it.path == path }?.let {
-                    atlasView.exploration.start(slice, it.id)
-                    onViewTabChange(AtlasViewTab.FILE)
-                }
-            }
-            Row(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .onGloballyPositioned { overviewBoxPos = it.positionInRoot() },
-            ) {
-                OverviewCanvas(
-                    graph = moduleGraph,
-                    layout = overviewLayout,
-                    activeModuleId = activeModuleId,
-                    followActive = followActive,
-                    view = overviewView,
-                    selection = overviewSelection,
-                    onSelectionChange = { overviewSelection = it },
-                    onOpenFile = exploreFile,
-                    roles = atlasRoleColors(),
-                    onDrillFrom = { rect, drilled ->
-                        drillFrom = drilled.node.id to rect
-                        drillRects = drillRects + (drilled.node.id to rect)
-                        drilledInfo = drilledInfo + (drilled.node.id to drilled)
-                    },
-                    drillingOutId = drillingOutId,
-                    drillOutFromRect = drillingOutId?.let { drillRects[it] },
-                    parentGraph = parentModuleGraph,
-                    parentLayout = parentOverviewLayout,
-                    onDrillingInChange = { drillingIn = it },
-                    drillOutMillis = drillStepMillis,
-                    drillOutEasing = drillOutEasing,
-                )
-                if (overviewSelection.drillPath.isNotEmpty() || moduleGraph.droppedModules > 0) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .background(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
-                                    RoundedCornerShape(8.dp),
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OverviewBreadcrumb(
-                                drillPath = overviewSelection.drillPath,
-                                onNavigate = { depth -> requestDrillOut(depth) },
-                            )
-                            if (moduleGraph.droppedModules > 0) {
-                                Text(
-                                    text = "·",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                )
-                                Text(
-                                    text = "${moduleGraph.nodes.size} of " +
-                                        "${moduleGraph.nodes.size + moduleGraph.droppedModules} modules",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (overviewSelection.drillPath.isNotEmpty()) {
-                                Text(
-                                    text = "Esc to go up",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                )
-                            }
-                        }
-                        val lastIndex = overviewSelection.drillPath.lastIndex
-                        overviewSelection.drillPath.forEachIndexed { i, id ->
-                            val isDeepest = i == lastIndex
-                            DrilledCard(
-                                animKey = id,
-                                drilled = drilledInfo[id],
-                                fallbackLabel = crumbLabel(id),
-                                flyFrom = if (isDeepest) drillRects[id] else null,
-                                boxPos = overviewBoxPos,
-                                exiting = drillOutTo != null && i >= drillOutTo!!,
-                                exitToHole = drillOutTo == lastIndex,
-                                exitMillis = drillStepMillis,
-                                exitEasing = drillOutEasing,
-                                onClick = { requestDrillOut(i) },
-                                onExited = {
-                                    if (drillOutTo == i) {
-                                        overviewSelection = overviewSelection.drillUpTo(i)
-                                        if (drillOutFinal != null && i > drillOutFinal!!) {
-                                            drillOutTo = i - 1
-                                        } else {
-                                            drillOutTo = null
-                                            drillOutFinal = null
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-                val pathFrom = overviewSelection.moduleId
-                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
-                val pathTo = overviewSelection.pathTarget
-                    ?.takeIf { overviewSelection.kind == OverviewSelection.Kind.PATH }
-                if (pathFrom != null && pathTo != null) {
-                    OverviewPathPanel(
-                        graph = moduleGraph,
-                        from = pathFrom,
-                        to = pathTo,
-                        onSelectModule = { overviewSelection = overviewSelection.selectModule(it) },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    )
-                }
-            }
-            }
             }
         } else if (viewTab == AtlasViewTab.FILE) {
             val insightFocus = remember(slice, activeFileId, selectedId, insightFocusOverride) {
