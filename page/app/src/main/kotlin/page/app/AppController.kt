@@ -504,7 +504,7 @@ internal class AppController(
     val stopActiveRun: () -> Unit = { dispatch(IdeEvent.Run.Stop) }
     val openRunDialog: () -> Unit = { dispatch(IdeEvent.Chrome.OpenRunDialog) }
     val openSettings: () -> Unit = { appState.settingsDialogOpen = true }
-    var onFocusActiveInAtlas: () -> Unit = {}
+    var onToggleProjectSummary: () -> Unit = {}
 
     private val actionHost = object : ActionHost {
         override val hasSearch: Boolean get() = focused().search != null
@@ -559,7 +559,7 @@ internal class AppController(
 
         override fun showAllActions() { layoutUiState.actionPalette = true }
         override fun cyclePalette() = this@AppController.cyclePalette()
-        override fun focusActiveInAtlas() = onFocusActiveInAtlas()
+        override fun toggleProjectSummary() = onToggleProjectSummary()
     }
 
     val handleShortcut: (KeyEvent) -> Boolean = { event -> ActionDispatcher.handle(event, actionHost) }

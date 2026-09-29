@@ -482,13 +482,23 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         }
     }
     var atlasFileRole by remember { mutableStateOf<page.atlas.graph.FileRole?>(null) }
+    var atlasNeighbours by remember { mutableStateOf<page.atlas.graph.FileNeighbours?>(null) }
     LaunchedEffect(atlasProvider, focusedActivePath) {
         atlasFileRole = null
+        atlasNeighbours = null
         val path = focusedActivePath ?: return@LaunchedEffect
         if (atlasProvider == null) return@LaunchedEffect
         kotlinx.coroutines.delay(700)
-        atlasFileRole = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { atlasProvider.fileRole(path) }.getOrNull()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            atlasFileRole = runCatching { atlasProvider.fileRole(path) }.getOrNull()
+            atlasNeighbours = runCatching { atlasProvider.fileNeighbours(path) }.getOrNull()
+        }
+    }
+    val projectMap by androidx.compose.runtime.produceState<page.atlas.graph.ProjectMap?>(null, rootDir) {
+        value = null
+        val root = rootDir ?: return@produceState
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { page.atlas.analyzer.ProjectMapLoader.load(root) }.getOrNull()
         }
     }
     var atlasProjectCycles by remember { mutableStateOf<List<List<page.atlas.graph.GraphNode>>>(emptyList()) }
@@ -510,17 +520,16 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         val id = atlasActiveId ?: return@LaunchedEffect
         atlasMapView.focusCenterId = id
     }
-    val focusInAtlas: (java.nio.file.Path) -> Unit = { path ->
-        val id = path.toAbsolutePath().normalize().toString()
-        atlasView.pendingFocusId = id
-        atlasMapView.focusCenterId = id
-        onIdeEvent(IdeEvent.Panel.FocusInAtlas)
+    val summarySeen = remember { page.app.ui.SummarySeen.preferences() }
+    var summaryChoice by remember(rootDir) { mutableStateOf<Boolean?>(null) }
+    val summaryRootDir = rootDir
+    val summaryVisible = summaryChoice
+        ?: (summaryRootDir != null && page.app.ui.worthSummarising(projectMap) && !summarySeen.seen(summaryRootDir))
+    val setSummaryVisible: (Boolean) -> Unit = { visible ->
+        summaryChoice = visible
+        if (!visible) rootDir?.let { summarySeen.markSeen(it) }
     }
-    val focusActiveInAtlas: () -> Unit = focusActiveInAtlas@{
-        val path = focusedActivePath ?: return@focusActiveInAtlas
-        focusInAtlas(path)
-    }
-    SideEffect { app.onFocusActiveInAtlas = focusActiveInAtlas }
+    SideEffect { app.onToggleProjectSummary = { setSummaryVisible(!summaryVisible) } }
 
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
@@ -800,7 +809,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onEvent = onIdeEvent,
                     lspRouter = currentLspRouter,
                     onCloseTab = { side, index -> requestCloseTab(side, index) },
-                    fileTree = app.fileTreePanelActions().copy(onOpenInAtlas = focusInAtlas),
+                    fileTree = app.fileTreePanelActions(),
                     search = app.editorSearchActions(),
                     onWindowShortcut = handleShortcut,
                     onJumpToProblem = { path, line, character ->
@@ -828,7 +837,7 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onEditorScrollChange = { p, snap ->
                         onIdeEvent(IdeEvent.EditorScroll.Changed(p, snap))
                     },
-                    tabContextActionsFor = { side -> tabContextActionsFor(side).copy(onOpenInAtlas = focusInAtlas) },
+                    tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settings = app.settingsBinding(),
                     atlasSlice = atlasSlice,
                     atlasMapView = atlasMapView,
@@ -836,8 +845,11 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasOverviewState = atlasOverviewState,
                     atlasLoadProgress = atlasLoadProgress,
                     atlasFileRole = atlasFileRole,
+                    atlasNeighbours = atlasNeighbours,
+                    projectMap = projectMap,
+                    summaryVisible = summaryVisible,
+                    onSummaryVisibleChange = setSummaryVisible,
                     atlasProjectCycles = atlasProjectCycles,
-                    onAtlasFocusActive = focusActiveInAtlas,
                     atlasVcsMarks = atlasVcsMarks,
                     atlasActiveId = atlasActiveId,
                     atlasCallsSlice = atlasCallsSlice,
@@ -845,7 +857,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     onAtlasCallsExpand = onAtlasCallsExpand,
                     onAtlasCallsOpen = onAtlasCallsOpen,
                     onShowCallGraph = showCallGraph,
-                    onShowInAtlas = focusInAtlas,
                     palette = palette,
                     onSelectPalette = { onIdeEvent(IdeEvent.Palette.Select(it)) },
                   )

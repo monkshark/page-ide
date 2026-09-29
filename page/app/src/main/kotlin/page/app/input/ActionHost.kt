@@ -33,5 +33,5 @@ interface ActionHost {
 
     fun showAllActions()
     fun cyclePalette()
-    fun focusActiveInAtlas()
+    fun toggleProjectSummary()
 }
