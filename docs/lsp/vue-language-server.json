@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-10-01T10:35:50.717Z",
+  "updatedAt": "2026-10-02T10:10:16.963Z",
   "packageName": "@vue/language-server",
-  "latest": "3.3.11",
+  "latest": "3.3.12",
   "versions": [
+    {
+      "version": "3.3.12",
+      "publishedAt": "2026-10-02T09:28:06.094Z"
+    },
     {
       "version": "3.3.11",
       "publishedAt": "2026-08-21T10:06:32.008Z"
@@ -198,10 +202,6 @@
     {
       "version": "3.0.0-beta.4",
       "publishedAt": "2025-06-25T13:36:24.857Z"
-    },
-    {
-      "version": "3.0.0-beta.3",
-      "publishedAt": "2025-06-22T09:58:39.609Z"
     }
   ]
 }
