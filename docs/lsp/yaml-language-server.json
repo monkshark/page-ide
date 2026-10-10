@@ -1,8 +1,16 @@
 {
-  "updatedAt": "2026-10-09T11:02:07.143Z",
+  "updatedAt": "2026-10-10T10:17:24.057Z",
   "packageName": "yaml-language-server",
-  "latest": "1.24.0",
+  "latest": "1.25.0",
   "versions": [
+    {
+      "version": "1.25.0",
+      "publishedAt": "2026-10-09T19:44:27.294Z"
+    },
+    {
+      "version": "1.25.1-dc9af27.0",
+      "publishedAt": "2026-10-09T19:37:08.721Z"
+    },
     {
       "version": "1.25.1-4d01306.0",
       "publishedAt": "2026-10-08T15:23:44.765Z"
@@ -194,14 +202,6 @@
     {
       "version": "1.23.1-27218d4.0",
       "publishedAt": "2026-05-01T13:45:11.671Z"
-    },
-    {
-      "version": "1.23.1-46328b6.0",
-      "publishedAt": "2026-04-30T15:52:09.347Z"
-    },
-    {
-      "version": "1.23.1-af6fabb.0",
-      "publishedAt": "2026-04-30T15:18:48.909Z"
     }
   ]
 }
