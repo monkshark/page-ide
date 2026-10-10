@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-10-09T11:02:06.901Z",
+  "updatedAt": "2026-10-10T10:17:23.957Z",
   "packageName": "typescript-language-server",
-  "latest": "6.0.1",
+  "latest": "6.0.2",
   "versions": [
+    {
+      "version": "6.0.2",
+      "publishedAt": "2026-10-09T13:55:50.314Z"
+    },
     {
       "version": "6.0.1",
       "publishedAt": "2026-09-24T20:10:12.447Z"
@@ -198,10 +202,6 @@
     {
       "version": "0.9.7",
       "publishedAt": "2022-02-27T19:46:23.410Z"
-    },
-    {
-      "version": "0.9.6",
-      "publishedAt": "2022-02-02T08:41:00.697Z"
     }
   ]
 }
