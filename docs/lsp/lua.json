@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-10-12T11:10:04.854Z",
+  "updatedAt": "2026-10-13T10:51:19.044Z",
   "owner": "LuaLS",
   "repo": "lua-language-server",
   "releases": [
+    {
+      "tag": "3.19.2",
+      "publishedAt": "2026-10-13T04:12:15Z"
+    },
     {
       "tag": "3.19.1",
       "publishedAt": "2026-08-13T22:10:33Z"
@@ -198,10 +202,6 @@
     {
       "tag": "3.6.21",
       "publishedAt": "2023-05-24T10:04:52Z"
-    },
-    {
-      "tag": "3.6.20",
-      "publishedAt": "2023-05-23T08:01:39Z"
     }
   ]
 }
