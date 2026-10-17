@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-10-16T08:37:09.792Z",
+  "updatedAt": "2026-10-17T08:08:58.648Z",
   "packageName": "svelte-language-server",
-  "latest": "0.18.4",
+  "latest": "0.18.5",
   "versions": [
+    {
+      "version": "0.18.5",
+      "publishedAt": "2026-10-16T13:22:58.930Z"
+    },
     {
       "version": "0.18.4",
       "publishedAt": "2026-08-13T05:43:53.993Z"
@@ -198,10 +202,6 @@
     {
       "version": "0.16.3",
       "publishedAt": "2024-01-15T09:26:47.075Z"
-    },
-    {
-      "version": "0.16.2",
-      "publishedAt": "2024-01-12T09:21:33.844Z"
     }
   ]
 }
