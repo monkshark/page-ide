@@ -1,8 +1,12 @@
 {
-  "updatedAt": "2026-10-18T08:12:05.404Z",
+  "updatedAt": "2026-10-19T09:09:18.199Z",
   "owner": "zigtools",
   "repo": "zls",
   "releases": [
+    {
+      "tag": "0.16.1",
+      "publishedAt": "2026-10-18T20:08:31Z"
+    },
     {
       "tag": "0.16.0",
       "publishedAt": "2026-04-16T20:47:47Z"
