@@ -1,6 +1,11 @@
 {
-  "updatedAt": "2026-11-04T11:36:11Z",
+  "updatedAt": "2026-11-05T11:34:48Z",
   "versions": [
+    {
+      "major": 8,
+      "semver": "8.0.512+9",
+      "openjdk_version": "1.8.0_512-b09"
+    },
     {
       "major": 8,
       "semver": "8.0.504+1",
@@ -45,11 +50,6 @@
       "major": 8,
       "semver": "8.0.432+6",
       "openjdk_version": "1.8.0_432-b06"
-    },
-    {
-      "major": 8,
-      "semver": "8.0.422+5.1",
-      "openjdk_version": "1.8.0_422-b05"
     },
     {
       "major": 11,
