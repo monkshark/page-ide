@@ -89,8 +89,10 @@ internal fun contextSummary(map: ProjectMap, margins: FileMargins?): String? {
         .groupingBy { it.name }
         .eachCount()
         .entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+    val elsewhere = margins.usedBy.size - byPart.sumOf { it.value }
+    val breakdown = byPart.map { "${it.value} in ${it.key}" } + (if (elsewhere > 0 && byPart.isNotEmpty()) listOf("$elsewhere elsewhere") else emptyList())
     val users = if (margins.usedBy.isEmpty()) "Used by no files"
-    else "Used by ${files(margins.usedBy.size)}" + (if (byPart.isEmpty()) "" else " (" + byPart.joinToString(", ") { "${it.value} in ${it.key}" } + ")")
+    else "Used by ${files(margins.usedBy.size)}" + (if (breakdown.isEmpty()) "" else " (" + breakdown.joinToString(", ") + ")")
     return "$users. Uses ${files(margins.needs.size)}"
 }
 
@@ -224,7 +226,6 @@ internal fun PartsPanel(
                 Text(current.fileName.toString(), color = colors.text, fontSize = 12.sp, fontFamily = EditorFontFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 contextSummary(map, margins)?.let { Text(it, color = colors.muted, fontSize = 12.sp, lineHeight = 16.sp) }
             }
-            SpineLegend(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
         }
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)) {
             SegmentedSwitch(
@@ -234,6 +235,7 @@ internal fun PartsPanel(
                 tags = listOf("parts-linked", "parts-all"),
             )
         }
+        if (current != null) SpineLegend(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
         val spineColor = colors.primary
         val baseColor = colors.text.copy(alpha = 0.10f)
         val dotColor = colors.text.copy(alpha = 0.32f)
@@ -458,7 +460,8 @@ private fun PartRow(
             .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
             .testTag("part-${part.id}"),
     ) {
-        Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 if (other) "Other files" else part.name,
                 color = if (other) colors.muted else colors.text,
@@ -479,7 +482,7 @@ private fun PartRow(
                         .background(colors.text.copy(alpha = 0.08f)).padding(horizontal = 6.dp).testTag("part-here-tag"),
                 )
             }
-            Box(Modifier.weight(1f))
+            }
             Text(part.fileCount.toString(), color = colors.muted, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
         }
         if (relation != null) {

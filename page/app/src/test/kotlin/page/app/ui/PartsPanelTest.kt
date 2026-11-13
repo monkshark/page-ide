@@ -295,6 +295,8 @@ class PartsPanelTest {
         )
         assertEquals("Used by 3 files (2 in lsp, 1 in app). Uses 1 file", contextSummary(project, m))
         assertEquals("Used by no files. Uses 0 files", contextSummary(project, FileMargins(emptyList(), emptyList(), emptyList())))
+        val withTests = FileMargins(emptyList(), listOf(node("app/Main.kt"), node("test/MainTest.kt"), node("test/OtherTest.kt")), emptyList())
+        assertEquals("Used by 3 files (1 in app, 2 elsewhere). Uses 0 files", contextSummary(project, withTests))
         assertNull(contextSummary(project, null))
     }
 
