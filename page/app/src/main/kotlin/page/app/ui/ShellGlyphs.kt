@@ -51,30 +51,6 @@ internal fun StopGlyph(tint: Color, size: Dp = 14.dp) {
 }
 
 @Composable
-internal fun TerminalGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.14f
-        val cx = w * 0.32f
-        val cy = h * 0.5f
-        val cs = w * 0.22f
-        val p = Path().apply {
-            moveTo(cx - cs, cy - cs * 0.95f)
-            lineTo(cx + cs * 0.35f, cy)
-            lineTo(cx - cs, cy + cs * 0.95f)
-        }
-        drawPath(p, color = tint, style = strokeStyle(strokeW))
-        drawRoundRect(
-            color = tint,
-            topLeft = Offset(w * 0.55f, h * 0.64f),
-            size = Size(w * 0.34f, strokeW),
-            cornerRadius = CornerRadius(strokeW / 2),
-        )
-    }
-}
-
-@Composable
 internal fun AtlasGlyph(tint: Color, size: Dp = 14.dp) {
     Canvas(modifier = Modifier.size(size)) {
         val w = this.size.width
@@ -92,27 +68,6 @@ internal fun AtlasGlyph(tint: Color, size: Dp = 14.dp) {
         drawCircle(color = tint, radius = w * 0.16f, center = center)
         nodes.forEach { node ->
             drawCircle(color = tint, radius = w * 0.12f, center = node)
-        }
-    }
-}
-
-@Composable
-internal fun OutputGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val lineH = h * 0.11f
-        val gap = h * 0.16f
-        val widths = listOf(0.82f, 0.58f, 0.82f)
-        var y = h * 0.22f
-        widths.forEach { wf ->
-            drawRoundRect(
-                color = tint,
-                topLeft = Offset(w * 0.09f, y),
-                size = Size(w * wf, lineH),
-                cornerRadius = CornerRadius(lineH / 2),
-            )
-            y += lineH + gap
         }
     }
 }
@@ -140,32 +95,6 @@ private fun roundedTriangle(vertices: List<Offset>, radius: Float): Path {
 }
 
 @Composable
-internal fun ProblemsGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.1f
-        val triangle = roundedTriangle(
-            listOf(
-                Offset(w * 0.5f, h * 0.01f),
-                Offset(w * 0.99f, h * 0.83f),
-                Offset(w * 0.01f, h * 0.83f),
-            ),
-            radius = w * 0.17f,
-        )
-        drawPath(triangle, color = tint, style = strokeStyle(strokeW))
-        drawLine(
-            color = tint,
-            start = Offset(w * 0.5f, h * 0.35f),
-            end = Offset(w * 0.5f, h * 0.57f),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round,
-        )
-        drawCircle(color = tint, radius = strokeW * 0.62f, center = Offset(w * 0.5f, h * 0.70f))
-    }
-}
-
-@Composable
 internal fun SettingsGlyph(tint: Color, size: Dp = 14.dp) {
     Canvas(modifier = Modifier.size(size)) {
         val w = this.size.width
@@ -186,68 +115,6 @@ internal fun SettingsGlyph(tint: Color, size: Dp = 14.dp) {
         }
         drawCircle(color = tint, radius = ring, center = Offset(cx, cy), style = Stroke(width = strokeW))
         drawCircle(color = tint, radius = w * 0.1f, center = Offset(cx, cy))
-    }
-}
-
-@Composable
-internal fun FilesGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val p = Path().apply {
-            moveTo(w * 0.12f, h * 0.74f)
-            lineTo(w * 0.12f, h * 0.30f)
-            lineTo(w * 0.40f, h * 0.30f)
-            lineTo(w * 0.48f, h * 0.40f)
-            lineTo(w * 0.88f, h * 0.40f)
-            lineTo(w * 0.88f, h * 0.74f)
-            close()
-        }
-        drawPath(p, color = tint, style = strokeStyle(w * 0.1f))
-    }
-}
-
-@Composable
-internal fun SearchGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.12f
-        drawCircle(
-            color = tint,
-            radius = w * 0.26f,
-            center = Offset(w * 0.42f, h * 0.42f),
-            style = Stroke(width = strokeW),
-        )
-        drawLine(
-            color = tint,
-            start = Offset(w * 0.62f, h * 0.62f),
-            end = Offset(w * 0.86f, h * 0.86f),
-            strokeWidth = strokeW,
-            cap = StrokeCap.Round,
-        )
-    }
-}
-
-@Composable
-internal fun SourceControlGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.1f
-        val r = w * 0.12f
-        val top = Offset(w * 0.28f, h * 0.24f)
-        val bottom = Offset(w * 0.28f, h * 0.76f)
-        val branch = Offset(w * 0.72f, h * 0.42f)
-        drawLine(color = tint, start = Offset(top.x, top.y + r), end = Offset(bottom.x, bottom.y - r), strokeWidth = strokeW, cap = StrokeCap.Round)
-        val curve = Path().apply {
-            moveTo(top.x + r, top.y)
-            cubicTo(w * 0.60f, h * 0.30f, branch.x, h * 0.30f, branch.x, branch.y - r)
-        }
-        drawPath(curve, color = tint, style = strokeStyle(strokeW))
-        drawCircle(color = tint, radius = r, center = top, style = Stroke(width = strokeW))
-        drawCircle(color = tint, radius = r, center = bottom, style = Stroke(width = strokeW))
-        drawCircle(color = tint, radius = r, center = branch, style = Stroke(width = strokeW))
     }
 }
 
@@ -277,7 +144,6 @@ internal fun AppMarkGlyph(size: Dp = 14.dp) {
     }
 }
 
-
 @Composable
 internal fun GlassGlyph(tint: Color, size: Dp = 14.dp) {
     Canvas(modifier = Modifier.size(size)) {
@@ -293,8 +159,6 @@ internal fun GlassGlyph(tint: Color, size: Dp = 14.dp) {
         drawPath(p, color = tint, style = strokeStyle(w * 0.1f))
     }
 }
-
-
 
 @Composable
 internal fun CommandGlyph(tint: Color, size: Dp = 14.dp) {

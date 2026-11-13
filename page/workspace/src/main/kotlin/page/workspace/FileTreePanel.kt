@@ -300,11 +300,6 @@ fun FileTreePanel(
     ) {
         CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
             Column(modifier = Modifier.fillMaxSize()) {
-                SectionHeader()
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    thickness = 1.dp,
-                )
                 if (root == null) {
                     EmptyTreeHint()
                 } else {
@@ -631,28 +626,6 @@ private fun FloatingDragLabel(
     }
 }
 
-@Composable
-private fun SectionHeader() {
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "PROJECT",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = androidx.compose.material3.LocalTextStyle.current.copy(
-                fontSize = 10.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                letterSpacing = 0.8.sp,
-                lineHeight = 10.sp,
-                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
-                    alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
-                    trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
-                ),
-            ),
-        )
-    }
-}
 
 @Composable
 private fun EmptyTreeHint() {

@@ -301,6 +301,7 @@ internal fun IdeMainLayout(
             onStopRun = onStopRun,
             onOpenRunDialog = onOpenRunDialog,
             ui = ui,
+            onOpenSettings = onToggleSettings,
             center = {
                 PillarSwitch(
                     atlasActive = summaryVisible && projectMap != null,
@@ -312,24 +313,11 @@ internal fun IdeMainLayout(
             },
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            ActivityRail(
-                activeSideView = ui.activeSideView,
-                onSelectSideView = { onEvent(IdeEvent.Panel.SelectSideView(it)) },
-                problemsOpen = ui.problemsOpen,
-                problemsCount = scopedProblemsCount,
-                onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
-                terminalOpen = ui.terminalOpen,
-                onTerminalToggle = onTerminalToggle,
-                outputOpen = ui.outputOpen,
-                onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
-                settingsOpen = settingsPanelOpen,
-                onSettingsToggle = onToggleSettings,
-            )
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
+                    .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
             ) {
             val sidebarView = ui.activeSideView
             var lastSidebarView by remember { mutableStateOf(page.app.mvi.SideView.FILES) }
@@ -344,6 +332,11 @@ internal fun IdeMainLayout(
                         level = GlassSurfaceLevel.Flat,
                         modifier = Modifier.width(ui.sidebarWidth).fillMaxHeight(),
                     ) {
+                        SidebarFrame(
+                            projectName = workspace.rootDir?.fileName?.toString(),
+                            active = lastSidebarView,
+                            onSelect = { if (it != ui.activeSideView) onEvent(IdeEvent.Panel.SelectSideView(it)) },
+                        ) {
                         when (lastSidebarView) {
                             page.app.mvi.SideView.FILES -> FileTreePanel(
                                 root = workspace.rootDir,
@@ -371,8 +364,7 @@ internal fun IdeMainLayout(
                                 revision = workspace.treeRevision,
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            page.app.mvi.SideView.SEARCH -> SideViewPlaceholder(title = "Search", modifier = Modifier.fillMaxSize())
-                            page.app.mvi.SideView.SOURCE_CONTROL -> SideViewPlaceholder(title = "Source Control", modifier = Modifier.fillMaxSize())
+                        }
                         }
                     }
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
@@ -658,6 +650,14 @@ internal fun IdeMainLayout(
             runtimeBuildFileVersions = runtimeBuildFileVersions.value,
             onProblemsToggle = { onEvent(IdeEvent.Panel.ToggleProblems) },
             onTodoToggle = { onEvent(IdeEvent.Panel.ToggleTodo) },
+            panels = StatusPanels(
+                problemsOpen = ui.problemsOpen,
+                problemsCount = scopedProblemsCount,
+                terminalOpen = ui.terminalOpen,
+                onTerminalToggle = onTerminalToggle,
+                outputOpen = ui.outputOpen,
+                onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
+            ),
             onRuntimeClick = { id -> runtimeDialogOpen = id },
             fileRole = atlasFileRole,
             neighbours = atlasNeighbours,

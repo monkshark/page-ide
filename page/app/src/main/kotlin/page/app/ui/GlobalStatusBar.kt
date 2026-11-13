@@ -33,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import page.app.dartSiblingLspStatus
 import page.app.lspStatusLineText
@@ -65,6 +67,7 @@ internal fun GlobalStatusBar(
     neighbours: page.atlas.graph.FileNeighbours? = null,
     groupOf: (java.nio.file.Path) -> String? = { null },
     onOpenFile: (java.nio.file.Path) -> Unit = {},
+    panels: StatusPanels? = null,
     modifier: Modifier = Modifier,
 ) {
     val pane = editor.focused()
@@ -133,6 +136,7 @@ internal fun GlobalStatusBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            if (panels != null) PanelToggles(panels, onProblemsToggle)
             if (showCursor) {
                 StatusItem("Ln ${caret.line + 1}, Col ${caret.col + 1}")
                 StatusItem("${buffer.lineCount} lines")
@@ -580,4 +584,41 @@ private fun StatusItem(text: String) {
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+internal data class StatusPanels(
+    val problemsOpen: Boolean,
+    val problemsCount: Int,
+    val terminalOpen: Boolean,
+    val onTerminalToggle: () -> Unit,
+    val outputOpen: Boolean,
+    val onOutputToggle: () -> Unit,
+)
+
+@Composable
+private fun PanelToggles(panels: StatusPanels, onProblemsToggle: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        PanelToggle("Problems", panels.problemsOpen, onProblemsToggle, count = panels.problemsCount)
+        PanelToggle("Terminal", panels.terminalOpen, panels.onTerminalToggle)
+        PanelToggle("Output", panels.outputOpen, panels.onOutputToggle)
+    }
+}
+
+@Composable
+private fun PanelToggle(label: String, open: Boolean, onClick: () -> Unit, count: Int = 0) {
+    val colors = Glass.colors
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (open) colors.surfaceRaised else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .testTag("panel-toggle-${label.lowercase()}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (count > 0) Box(Modifier.size(6.dp).clip(CircleShape).background(colors.warn))
+        Text(label, color = if (open) colors.text else colors.muted, fontSize = 12.sp)
+        if (count > 0) Text(count.toString(), color = if (open) colors.text else colors.muted, fontSize = 12.sp, fontFamily = page.ui.EditorFontFamily)
+    }
 }

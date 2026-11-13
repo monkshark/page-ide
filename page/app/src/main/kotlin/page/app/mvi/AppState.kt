@@ -19,7 +19,7 @@ import page.ui.GlassPalette
 import java.nio.file.Path
 
 
-internal enum class SideView { FILES, SEARCH, SOURCE_CONTROL }
+internal enum class SideView { FILES }
 
 internal enum class Pillar { PAIR, GLASS, ATLAS, ECHO }
 
