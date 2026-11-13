@@ -167,6 +167,9 @@ internal fun PartsPanel(
     var selectedId by remember(currentPart?.id, map) { mutableStateOf(currentPart?.id ?: tiers.firstOrNull()?.firstOrNull()?.id) }
     val selected = selectedId?.let { map.part(it) }
     var pinnedFor by remember(currentPart?.id, map) { mutableStateOf<String?>(null) }
+    var flashTick by remember { mutableStateOf(0) }
+    val fileListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    androidx.compose.runtime.LaunchedEffect(flashTick) { if (flashTick > 0) fileListState.scrollToItem(0) }
     val factsCache = remember(map) { mutableStateMapOf<String, Map<Path, FileFacts>>() }
     var factsLoading by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(selected?.id, map, loadFacts) {
@@ -297,9 +300,23 @@ internal fun PartsPanel(
                             selectedId = part.id
                             pinnedFor = null
                         },
-                        onRelationClick = {
-                            selectedId = part.id
-                            pinnedFor = part.id
+                        action = relatedByPart(part.id).all.let { files ->
+                            when {
+                                part.id == currentPart?.id -> null
+                                files.size == 1 -> "Open ${files.single().fileName}"
+                                files.size > 1 -> "Show ${files.size} files"
+                                else -> null
+                            }
+                        },
+                        onAction = {
+                            val files = relatedByPart(part.id).all
+                            if (files.size == 1) {
+                                onOpenFile(files.single())
+                            } else {
+                                selectedId = part.id
+                                pinnedFor = part.id
+                                flashTick++
+                            }
                         },
                         modifier = Modifier.onGloballyPositioned { rowTops[part.id] = it.positionInParent().y },
                     )
@@ -371,7 +388,7 @@ internal fun PartsPanel(
                 (related.all + ordered).filter { query.isBlank() || it.fileName.toString().contains(query.trim(), ignoreCase = true) }
             }
             val maxUsers = facts.values.maxOfOrNull { it.usedBy }?.coerceAtLeast(1) ?: 1
-            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp).testTag("part-files")) {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp).testTag("part-files"), state = fileListState) {
                 if (!related.isEmpty()) {
                     item(key = "pinned-label") {
                         Text(
@@ -384,7 +401,7 @@ internal fun PartsPanel(
                 }
                 items(files, key = { it.toString() }) { file ->
                     val fact = facts[file]
-                    PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, factsLoading, onOpenFile)
+                    PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, factsLoading, onOpenFile, pinned = file in related.all, flashTick = flashTick)
                 }
             }
         }
@@ -401,7 +418,8 @@ private fun PartRow(
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit,
-    onRelationClick: () -> Unit = onClick,
+    action: String? = null,
+    onAction: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = Glass.colors
@@ -443,14 +461,22 @@ private fun PartRow(
             Text(part.fileCount.toString(), color = colors.muted, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
         }
         if (relation != null) {
-            Text(
-                relation,
-                color = colors.text,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                modifier = Modifier.clickable(onClick = onRelationClick).testTag("relation-${part.id}"),
-            )
+            Row(Modifier.fillMaxWidth().heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(relation, color = colors.text, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.weight(1f).testTag("relation-${part.id}"))
+                if (action != null) {
+                    Box(
+                        Modifier
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onAction)
+                            .padding(horizontal = 4.dp)
+                            .testTag("relation-action-${part.id}"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(action, color = colors.primary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
         }
         WeightBar(weight, if (here) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f), Modifier.padding(top = 4.dp, bottom = 2.dp).fillMaxWidth())
     }
@@ -470,15 +496,37 @@ private fun WeightBar(fraction: Float, fill: Color, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: Boolean, stale: Boolean, onOpenFile: (Path) -> Unit) {
+private fun PartFileRow(
+    file: Path,
+    facts: FileFacts?,
+    weight: Float?,
+    current: Boolean,
+    stale: Boolean,
+    onOpenFile: (Path) -> Unit,
+    pinned: Boolean = false,
+    flashTick: Int = 0,
+) {
     val colors = Glass.colors
+    val flash = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(flashTick, pinned) {
+        if (pinned && flashTick > 0) {
+            flash.snapTo(1f)
+            flash.animateTo(0f, androidx.compose.animation.core.tween(1200))
+        }
+    }
     var focused by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().height(28.dp)) {
         Row(
             Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(6.dp))
-                .background(if (current) colors.surfaceRaised else Color.Transparent)
+                .background(
+                    when {
+                        current -> colors.surfaceRaised
+                        pinned -> colors.primary.copy(alpha = 0.14f + 0.21f * flash.value)
+                        else -> Color.Transparent
+                    },
+                )
                 .border(1.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(6.dp))
                 .onFocusChanged { focused = it.isFocused }
                 .clickable { onOpenFile(file) }

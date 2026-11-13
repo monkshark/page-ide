@@ -44,7 +44,7 @@ class PartsPanelTest {
             part("app", 2, "app/Main.kt"),
             part("language", 1, "language/LspRouter.kt"),
             part("lsp", 1, "lsp/LspTransport.kt", "lsp/LspClient.kt", "lsp/JsonRpc.kt"),
-            part("core", 0, "core/Env.kt"),
+            part("core", 0, "core/Env.kt", "core/Paths.kt"),
             MapPart(ProjectMapBuilder.OTHER_ID, "Other", "", null, listOf(file("tools/gen.kt")), 0),
         ),
         emptyList(),
@@ -94,8 +94,8 @@ class PartsPanelTest {
             }
         }
         onNodeWithTag("parts-all").performClick()
-        onNodeWithTag("relation-app").assertTextEquals("Uses this file")
-        onNodeWithTag("relation-core").assertTextEquals("Used by this file")
+        onNodeWithTag("relation-app", useUnmergedTree = true).assertTextEquals("Uses this file")
+        onNodeWithTag("relation-core", useUnmergedTree = true).assertTextEquals("Used by this file")
         onNodeWithText("Other files").assertIsDisplayed()
         assertEquals(0, onAllNodes(hasText("Descriptions are not shown")).fetchSemanticsNodes().size)
         waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("loop")).fetchSemanticsNodes().isNotEmpty() }
@@ -134,7 +134,13 @@ class PartsPanelTest {
     }
 
     @Test
-    fun `following a relation opens that part with its files on top`() = runComposeUiTest {
+    fun `a relation opens its only file or pins several`() = runComposeUiTest {
+        var opened: Path? = null
+        val linked = FileMargins(
+            needs = listOf(Need(node("core/Env.kt"), 3), Need(node("core/Paths.kt"), 4)),
+            usedBy = listOf(node("app/Main.kt")),
+            cycle = emptyList(),
+        )
         setContent {
             GlassTheme {
                 PartsPanel(
@@ -142,18 +148,19 @@ class PartsPanelTest {
                     currentFile = file("lsp/LspTransport.kt"),
                     ties = mapOf("app" to PartTie(1, false), "core" to PartTie(0, true)),
                     loadFacts = { emptyMap() },
-                    onOpenFile = {},
+                    onOpenFile = { opened = it },
                     root = root,
-                    margins = margins,
+                    margins = linked,
                 )
             }
         }
-        onNodeWithTag("relation-core").performClick()
+        onNodeWithTag("relation-action-app").assertTextEquals("Open Main.kt")
+        onNodeWithTag("relation-action-app").performClick()
+        assertEquals(file("app/Main.kt"), opened)
+        onNodeWithTag("relation-action-core").assertTextEquals("Show 2 files")
+        onNodeWithTag("relation-action-core").performClick()
         onNodeWithText("page/core").assertIsDisplayed()
-        onNodeWithTag("pinned-label").assertTextEquals("Used by this file, 1 file")
-        onNodeWithTag("relation-app").performClick()
-        onNodeWithTag("pinned-label").assertTextEquals("Uses this file, 1 file")
-        onNodeWithText("Main.kt").assertIsDisplayed()
+        onNodeWithTag("pinned-label").assertTextEquals("Used by this file, 2 files")
     }
 
     @Test
