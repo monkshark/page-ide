@@ -203,11 +203,9 @@ private fun ManagerSidebar(
                 }
                 if (categoryEntries.isEmpty()) continue
                 Text(
-                    text = category.label.uppercase(),
-                    color = Glass.colors.faint,
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.6.sp,
+                    text = category.label,
+                    color = Glass.colors.muted,
+                    fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
                 for (entry in categoryEntries) {
@@ -406,10 +404,8 @@ private fun ManagerDetailPane(
             Spacer(Modifier.height(20.dp))
             Text(
                 text = "Installed versions",
-                color = Glass.colors.faint,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.6.sp,
+                color = Glass.colors.muted,
+                fontSize = 12.sp,
             )
             Spacer(Modifier.height(8.dp))
             val cardShape = RoundedCornerShape(Glass.radius.sm)
@@ -554,10 +550,8 @@ private fun ManagerDetailPane(
         Spacer(Modifier.height(20.dp))
         Text(
             text = "Add version",
-            color = Glass.colors.faint,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp,
+            color = Glass.colors.muted,
+            fontSize = 12.sp,
         )
         Spacer(Modifier.height(8.dp))
         DetailPrimaryButton(label = "Install new version…") { onInstallRequested(entry.id) }

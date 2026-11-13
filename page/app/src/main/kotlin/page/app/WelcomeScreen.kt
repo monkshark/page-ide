@@ -144,8 +144,7 @@ fun WelcomeScreen(
             Text(
                 text = "${PageIdentity.ACRONYM}  ·  v${PageIdentity.VERSION}",
                 fontFamily = EditorFontFamily,
-                fontSize = 11.5.sp,
-                letterSpacing = 0.6.sp,
+                fontSize = 12.sp,
                 color = Glass.colors.muted,
             )
 
@@ -358,12 +357,10 @@ private fun DocsLink() {
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text = text.uppercase(),
-        fontFamily = EditorFontFamily,
-        fontSize = 10.sp,
-        letterSpacing = 2.6.sp,
-        color = Glass.colors.faint,
-        modifier = Modifier.padding(start = 2.dp, bottom = 11.dp),
+        text = text,
+        fontSize = 13.sp,
+        color = Glass.colors.muted,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
     )
 }
 

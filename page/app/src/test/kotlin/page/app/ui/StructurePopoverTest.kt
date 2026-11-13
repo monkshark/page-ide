@@ -42,8 +42,8 @@ class StructurePopoverTest {
             }
         }
         onNodeWithText("2 files use LspTransport.kt").assertIsDisplayed()
-        onNodeWithText("LSP").assertIsDisplayed()
-        onNodeWithText("LANGUAGE").assertIsDisplayed()
+        onNodeWithText("lsp").assertIsDisplayed()
+        onNodeWithText("language").assertIsDisplayed()
         onNodeWithText("LspController.kt").performClick()
         assertEquals(root.resolve("language/LspController.kt"), opened)
     }

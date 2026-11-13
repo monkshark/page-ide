@@ -283,9 +283,8 @@ private fun TerminalTabBar(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
-            text = "TERMINAL",
+            text = "Terminal",
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
             color = Glass.colors.text,
             modifier = Modifier.padding(horizontal = 6.dp),
         )

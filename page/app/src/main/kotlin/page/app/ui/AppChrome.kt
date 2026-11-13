@@ -74,7 +74,7 @@ internal fun PaletteToast(palette: GlassPalette, visibleUntilMs: Long) {
         now = System.currentTimeMillis()
     }
     if (now >= visibleUntilMs) return
-    val label = "Glass · ${palette.name}"
+    val label = "Glass · ${paletteLabel(palette)}"
     Box(
         modifier = Modifier.fillMaxSize().padding(20.dp),
         contentAlignment = Alignment.BottomEnd,

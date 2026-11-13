@@ -609,7 +609,7 @@ private fun FloatingDragLabel(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "COPY",
+                        text = "Copy",
                         color = MaterialTheme.colorScheme.onPrimary,
                         style = androidx.compose.material3.LocalTextStyle.current.copy(
                             fontSize = 9.sp,

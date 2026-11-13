@@ -98,11 +98,9 @@ internal fun SettingsPreview(editor: EditorOptions, modifier: Modifier = Modifie
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "PREVIEW",
-                color = colors.faint,
-                fontSize = Glass.type.label,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 1.4.sp,
+                text = "Preview",
+                color = colors.muted,
+                fontSize = Glass.type.ui,
             )
             Box(Modifier.weight(1f))
             Text(
