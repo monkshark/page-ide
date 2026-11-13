@@ -283,16 +283,29 @@ internal fun PartsPanel(
                         .testTag("parts-back"),
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
+            var query by remember(selected.id) { mutableStateOf("") }
+            var byUsers by remember { mutableStateOf(false) }
+            FilterField(query, { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth())
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("File", color = colors.faint, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                Text("Used by", color = colors.faint, fontSize = 11.sp)
+                Row(
+                    Modifier.clickable { byUsers = !byUsers }.testTag("parts-sort"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text("Used by", color = if (byUsers) colors.muted else colors.faint, fontSize = 11.sp)
+                    if (byUsers) FoldChevron(open = true, tint = colors.muted)
+                }
             }
             val related = remember(selected, margins, pinnedFor) {
                 if (pinnedFor == selected.id) relatedFiles(map, margins, selected.id) else RelatedFiles(emptyList(), emptyList())
             }
-            val files = remember(selected, related) {
+            val files = remember(selected, related, query, byUsers, facts) {
                 val pinned = related.all.toSet()
-                related.all + selected.files.filter { it !in pinned }.sortedBy { it.fileName.toString().lowercase() }
+                val rest = selected.files.filter { it !in pinned }
+                val ordered = if (byUsers) rest.sortedWith(compareByDescending<Path> { facts[it]?.usedBy ?: -1 }.thenBy { it.fileName.toString().lowercase() })
+                else rest.sortedBy { it.fileName.toString().lowercase() }
+                (related.all + ordered).filter { query.isBlank() || it.fileName.toString().contains(query.trim(), ignoreCase = true) }
             }
             val maxUsers = facts.values.maxOfOrNull { it.usedBy }?.coerceAtLeast(1) ?: 1
             val openName = current?.fileName?.toString()?.substringBeforeLast('.')
@@ -441,4 +454,28 @@ private fun FoldChevron(open: Boolean, tint: Color) {
         }
         drawPath(path, tint, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
+}
+
+@Composable
+private fun FilterField(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val colors = Glass.colors
+    val shape = RoundedCornerShape(8.dp)
+    androidx.compose.foundation.text.BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(color = colors.text, fontSize = 12.sp, fontFamily = page.ui.UiFontFamily),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.primary),
+        modifier = modifier.testTag("parts-filter"),
+        decorationBox = { inner ->
+            Box(
+                Modifier.height(28.dp).fillMaxWidth().clip(shape).background(colors.background)
+                    .border(1.dp, colors.separator, shape).padding(horizontal = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isEmpty()) Text("Filter files", color = colors.faint, fontSize = 12.sp)
+                inner()
+            }
+        },
+    )
 }

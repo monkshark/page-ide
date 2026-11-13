@@ -1,5 +1,6 @@
 package page.app.ui
 
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
@@ -7,6 +8,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import page.atlas.graph.FileFacts
 import page.atlas.graph.FileMargins
@@ -179,5 +181,31 @@ class PartsPanelTest {
         onNodeWithTag("parts-more").assertTextEquals("3 more parts")
         onNodeWithTag("parts-more").performClick()
         onNodeWithTag("part-app").assertIsDisplayed()
+    }
+
+    @Test
+    fun `files sort by their users and narrow with the filter`() = runComposeUiTest {
+        val counts = mapOf("LspTransport.kt" to 1, "LspClient.kt" to 9, "JsonRpc.kt" to 4)
+        setContent {
+            GlassTheme {
+                PartsPanel(
+                    map = project,
+                    currentFile = file("lsp/LspTransport.kt"),
+                    ties = emptyMap(),
+                    loadFacts = { files -> files.associateWith { FileFacts(counts.getValue(it.fileName.toString()), false) } },
+                    onOpenFile = {},
+                    root = root,
+                )
+            }
+        }
+        waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("9")).fetchSemanticsNodes().isNotEmpty() }
+        fun order() = onAllNodes(hasText(".kt", substring = true)).fetchSemanticsNodes()
+            .mapNotNull { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text }
+            .filter { it in counts.keys }
+        assertEquals(listOf("JsonRpc.kt", "LspClient.kt", "LspTransport.kt"), order())
+        onNodeWithTag("parts-sort").performClick()
+        assertEquals(listOf("LspClient.kt", "JsonRpc.kt", "LspTransport.kt"), order())
+        onNodeWithTag("parts-filter").performTextInput("client")
+        assertEquals(listOf("LspClient.kt"), order())
     }
 }
