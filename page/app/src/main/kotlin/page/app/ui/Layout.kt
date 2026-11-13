@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -290,17 +289,6 @@ internal fun IdeMainLayout(
             }
         } else false
     }) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .background(
-                Brush.verticalGradient(
-                    0f to Glass.colors.primary.copy(alpha = 0.12f),
-                    1f to androidx.compose.ui.graphics.Color.Transparent,
-                ),
-            ),
-    )
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
             path = editor.focused().book.active?.path,
