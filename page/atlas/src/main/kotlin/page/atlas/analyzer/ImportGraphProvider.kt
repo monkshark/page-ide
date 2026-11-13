@@ -30,7 +30,6 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     }
     private var digestRevision = Long.MIN_VALUE
     private var cachedDigest: DependencyDigest = DependencyDigest.EMPTY
-    private var cachedSlice: GraphSlice = GraphSlice.EMPTY
 
     private data class CachedAnalysis(val mtime: Long, val analysis: FileAnalysis)
     private data class CachedDeclarations(val mtime: Long, val declarations: FileDeclarations)
@@ -176,7 +175,6 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         val digest = page.atlas.graph.dependencyDigest(slice, truncated = supported > PROJECT_MAX_NODES)
         digestRevision = revision
         cachedDigest = digest
-        cachedSlice = slice
         return digest
     }
 
@@ -186,12 +184,6 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     }
 
     fun projectCycles(): List<List<GraphNode>> = dependencyDigest().cycleGroups
-
-    fun fileNeighbours(path: Path): page.atlas.graph.FileNeighbours? {
-        if (!ImportExtractor.supports(path)) return null
-        dependencyDigest()
-        return page.atlas.graph.neighboursOf(cachedSlice, nodeId(path))
-    }
 
     fun margins(path: Path, text: String): FileMargins {
         index.refreshIfStale()
