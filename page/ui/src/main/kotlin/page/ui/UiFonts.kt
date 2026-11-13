@@ -5,6 +5,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 
 private val UI_FONT_RESOURCES = listOf(
@@ -20,7 +21,9 @@ val UiFontFamily: FontFamily = run {
     if (fonts.isEmpty()) FontFamily.Default else FontFamily(fonts)
 }
 
-private fun TextStyle.glass(): TextStyle = copy(fontFamily = UiFontFamily, letterSpacing = 0.sp)
+private val CenteredLines = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
+
+private fun TextStyle.glass(): TextStyle = copy(fontFamily = UiFontFamily, letterSpacing = 0.sp, lineHeightStyle = CenteredLines)
 
 internal val GlassTypography: Typography = Typography().let { base ->
     Typography(
