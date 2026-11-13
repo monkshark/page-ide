@@ -360,6 +360,7 @@ internal fun IdeMainLayout(
                                 loadFacts = loadPartFacts,
                                 onOpenFile = onOpenFile,
                                 root = workspace.rootDir,
+                                margins = atlasMargins?.takeIf { atlasMarginsPath == editor.focused().book.active?.path },
                                 onBrowseFiles = { onEvent(IdeEvent.Panel.SelectSideView(page.app.mvi.SideView.FILES)) },
                             )
                             page.app.mvi.SideView.FILES -> FileTreePanel(

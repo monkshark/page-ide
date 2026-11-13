@@ -2,12 +2,18 @@ package page.app.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import page.atlas.graph.FileFacts
+import page.atlas.graph.FileMargins
+import page.atlas.graph.GraphNode
+import page.atlas.graph.Need
+import page.atlas.graph.NodeKind
+import page.shared.path.FilePath
 import page.atlas.graph.MapPart
 import page.atlas.graph.PartTie
 import page.atlas.graph.ProjectMap
@@ -105,5 +111,42 @@ class PartsPanelTest {
         onNodeWithText("No parts found").assertIsDisplayed()
         onNodeWithText("Browse in Files").performClick()
         assertEquals(true, browsed)
+    }
+
+    private fun node(rel: String) = GraphNode(file(rel).toString(), rel.substringAfterLast('/'), FilePath.of(file(rel).toString()), NodeKind.WORKSPACE_FILE)
+    private val margins = FileMargins(
+        needs = listOf(Need(node("core/Env.kt"), 3)),
+        usedBy = listOf(node("app/Main.kt"), node("lsp/LspClient.kt")),
+        cycle = emptyList(),
+    )
+
+    @Test
+    fun `related files are the open file's users and needs inside one part`() {
+        assertEquals(RelatedFiles(listOf(file("app/Main.kt")), emptyList()), relatedFiles(project, margins, "app"))
+        assertEquals(RelatedFiles(emptyList(), listOf(file("core/Env.kt"))), relatedFiles(project, margins, "core"))
+        assertEquals(RelatedFiles(emptyList(), emptyList()), relatedFiles(project, null, "app"))
+    }
+
+    @Test
+    fun `following a relation opens that part with its files on top`() = runComposeUiTest {
+        setContent {
+            GlassTheme {
+                PartsPanel(
+                    map = project,
+                    currentFile = file("lsp/LspTransport.kt"),
+                    ties = mapOf("app" to PartTie(1, false), "core" to PartTie(0, true)),
+                    loadFacts = { emptyMap() },
+                    onOpenFile = {},
+                    root = root,
+                    margins = margins,
+                )
+            }
+        }
+        onNodeWithTag("relation-core").performClick()
+        onNodeWithText("page/core").assertIsDisplayed()
+        onNodeWithTag("pinned-label").assertTextEquals("Used by LspTransport")
+        onNodeWithTag("relation-app").performClick()
+        onNodeWithTag("pinned-label").assertTextEquals("Uses LspTransport")
+        onNodeWithText("Main.kt").assertIsDisplayed()
     }
 }

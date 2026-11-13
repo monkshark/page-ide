@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import page.atlas.graph.FileFacts
+import page.atlas.graph.FileMargins
+import page.atlas.toNioPath
 import page.atlas.graph.MapPart
 import page.atlas.graph.PartTie
 import page.atlas.graph.ProjectMap
@@ -85,6 +87,21 @@ internal fun partFolder(part: MapPart, root: Path?): String? {
 
 private enum class SpineTie { HERE, USER, NEEDED, NONE, OTHER }
 
+internal data class RelatedFiles(val users: List<Path>, val needs: List<Path>) {
+    fun isEmpty(): Boolean = users.isEmpty() && needs.isEmpty()
+    val all: List<Path> get() = users + needs
+}
+
+internal fun relatedFiles(map: ProjectMap, margins: FileMargins?, partId: String): RelatedFiles {
+    if (margins == null) return RelatedFiles(emptyList(), emptyList())
+    fun inPart(node: page.atlas.graph.GraphNode): Path? =
+        node.path?.toNioPath()?.toAbsolutePath()?.normalize()?.takeIf { map.partOf(it)?.id == partId }
+    return RelatedFiles(
+        users = margins.usedBy.mapNotNull(::inPart).distinct(),
+        needs = margins.needs.mapNotNull { inPart(it.node) }.distinct(),
+    )
+}
+
 @Composable
 internal fun PartsPanel(
     map: ProjectMap?,
@@ -94,6 +111,7 @@ internal fun PartsPanel(
     onOpenFile: (Path) -> Unit,
     root: Path? = null,
     onBrowseFiles: () -> Unit = {},
+    margins: FileMargins? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = Glass.colors
@@ -113,6 +131,7 @@ internal fun PartsPanel(
     val maxCount = remember(map) { map.parts.maxOfOrNull { it.fileCount }?.coerceAtLeast(1) ?: 1 }
     var selectedId by remember(currentPart?.id, map) { mutableStateOf(currentPart?.id ?: tiers.firstOrNull()?.firstOrNull()?.id) }
     val selected = selectedId?.let { map.part(it) }
+    var pinnedFor by remember(currentPart?.id, map) { mutableStateOf<String?>(null) }
     val facts by produceState(emptyMap<Path, FileFacts>(), selected?.id, map) {
         value = emptyMap()
         val part = selected ?: return@produceState
@@ -199,7 +218,14 @@ internal fun PartsPanel(
                         here = part.id == currentPart?.id,
                         selected = part.id == selectedId,
                         weight = part.fileCount.toFloat() / maxCount,
-                        onClick = { selectedId = part.id },
+                        onClick = {
+                            selectedId = part.id
+                            pinnedFor = null
+                        },
+                        onRelationClick = {
+                            selectedId = part.id
+                            pinnedFor = part.id
+                        },
                         modifier = Modifier.onGloballyPositioned { rowTops[part.id] = it.positionInParent().y },
                     )
                 }
@@ -221,9 +247,26 @@ internal fun PartsPanel(
                 Text("File", color = colors.faint, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 Text("Used by", color = colors.faint, fontSize = 11.sp)
             }
-            val files = remember(selected) { selected.files.sortedBy { it.fileName.toString().lowercase() } }
+            val related = remember(selected, margins, pinnedFor) {
+                if (pinnedFor == selected.id) relatedFiles(map, margins, selected.id) else RelatedFiles(emptyList(), emptyList())
+            }
+            val files = remember(selected, related) {
+                val pinned = related.all.toSet()
+                related.all + selected.files.filter { it !in pinned }.sortedBy { it.fileName.toString().lowercase() }
+            }
             val maxUsers = facts.values.maxOfOrNull { it.usedBy }?.coerceAtLeast(1) ?: 1
+            val openName = current?.fileName?.toString()?.substringBeforeLast('.')
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp).testTag("part-files")) {
+                if (!related.isEmpty() && openName != null) {
+                    item(key = "pinned-label") {
+                        Text(
+                            if (related.users.isNotEmpty()) "Uses $openName" else "Used by $openName",
+                            color = colors.faint,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp).testTag("pinned-label"),
+                        )
+                    }
+                }
                 items(files, key = { it.toString() }) { file ->
                     val fact = facts[file]
                     PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, onOpenFile)
@@ -241,6 +284,7 @@ private fun PartRow(
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit,
+    onRelationClick: () -> Unit = onClick,
     modifier: Modifier = Modifier,
 ) {
     val colors = Glass.colors
@@ -268,7 +312,14 @@ private fun PartRow(
             Text(part.fileCount.toString(), color = colors.faint, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
         }
         if (relation != null) {
-            Text(relation, color = colors.text, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(
+                relation,
+                color = colors.text,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                modifier = Modifier.clickable(onClick = onRelationClick).testTag("relation-${part.id}"),
+            )
         }
         WeightBar(weight, if (here) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f), Modifier.padding(top = 4.dp, bottom = 2.dp).fillMaxWidth())
     }
