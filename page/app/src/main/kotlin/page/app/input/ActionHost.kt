@@ -34,5 +34,5 @@ interface ActionHost {
 
     fun showAllActions()
     fun cyclePalette()
-    fun toggleProjectSummary()
+    fun toggleMargins()
 }

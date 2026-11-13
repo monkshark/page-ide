@@ -177,6 +177,9 @@ internal fun IdeMainLayout(
     atlasFileRole: FileRole? = null,
     atlasNeighbours: page.atlas.graph.FileNeighbours? = null,
     atlasMargins: page.atlas.graph.FileMargins? = null,
+    atlasMarginsPath: Path? = null,
+    marginsOpen: Boolean = true,
+    onToggleMargins: () -> Unit = {},
     loadPartFacts: (List<Path>) -> Map<Path, page.atlas.graph.FileFacts> = { emptyMap() },
     projectMap: page.atlas.graph.ProjectMap? = null,
     summaryVisible: Boolean = false,
@@ -190,6 +193,15 @@ internal fun IdeMainLayout(
     palette: GlassPalette = GlassPalette.Signature,
     onSelectPalette: (GlassPalette) -> Unit = {},
 ) {
+    val marginsBinding = remember(atlasMargins, atlasMarginsPath, marginsOpen, projectMap) {
+        val margins = atlasMargins
+        val path = atlasMarginsPath
+        if (marginsOpen && margins != null && path != null) {
+            MarginsBinding(path, margins, { p -> projectMap?.partOf(p)?.name }, { p -> fileTree.onOpenFile(p) })
+        } else {
+            null
+        }
+    }
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
     val onCreateFileIn = fileTree.onCreateFileIn
@@ -306,8 +318,8 @@ internal fun IdeMainLayout(
             onOpenSettings = onToggleSettings,
             center = {
                 PillarSwitch(
-                    atlasActive = summaryVisible && projectMap != null,
-                    onAtlasToggle = { onSummaryVisibleChange(!summaryVisible) },
+                    atlasActive = marginsOpen,
+                    onAtlasToggle = onToggleMargins,
                     currentPalette = palette,
                     onSelectPalette = onSelectPalette,
                     onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
@@ -452,6 +464,7 @@ internal fun IdeMainLayout(
                                 onReferencesOpenInPanel = onReferencesOpenInPanel,
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
+                                margins = marginsBinding,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -493,6 +506,7 @@ internal fun IdeMainLayout(
                                 onReferencesOpenInPanel = onReferencesOpenInPanel,
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
+                                margins = marginsBinding,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -533,6 +547,7 @@ internal fun IdeMainLayout(
                         onReferencesOpenInPanel = onReferencesOpenInPanel,
                         linePreviewFor = linePreviewFor,
                         onShowCallGraph = onShowCallGraph,
+                        margins = marginsBinding,
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),

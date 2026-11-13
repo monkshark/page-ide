@@ -217,12 +217,12 @@ object ActionCatalog {
             macBinding = Binding(Key.T, control = true, alt = true),
         ) { it.cyclePalette() },
         ActionSpec(
-            id = "page.projectSummary",
-            label = "Show Project Summary",
+            id = "page.margins",
+            label = "Toggle Margins",
             group = ActionGroup.Page,
             binding = Binding(Key.A, primary = true, alt = true),
             macBinding = Binding(Key.A, control = true, alt = true),
-        ) { it.toggleProjectSummary() },
+        ) { it.toggleMargins() },
         ActionSpec(
             id = "editor.completion",
             label = "Trigger Completion",
