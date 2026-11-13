@@ -68,6 +68,7 @@ internal fun PaneRegion(
     linePreviewFor: (String, Int) -> String? = { _, _ -> null },
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
     margins: MarginsBinding? = null,
+    onMarginsShownChange: (Boolean) -> Unit = {},
     workspaceRoot: Path? = null,
     usedElsewhere: (Path?) -> (String) -> Boolean = { { false } },
     usageRevision: Int = 0,
@@ -215,6 +216,7 @@ internal fun PaneRegion(
                     onReferencesDismiss = onReferencesClose,
                     referenceLinePreview = linePreviewFor,
                     margins = if (isFocused) margins else null,
+                    onMarginsShownChange = onMarginsShownChange,
                     onShowCallGraph = active?.path
                         ?.takeIf { activeCtrl?.supportsCallHierarchy == true || ImportExtractor.supportsStaticCalls(it) }
                         ?.let { p -> { line, ch -> onShowCallGraph(p, line, ch) } },

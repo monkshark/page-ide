@@ -177,6 +177,7 @@ fun EditorPanel(
     onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
     workspaceRoot: Path? = null,
     margins: page.app.ui.MarginsBinding? = null,
+    onMarginsShownChange: (Boolean) -> Unit = {},
     editorFocusVersion: Int = 0,
     initialFoldedStartLines: Set<Int> = emptySet(),
     onFoldStartLinesChange: (Set<Int>) -> Unit = {},
@@ -1054,6 +1055,9 @@ fun EditorPanel(
         binding.path == activePath && with(panelDensity) { panelWidthPx.toDp() } >= page.app.ui.MarginsMinEditorWidth
     }
     val marginLineHeight = with(panelDensity) { editorLineHeight.toDp() }
+    LaunchedEffect(margins != null, marginsBinding != null) {
+        if (margins != null) onMarginsShownChange(marginsBinding != null)
+    }
     val visibleOriginalLines = remember(gutterLines) { gutterLines.map { it.originalLine } }
     val separatorColor = page.ui.Glass.colors.separator
     Column(

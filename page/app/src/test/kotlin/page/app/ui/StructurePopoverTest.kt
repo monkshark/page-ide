@@ -2,7 +2,6 @@ package page.app.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -12,16 +11,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import page.atlas.graph.FileNeighbours
 import page.atlas.graph.GraphNode
-import page.atlas.graph.MapPart
 import page.atlas.graph.NodeKind
 import page.atlas.graph.ProjectMap
-import page.atlas.graph.ProjectMapBuilder
 import page.shared.path.FilePath
 import page.ui.GlassTheme
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
@@ -78,30 +74,4 @@ class StructurePopoverTest {
         assertTrue(dismissed)
     }
 
-    private fun part(id: String, layer: Int, files: Int, desc: String = "") =
-        MapPart(id, id, desc, null, List(files) { Path.of("$id$it.kt") }, layer)
-
-    @Test
-    fun `the summary leads with what sits on top and leaves Other out`() {
-        val map = ProjectMap("IDE", listOf(part("core", 0, 2), part("app", 2, 100), part(ProjectMapBuilder.OTHER_ID, 0, 40), part("ui", 1, 18)), emptyList())
-        assertEquals(listOf("app", "ui", "core"), summaryParts(map).map { it.id })
-    }
-
-    @Test
-    fun `a one-part project is not worth a summary`() {
-        assertFalse(worthSummarising(ProjectMap("x", listOf(part("a", 0, 3)), emptyList())))
-        assertFalse(worthSummarising(null))
-        assertTrue(worthSummarising(ProjectMap("x", listOf(part("a", 1, 3), part("b", 0, 1)), emptyList())))
-    }
-
-    @Test
-    fun `the summary card names the project and can be dismissed`() = runComposeUiTest {
-        var dismissed = false
-        val map = ProjectMap("IDE", listOf(part("app", 1, 10, "window and panels"), part("core", 0, 2, "shared basics")), emptyList())
-        setContent { GlassTheme { ProjectSummaryCard(map, onDismiss = { dismissed = true }) } }
-        onNodeWithText("IDE, in 2 parts").assertIsDisplayed()
-        onNodeWithText("window and panels").assertIsDisplayed()
-        onNodeWithTag("project-summary-close").performClick()
-        assertTrue(dismissed)
-    }
 }

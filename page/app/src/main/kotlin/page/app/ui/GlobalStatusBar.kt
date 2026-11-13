@@ -40,7 +40,6 @@ import kotlinx.coroutines.delay
 import page.app.dartSiblingLspStatus
 import page.app.lspStatusLineText
 import page.app.state.EditorWorkspaceState
-import page.atlas.graph.FileRole
 import page.editor.FileKind
 import page.editor.FileKinds
 import page.editor.TextBuffer
@@ -63,8 +62,8 @@ internal fun GlobalStatusBar(
     onProblemsToggle: () -> Unit,
     onTodoToggle: () -> Unit,
     onRuntimeClick: ((String) -> Unit)?,
-    fileRole: FileRole? = null,
     neighbours: page.atlas.graph.FileNeighbours? = null,
+    structureInMargins: Boolean = false,
     groupOf: (java.nio.file.Path) -> String? = { null },
     onOpenFile: (java.nio.file.Path) -> Unit = {},
     panels: StatusPanels? = null,
@@ -153,8 +152,7 @@ internal fun GlobalStatusBar(
                     label = "warnings",
                     onClick = onProblemsToggle,
                 )
-                if (fileRole != null) StructureChips(
-                    role = fileRole,
+                if (neighbours != null && !structureInMargins) StructureChips(
                     fileName = active?.path?.fileName?.toString() ?: "",
                     neighbours = neighbours,
                     groupOf = groupOf,
@@ -487,37 +485,34 @@ private fun TodoStatusBadge(
 
 @Composable
 private fun StructureChips(
-    role: FileRole,
     fileName: String,
-    neighbours: page.atlas.graph.FileNeighbours?,
+    neighbours: page.atlas.graph.FileNeighbours,
     groupOf: (java.nio.file.Path) -> String?,
     onOpenFile: (java.nio.file.Path) -> Unit,
 ) {
     var open by remember(fileName) { mutableStateOf<StructureView?>(null) }
-    val countText = if (role.truncated) "${role.dependents}+" else "${role.dependents}"
-    val canOpen = neighbours != null
+    val countText = neighbours.usedBy.size.toString()
     Box {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (role.inCycle) {
+            if (neighbours.cycle.isNotEmpty()) {
                 StructureChip(
                     color = Glass.colors.warn,
-                    label = "In cycle",
+                    label = "In a loop",
                     tooltip = "This file is part of a dependency loop. Click to see the loop.",
-                    onClick = if (canOpen) ({ open = if (open == StructureView.CYCLE) null else StructureView.CYCLE }) else null,
+                    onClick = { open = if (open == StructureView.CYCLE) null else StructureView.CYCLE },
                 )
             }
-            val usedLabel = if (role.isHub) "Hub · used by $countText" else "Used by $countText"
-            if (role.isHub || role.dependents > 0) {
+            if (neighbours.usedBy.isNotEmpty()) {
                 StructureChip(
-                    color = if (role.isHub) Glass.colors.primary else null,
-                    label = usedLabel,
-                    tooltip = "$countText files import this file. Click to see which.",
-                    onClick = if (canOpen) ({ open = if (open == StructureView.USED_BY || open == StructureView.USES) null else StructureView.USED_BY }) else null,
+                    color = null,
+                    label = "Used by $countText",
+                    tooltip = "$countText files use this file. Click to see which.",
+                    onClick = { open = if (open == StructureView.USED_BY || open == StructureView.USES) null else StructureView.USED_BY },
                 )
             }
         }
         val view = open
-        if (view != null && neighbours != null) {
+        if (view != null) {
             StructurePopover(
                 view = view,
                 fileName = fileName,

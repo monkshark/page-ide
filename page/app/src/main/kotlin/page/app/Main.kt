@@ -430,19 +430,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
     }
 
     val atlasProvider = remember(rootDir) { rootDir?.let { ImportGraphProvider(it) } }
-    var atlasFileRole by remember { mutableStateOf<page.atlas.graph.FileRole?>(null) }
-    var atlasNeighbours by remember { mutableStateOf<page.atlas.graph.FileNeighbours?>(null) }
-    LaunchedEffect(atlasProvider, focusedActivePath) {
-        atlasFileRole = null
-        atlasNeighbours = null
-        val path = focusedActivePath ?: return@LaunchedEffect
-        if (atlasProvider == null) return@LaunchedEffect
-        kotlinx.coroutines.delay(700)
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            atlasFileRole = runCatching { atlasProvider.fileRole(path) }.getOrNull()
-            atlasNeighbours = runCatching { atlasProvider.fileNeighbours(path) }.getOrNull()
-        }
-    }
     var atlasMargins by remember { mutableStateOf<page.atlas.graph.FileMargins?>(null) }
     var atlasMarginsPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
     LaunchedEffect(atlasProvider, focusedActivePath, focusedActiveText) {
@@ -475,15 +462,6 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         atlasProjectCycles = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching { atlasProvider.projectCycles() }.getOrDefault(emptyList())
         }
-    }
-    val summarySeen = remember { page.app.ui.SummarySeen.preferences() }
-    var summaryChoice by remember(rootDir) { mutableStateOf<Boolean?>(null) }
-    val summaryRootDir = rootDir
-    val summaryVisible = summaryChoice
-        ?: (summaryRootDir != null && page.app.ui.worthSummarising(projectMap) && !summarySeen.seen(summaryRootDir))
-    val setSummaryVisible: (Boolean) -> Unit = { visible ->
-        summaryChoice = visible
-        if (!visible) rootDir?.let { summarySeen.markSeen(it) }
     }
     var marginsOpen by remember { mutableStateOf(true) }
     SideEffect { app.onToggleMargins = { marginsOpen = !marginsOpen } }
@@ -796,16 +774,12 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     },
                     tabContextActionsFor = { side -> tabContextActionsFor(side) },
                     settings = app.settingsBinding(),
-                    atlasFileRole = atlasFileRole,
-                    atlasNeighbours = atlasNeighbours,
                     atlasMargins = atlasMargins,
                     atlasMarginsPath = atlasMarginsPath,
                     marginsOpen = marginsOpen,
                     onToggleMargins = { marginsOpen = !marginsOpen },
                     loadPartFacts = { files -> atlasProvider?.fileFacts(files).orEmpty() },
                     projectMap = projectMap,
-                    summaryVisible = summaryVisible,
-                    onSummaryVisibleChange = setSummaryVisible,
                     atlasProjectCycles = atlasProjectCycles,
                     atlasCallsSlice = atlasCallsSlice,
                     atlasCallsState = atlasCallsView,

@@ -49,7 +49,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.*
 import page.app.mvi.IdeEvent
-import page.atlas.graph.FileRole
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.toFilePath
@@ -174,16 +173,12 @@ internal fun IdeMainLayout(
     usageRevision: Int = 0,
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
     settings: SettingsBinding = SettingsBinding(),
-    atlasFileRole: FileRole? = null,
-    atlasNeighbours: page.atlas.graph.FileNeighbours? = null,
     atlasMargins: page.atlas.graph.FileMargins? = null,
     atlasMarginsPath: Path? = null,
     marginsOpen: Boolean = true,
     onToggleMargins: () -> Unit = {},
     loadPartFacts: (List<Path>) -> Map<Path, page.atlas.graph.FileFacts> = { emptyMap() },
     projectMap: page.atlas.graph.ProjectMap? = null,
-    summaryVisible: Boolean = false,
-    onSummaryVisibleChange: (Boolean) -> Unit = {},
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
     atlasCallsSlice: GraphSlice = GraphSlice.EMPTY,
     atlasCallsState: CallGraphState = remember { CallGraphState() },
@@ -202,6 +197,7 @@ internal fun IdeMainLayout(
             null
         }
     }
+    var marginsShown by remember { mutableStateOf(false) }
     val onToggle = fileTree.onToggle
     val onOpenFile = fileTree.onOpenFile
     val onCreateFileIn = fileTree.onCreateFileIn
@@ -465,6 +461,7 @@ internal fun IdeMainLayout(
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
                                 margins = marginsBinding,
+                                onMarginsShownChange = { marginsShown = it },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -507,6 +504,7 @@ internal fun IdeMainLayout(
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
                                 margins = marginsBinding,
+                                onMarginsShownChange = { marginsShown = it },
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -548,6 +546,7 @@ internal fun IdeMainLayout(
                         linePreviewFor = linePreviewFor,
                         onShowCallGraph = onShowCallGraph,
                         margins = marginsBinding,
+                        onMarginsShownChange = { marginsShown = it },
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -687,8 +686,8 @@ internal fun IdeMainLayout(
                 onOutputToggle = { onEvent(IdeEvent.Panel.ToggleOutput) },
             ),
             onRuntimeClick = { id -> runtimeDialogOpen = id },
-            fileRole = atlasFileRole,
-            neighbours = atlasNeighbours,
+            neighbours = atlasMargins?.takeIf { atlasMarginsPath == editor.focused().book.active?.path }?.asNeighbours(),
+            structureInMargins = marginsOpen && marginsShown,
             groupOf = { path -> projectMap?.partOf(path)?.name },
             onOpenFile = onOpenFile,
         )
@@ -822,12 +821,6 @@ internal fun IdeMainLayout(
             )
         } else {
             runtimeDialogOpen = null
-        }
-    }
-    val summaryMap = projectMap
-    if (summaryVisible && summaryMap != null && summaryMap.parts.isNotEmpty()) {
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(top = 48.dp, end = 16.dp), contentAlignment = Alignment.TopEnd) {
-            ProjectSummaryCard(summaryMap, onDismiss = { onSummaryVisibleChange(false) })
         }
     }
     }
