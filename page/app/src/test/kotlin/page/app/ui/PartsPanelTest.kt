@@ -208,4 +208,30 @@ class PartsPanelTest {
         onNodeWithTag("parts-filter").performTextInput("client")
         assertEquals(listOf("LspClient.kt"), order())
     }
+
+    @Test
+    fun `returning to a part shows its last numbers while new ones load`() = runComposeUiTest {
+        var calls = 0
+        setContent {
+            GlassTheme {
+                PartsPanel(
+                    map = project,
+                    currentFile = file("lsp/LspTransport.kt"),
+                    ties = emptyMap(),
+                    loadFacts = { files ->
+                        calls++
+                        if (calls >= 3) Thread.sleep(2_000)
+                        files.associateWith { FileFacts(7, false) }
+                    },
+                    onOpenFile = {},
+                    root = root,
+                )
+            }
+        }
+        waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("7")).fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithTag("part-core").performClick()
+        waitUntil(timeoutMillis = 3_000) { calls >= 2 }
+        onNodeWithTag("parts-back").performClick()
+        onNodeWithTag("file-users-JsonRpc.kt", useUnmergedTree = true).assertTextEquals("7")
+    }
 }

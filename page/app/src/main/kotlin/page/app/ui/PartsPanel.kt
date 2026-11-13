@@ -22,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -133,11 +132,16 @@ internal fun PartsPanel(
     var selectedId by remember(currentPart?.id, map) { mutableStateOf(currentPart?.id ?: tiers.firstOrNull()?.firstOrNull()?.id) }
     val selected = selectedId?.let { map.part(it) }
     var pinnedFor by remember(currentPart?.id, map) { mutableStateOf<String?>(null) }
-    val facts by produceState(emptyMap<Path, FileFacts>(), selected?.id, map) {
-        value = emptyMap()
-        val part = selected ?: return@produceState
-        value = withContext(Dispatchers.IO) { runCatching { loadFacts(part.files) }.getOrDefault(emptyMap()) }
+    val factsCache = remember(map) { mutableStateMapOf<String, Map<Path, FileFacts>>() }
+    var factsLoading by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(selected?.id, map, loadFacts) {
+        val part = selected ?: return@LaunchedEffect
+        factsLoading = true
+        val fresh = withContext(Dispatchers.IO) { runCatching { loadFacts(part.files) }.getOrNull() }
+        if (fresh != null) factsCache[part.id] = fresh
+        factsLoading = false
     }
+    val facts = selected?.let { factsCache[it.id] }.orEmpty()
     fun tieOf(part: MapPart): SpineTie = when {
         part.id == currentPart?.id -> SpineTie.HERE
         part.id == ProjectMapBuilder.OTHER_ID -> SpineTie.OTHER
@@ -322,7 +326,7 @@ internal fun PartsPanel(
                 }
                 items(files, key = { it.toString() }) { file ->
                     val fact = facts[file]
-                    PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, onOpenFile)
+                    PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, factsLoading, onOpenFile)
                 }
             }
         }
@@ -392,7 +396,7 @@ private fun WeightBar(fraction: Float, fill: Color, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: Boolean, onOpenFile: (Path) -> Unit) {
+private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: Boolean, stale: Boolean, onOpenFile: (Path) -> Unit) {
     val colors = Glass.colors
     Box(Modifier.fillMaxWidth().height(28.dp)) {
         Row(
@@ -406,27 +410,26 @@ private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: 
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(file.fileName.toString(), color = colors.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (weight != null && facts?.inLoop != true) {
-                Box(Modifier.width(48.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            val dim = if (stale) 0.35f else 1f
+            Box(Modifier.width(48.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                if (weight != null && facts?.inLoop != true) {
                     WeightBar(
                         weight,
-                        if (current) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f),
+                        (if (current) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f)).let { it.copy(alpha = it.alpha * dim) },
                         Modifier.fillMaxWidth(),
                         fromEnd = true,
                     )
                 }
             }
-            val caption = factCaption(facts)
-            if (caption != null) {
-                Text(
-                    caption,
-                    color = if (facts?.inLoop == true) colors.warn else colors.faint,
-                    fontSize = 11.sp,
-                    fontFamily = EditorFontFamily,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.width(if (facts?.inLoop == true) 32.dp else 20.dp),
-                )
-            }
+            Text(
+                factCaption(facts).orEmpty(),
+                color = (if (facts?.inLoop == true) colors.warn else colors.faint).let { it.copy(alpha = it.alpha * dim) },
+                fontSize = 11.sp,
+                fontFamily = EditorFontFamily,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                modifier = Modifier.width(32.dp).testTag("file-users-${file.fileName}"),
+            )
         }
         if (current) {
             Box(
