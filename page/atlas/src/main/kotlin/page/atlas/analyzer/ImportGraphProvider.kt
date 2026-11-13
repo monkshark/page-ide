@@ -5,6 +5,7 @@ import java.nio.file.Path
 import page.atlas.graph.CodeGraphProvider
 import page.atlas.graph.DependencyDigest
 import page.atlas.graph.EdgeKind
+import page.atlas.graph.FileFacts
 import page.atlas.graph.FileMargins
 import page.atlas.graph.FileRole
 import page.atlas.graph.GraphEdge
@@ -13,6 +14,7 @@ import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.graph.SourceEvidence
 import page.atlas.graph.marginsOf
+import page.atlas.graph.neighboursOf
 import page.atlas.toFilePath
 
 class ImportGraphProvider(root: Path) : CodeGraphProvider {
@@ -196,21 +198,37 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         if (!ImportExtractor.supports(path)) return@withSnapshot FileMargins.EMPTY
         val active = path.toAbsolutePath().normalize()
         val slice = computeFile(active, text)
-        marginsOf(slice, active.toString(), usersOf(active, text))
+        marginsOf(slice, active.toString(), usersOf(active, text, projectContents()))
         }
     }
 
-    private fun usersOf(active: Path, text: String): List<GraphNode> {
+    fun fileFacts(files: List<Path>): Map<Path, FileFacts> {
+        index.refreshIfStale()
+        return index.withSnapshot {
+            val contents = projectContents()
+            val byPath = contents.toMap()
+            files.map { it.toAbsolutePath().normalize() }.filter { ImportExtractor.supports(it) }.associateWith { file ->
+                val text = byPath[file] ?: runCatching { Files.readString(file) }.getOrDefault("")
+                FileFacts(
+                    usedBy = usersOf(file, text, contents).size,
+                    inLoop = neighboursOf(computeFile(file, text), file.toString()).cycle.isNotEmpty(),
+                )
+            }
+        }
+    }
+
+    private fun projectContents(): List<Pair<Path, String>> =
+        index.files().filter { ImportExtractor.supports(it) }.mapNotNull { file ->
+            runCatching { file.toAbsolutePath().normalize() to Files.readString(file) }.getOrNull()
+        }
+
+    private fun usersOf(active: Path, text: String, contents: List<Pair<Path, String>>): List<GraphNode> {
         val names = buildSet {
             add(active.fileName.toString().substringBeforeLast('.'))
             addAll(ImportExtractor.analyzeDeclarations(active, text).symbols)
         }.filter { it.isNotBlank() }
         if (names.isEmpty()) return emptyList()
-        val activeId = active.toString()
-        val candidates = index.files().filter { file ->
-            ImportExtractor.supports(file) && nodeId(file) != activeId &&
-                runCatching { Files.readString(file) }.getOrNull()?.let { content -> names.any { content.contains(it) } } == true
-        }
+        val candidates = contents.filter { (file, content) -> file != active && names.any { content.contains(it) } }.map { it.first }
         if (candidates.any { ImportResolver.requiresDeclarations(it) }) declarations.refreshIfStale { _, _ -> }
         return candidates.mapNotNull { file ->
             val analysis = cachedAnalysis(file) ?: return@mapNotNull null

@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.io.TempDir
 import page.atlas.analyzer.ImportGraphProvider
+import page.atlas.graph.FileFacts
 
 class FileMarginsTest {
 
@@ -61,6 +62,17 @@ class FileMarginsTest {
         val margins = ImportGraphProvider(root).margins(active, transport)
         assertEquals(listOf("LspTransport.kt", "LspClient.kt", "LspTransport.kt"), margins.cycle.map { it.label })
         assertEquals(9, margins.cycleLine)
+    }
+
+    @Test
+    fun `facts for a part's files count their users and flag loops in one pass`(@TempDir root: Path) {
+        val active = project(root)
+        val lsp = active.parent
+        val files = listOf(active, lsp.resolve("LspClient.kt"), lsp.resolve("ProcessTransport.kt"))
+        val facts = ImportGraphProvider(root).fileFacts(files).mapKeys { it.key.fileName.toString() }
+        assertEquals(FileFacts(2, true), facts["LspTransport.kt"])
+        assertEquals(FileFacts(1, true), facts["LspClient.kt"])
+        assertEquals(FileFacts(1, false), facts["ProcessTransport.kt"])
     }
 
     @Test
