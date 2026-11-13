@@ -168,6 +168,8 @@ internal fun PartsPanel(
     var selectedId by remember(currentPart?.id, map) { mutableStateOf(currentPart?.id ?: tiers.firstOrNull()?.firstOrNull()?.id) }
     val selected = selectedId?.let { map.part(it) }
     var pinnedFor by remember(currentPart?.id, map) { mutableStateOf<String?>(null) }
+    var query by remember(map) { mutableStateOf("") }
+    var byUsers by remember { mutableStateOf(false) }
     var flashTick by remember { mutableStateOf(0) }
     val fileListState = androidx.compose.foundation.lazy.rememberLazyListState()
     androidx.compose.runtime.LaunchedEffect(flashTick) { if (flashTick > 0) fileListState.scrollToItem(0) }
@@ -363,19 +365,10 @@ internal fun PartsPanel(
                         .testTag("parts-back"),
                 )
             }
-            var query by remember(selected.id) { mutableStateOf("") }
-            var byUsers by remember { mutableStateOf(false) }
-            FilterField(query, { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth().focusRequester(filterFocus))
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            FilterAndSort(query, { query = it }, byUsers, { byUsers = it }, filterFocus)
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
                 Text("File", color = colors.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                Row(
-                    Modifier.clickable { byUsers = !byUsers }.testTag("parts-sort"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text("Users", color = if (byUsers) colors.text else colors.muted, fontSize = 11.sp)
-                    if (byUsers) FoldChevron(open = true, tint = colors.muted)
-                }
+                Text("Users", color = colors.muted, fontSize = 11.sp)
             }
             val related = remember(selected, margins, pinnedFor) {
                 if (pinnedFor == selected.id) relatedFiles(map, margins, selected.id) else RelatedFiles(emptyList(), emptyList())
@@ -397,6 +390,19 @@ internal fun PartsPanel(
                             fontSize = 11.sp,
                             modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp).testTag("pinned-label"),
                         )
+                    }
+                }
+                if (files.isEmpty() && query.isNotBlank()) {
+                    item(key = "no-match") {
+                        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("No file in ${selected.name} matches “${query.trim()}”", color = colors.muted, fontSize = 12.sp)
+                            Box(
+                                Modifier.height(24.dp).clip(RoundedCornerShape(4.dp)).clickable { query = "" }.padding(horizontal = 4.dp).testTag("parts-clear"),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                Text("Clear filter", color = colors.primary, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
                 items(files, key = { it.toString() }) { file ->
@@ -605,10 +611,10 @@ private fun FilterField(value: String, onChange: (String) -> Unit, modifier: Mod
         decorationBox = { inner ->
             Box(
                 Modifier.height(28.dp).fillMaxWidth().clip(shape).background(colors.background)
-                    .border(1.dp, colors.separator, shape).padding(horizontal = 8.dp),
+                    .border(1.dp, colors.text.copy(alpha = 0.28f), shape).padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                if (value.isEmpty()) Text("Filter files", color = colors.faint, fontSize = 12.sp)
+                if (value.isEmpty()) Text("Filter files", color = colors.muted, fontSize = 12.sp)
                 inner()
             }
         },
@@ -658,5 +664,28 @@ private fun SegmentedSwitch(options: List<String>, selectedIndex: Int, onSelect:
                 Text(label, color = if (on) colors.text else colors.muted, fontSize = 12.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun FilterAndSort(
+    query: String,
+    onQuery: (String) -> Unit,
+    byUsers: Boolean,
+    onByUsers: (Boolean) -> Unit,
+    filterFocus: androidx.compose.ui.focus.FocusRequester,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterField(query, onQuery, Modifier.weight(1f).focusRequester(filterFocus))
+        SegmentedSwitch(
+            options = listOf("A–Z", "Most used"),
+            selectedIndex = if (byUsers) 1 else 0,
+            onSelect = { onByUsers(it == 1) },
+            tags = listOf("parts-sort-az", "parts-sort-most"),
+        )
     }
 }

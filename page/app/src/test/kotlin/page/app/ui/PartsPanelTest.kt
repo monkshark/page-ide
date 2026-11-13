@@ -218,7 +218,7 @@ class PartsPanelTest {
             .mapNotNull { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text }
             .filter { it in counts.keys }
         assertEquals(listOf("JsonRpc.kt", "LspClient.kt", "LspTransport.kt"), order())
-        onNodeWithTag("parts-sort").performClick()
+        onNodeWithTag("parts-sort-most").performClick()
         assertEquals(listOf("LspClient.kt", "JsonRpc.kt", "LspTransport.kt"), order())
         onNodeWithTag("parts-filter").performTextInput("client")
         assertEquals(listOf("LspClient.kt"), order())
@@ -310,5 +310,21 @@ class PartsPanelTest {
         onNodeWithTag("parts-all").performClick()
         onNodeWithTag("part-core").performClick()
         onNodeWithTag("part-core").assertIsSelected()
+    }
+
+    @Test
+    fun `a filter with no match says so, offers a way out and survives a part switch`() = runComposeUiTest {
+        setContent {
+            GlassTheme {
+                PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
+            }
+        }
+        onNodeWithTag("parts-filter").performTextInput("zzz")
+        onNodeWithText("No file in lsp matches “zzz”").assertIsDisplayed()
+        onNodeWithTag("parts-all").performClick()
+        onNodeWithTag("part-core").performClick()
+        onNodeWithText("No file in core matches “zzz”").assertIsDisplayed()
+        onNodeWithTag("parts-clear").performClick()
+        onNodeWithText("Env.kt").assertIsDisplayed()
     }
 }
