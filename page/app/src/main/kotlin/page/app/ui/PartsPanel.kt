@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -163,7 +165,6 @@ internal fun PartsPanel(
     val currentPart = current?.let { map.partOf(it) }
     val tiers = remember(map) { partTiers(map) }
     val other = map.part(ProjectMapBuilder.OTHER_ID)
-    val maxCount = remember(map) { map.parts.maxOfOrNull { it.fileCount }?.coerceAtLeast(1) ?: 1 }
     var selectedId by remember(currentPart?.id, map) { mutableStateOf(currentPart?.id ?: tiers.firstOrNull()?.firstOrNull()?.id) }
     val selected = selectedId?.let { map.part(it) }
     var pinnedFor by remember(currentPart?.id, map) { mutableStateOf<String?>(null) }
@@ -295,7 +296,6 @@ internal fun PartsPanel(
                         relation = if (part.id == currentPart?.id) null else relationLabel(ties[part.id]),
                         here = part.id == currentPart?.id,
                         selected = part.id == selectedId,
-                        weight = part.fileCount.toFloat() / maxCount,
                         onClick = {
                             selectedId = part.id
                             pinnedFor = null
@@ -416,7 +416,6 @@ private fun PartRow(
     relation: String?,
     here: Boolean,
     selected: Boolean,
-    weight: Float,
     onClick: () -> Unit,
     action: String? = null,
     onAction: () -> Unit = {},
@@ -433,16 +432,12 @@ private fun PartRow(
         Modifier
             .weight(1f)
             .clip(RoundedCornerShape(6.dp))
-            .background(if (here) colors.surfaceRaised else Color.Transparent)
-            .border(
-                1.dp,
-                when {
-                    focused -> colors.primary
-                    selected && !here -> colors.text.copy(alpha = 0.16f)
-                    else -> Color.Transparent
-                },
-                RoundedCornerShape(6.dp),
-            )
+            .background(if (selected && !here) colors.surfaceRaised else Color.Transparent)
+            .drawBehind {
+                if (selected && !here) drawRect(colors.primary, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+            }
+            .border(2.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(6.dp))
+            .semantics { this.selected = selected && !here }
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
             .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
@@ -456,8 +451,20 @@ private fun PartRow(
                 lineHeight = 20.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (here) {
+                Text(
+                    "open file here",
+                    color = colors.muted,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(4.dp))
+                        .background(colors.text.copy(alpha = 0.08f)).padding(horizontal = 6.dp).testTag("part-here-tag"),
+                )
+            }
+            Box(Modifier.weight(1f))
             Text(part.fileCount.toString(), color = colors.muted, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
         }
         if (relation != null) {
@@ -478,7 +485,6 @@ private fun PartRow(
                 }
             }
         }
-        WeightBar(weight, if (here) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f), Modifier.padding(top = 4.dp, bottom = 2.dp).fillMaxWidth())
     }
 }
 }

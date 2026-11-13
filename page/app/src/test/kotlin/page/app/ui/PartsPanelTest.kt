@@ -3,6 +3,8 @@ package page.app.ui
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
@@ -294,5 +296,19 @@ class PartsPanelTest {
         assertEquals("Used by 3 files (2 in lsp, 1 in app). Uses 1 file", contextSummary(project, m))
         assertEquals("Used by no files. Uses 0 files", contextSummary(project, FileMargins(emptyList(), emptyList(), emptyList())))
         assertNull(contextSummary(project, null))
+    }
+
+    @Test
+    fun `the picked part is marked selected and the open file's part carries a tag`() = runComposeUiTest {
+        setContent {
+            GlassTheme {
+                PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
+            }
+        }
+        onNodeWithTag("part-here-tag", useUnmergedTree = true).assertTextEquals("open file here")
+        onNodeWithTag("part-lsp").assertIsNotSelected()
+        onNodeWithTag("parts-all").performClick()
+        onNodeWithTag("part-core").performClick()
+        onNodeWithTag("part-core").assertIsSelected()
     }
 }
