@@ -194,7 +194,7 @@ fun WelcomeScreen(
                                 Text(
                                     text = displayPath(project),
                                     fontFamily = EditorFontFamily,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 12.sp,
                                     color = Glass.colors.faint,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -316,7 +316,7 @@ private fun Wordmark() {
             text = "PAGE",
             fontFamily = FontFamily.SansSerif,
             fontSize = 44.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             letterSpacing = (-0.5).sp,
             color = Glass.colors.text,
         )

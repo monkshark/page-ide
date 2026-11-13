@@ -497,7 +497,7 @@ private fun SymbolKindBadge(kind: SymbolKind?) {
             style = TextStyle(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
             ),
         )

@@ -324,7 +324,7 @@ fun TreeRow(
                 text = name,
                 style = LocalTextStyle.current.copy(
                     color = textColor,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = if (node.isDirectory) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 12.sp,
                     lineHeightStyle = TreeCenterTight,

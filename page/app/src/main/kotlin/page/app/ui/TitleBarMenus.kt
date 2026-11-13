@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import page.app.input.ActionCatalog
 import page.app.input.ActionMenus
 import page.app.input.ActionSpec
@@ -155,7 +156,7 @@ private fun MenuButton(
     }
     Text(
         text = label,
-        style = MaterialTheme.typography.labelLarge,
+        style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Normal),
         color = if (open) colors.onPrimary else colors.text,
         modifier = Modifier
             .onGloballyPositioned { coords ->

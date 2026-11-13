@@ -86,7 +86,7 @@ fun ReferencesPanel(
                 Text(
                     text = "References",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (state.symbolName.isNotEmpty()) {
@@ -181,7 +181,7 @@ private fun ReferenceFileHeader(path: Path, count: Int) {
         Text(
             text = path.fileName?.toString() ?: path.toString(),
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         val parent = path.parent?.toString().orEmpty()
@@ -258,7 +258,7 @@ private fun ReferencePreviewText(
             val sClamped = s.coerceIn(0, text.length)
             val eClamped = e.coerceIn(sClamped, text.length)
             append(text.substring(0, sClamped))
-            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+            withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
                 append(text.substring(sClamped, eClamped))
             }
             append(text.substring(eClamped))
