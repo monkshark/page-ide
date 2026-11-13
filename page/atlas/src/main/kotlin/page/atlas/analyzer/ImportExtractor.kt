@@ -53,6 +53,7 @@ data class FileAnalysis(
     val calls: List<CallSite> = emptyList(),
     val importEvidence: Map<RawImport, SourceEvidence> = emptyMap(),
     val relationEvidence: Map<RawRelation, SourceEvidence> = emptyMap(),
+    val references: Map<String, SourceEvidence> = emptyMap(),
 ) {
     companion object {
         val EMPTY = FileAnalysis(emptyList(), emptyList())
@@ -71,6 +72,7 @@ object ImportExtractor {
         val factory: () -> TSLanguage,
         val softImportTypes: Set<String> = emptySet(),
         val callTypes: Set<String> = emptySet(),
+        val referenceTypes: Set<String> = emptySet(),
     ) {
         JAVA(
             setOf("import_declaration"),
@@ -85,6 +87,7 @@ object ImportExtractor {
             "package_declaration",
             ::TreeSitterJava,
             callTypes = setOf("method_invocation"),
+            referenceTypes = setOf("type_identifier", "identifier"),
         ),
         KOTLIN(
             setOf("import_header"),
@@ -99,6 +102,7 @@ object ImportExtractor {
             "package_header",
             ::TreeSitterKotlin,
             callTypes = setOf("call_expression"),
+            referenceTypes = setOf("user_type", "simple_identifier"),
         ),
         PYTHON(
             setOf("import_statement", "import_from_statement"),
@@ -299,7 +303,8 @@ object ImportExtractor {
         val byteToChar = buildByteToChar(text)
         val imports = mutableListOf<Statement>()
         val relations = mutableListOf<Statement>()
-        collect(TSTreeCursor(tree.rootNode), lang, text, byteToChar, imports, relations)
+        val references = mutableListOf<Statement>()
+        collect(TSTreeCursor(tree.rootNode), lang, text, byteToChar, imports, relations, references)
         val parsedImports = imports.flatMap { statement ->
             parse(lang, statement.type, statement.text).map { it to SourceEvidence(statement.line, statement.text) }
         }
@@ -313,7 +318,18 @@ object ImportExtractor {
             collectCalls(tree.rootNode, lang, text, byteToChar),
             parsedImports.asReversed().toMap(),
             parsedRelations.asReversed().toMap(),
+            firstReferences(references),
         )
+    }
+
+    private fun firstReferences(statements: List<Statement>): Map<String, SourceEvidence> {
+        val out = LinkedHashMap<String, SourceEvidence>()
+        for (statement in statements) {
+            val name = statement.text.substringBefore('<').substringBefore('.').substringBefore('?').trim()
+            if (name.isEmpty() || !name.first().isUpperCase() || !name.all { it.isJavaIdentifierPart() }) continue
+            out.putIfAbsent(name, SourceEvidence(statement.line, name))
+        }
+        return out
     }
 
     private fun maskSfcScript(text: String): Pair<String, Boolean> {
@@ -454,9 +470,11 @@ object ImportExtractor {
         byteToChar: IntArray,
         imports: MutableList<Statement>,
         relations: MutableList<Statement>,
+        references: MutableList<Statement>,
     ) {
         val node = c.currentNode()
         val type = node.type ?: ""
+        if (type == lang.packageType) return
         if (type in lang.nodeTypes) {
             imports += Statement(type, nodeText(node, text, byteToChar), node.startPoint.row)
             return
@@ -467,9 +485,12 @@ object ImportExtractor {
         if (type in lang.relationTypes) {
             relations += Statement(type, nodeText(node, text, byteToChar), node.startPoint.row)
         }
+        if (type in lang.referenceTypes) {
+            references += Statement(type, nodeText(node, text, byteToChar), node.startPoint.row)
+        }
         if (c.gotoFirstChild()) {
             do {
-                collect(c, lang, text, byteToChar, imports, relations)
+                collect(c, lang, text, byteToChar, imports, relations, references)
             } while (c.gotoNextSibling())
             c.gotoParent()
         }

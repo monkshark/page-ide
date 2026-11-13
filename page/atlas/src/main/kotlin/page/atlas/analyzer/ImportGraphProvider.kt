@@ -60,6 +60,11 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                 }
             }
             applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
+            for ((name, evidence) in analysis.references) {
+                val target = sameDirTarget(file, name, nodes, queue) ?: continue
+                if (target.id == fileId) continue
+                edges.putIfAbsent(fileId to target.id, GraphEdge(fileId, target.id, evidence = evidence))
+            }
         }
         return GraphSlice(nodes.values.toList(), edges.values.toList())
     }
@@ -121,6 +126,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
             nodes[id] = GraphNode(id, resolved.fileName.toString(), resolved.toFilePath(), kind)
         }
         val queue = ArrayDeque<Pair<Path, String?>>()
+        val siblings = files.groupBy { it.toAbsolutePath().normalize().parent }
+            .mapValues { (_, group) -> group.associate { it.fileName.toString().substringBeforeLast('.') to nodeId(it) } }
         onStage(ProjectAnalysisProgress(ProjectAnalysisStage.RELATIONSHIPS, 0, files.size))
         for ((done, file) in files.withIndex()) {
             onProgress(done, files.size)
@@ -141,6 +148,12 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
                     }
                 }
                 applyRelations(file, fileId, analysis.relations, imported, nodes, edges, queue, analysis.relationEvidence)
+                val local = siblings[file.toAbsolutePath().normalize().parent].orEmpty()
+                for ((name, evidence) in analysis.references) {
+                    val id = local[name] ?: continue
+                    if (id == fileId || id !in nodes) continue
+                    edges.putIfAbsent(fileId to id, GraphEdge(fileId, id, evidence = evidence))
+                }
             } finally {
                 onStage(ProjectAnalysisProgress(ProjectAnalysisStage.RELATIONSHIPS, done + 1, files.size))
             }
