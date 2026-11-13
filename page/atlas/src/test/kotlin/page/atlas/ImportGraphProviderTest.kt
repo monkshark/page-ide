@@ -375,4 +375,45 @@ class ImportGraphProviderTest {
         assertEquals(1, slice.edges.size)
         assertEquals(EdgeKind.EXTENDS, slice.edges.single().kind)
     }
+
+    @Test
+    fun `same package use without an import links with the line it starts on`(@TempDir root: Path) {
+        val dir = Files.createDirectories(root.resolve("src/page/lsp"))
+        Files.writeString(dir.resolve("ProcessTransport.kt"), "package page.lsp\n\nclass ProcessTransport")
+        val text = """
+            package page.lsp
+
+            class LspTransport(
+                private val process: ProcessTransport,
+            )
+        """.trimIndent()
+        val active = dir.resolve("LspTransport.kt")
+        Files.writeString(active, text)
+        val edge = ImportGraphProvider(root).nodesForFile(active, text).edges.single()
+        assertTrue(edge.to.endsWith("ProcessTransport.kt"))
+        assertEquals(3, edge.evidence?.line)
+    }
+
+    @Test
+    fun `project slice links same package uses so used by counts them`(@TempDir root: Path) {
+        val dir = Files.createDirectories(root.resolve("src/page/lsp"))
+        Files.writeString(dir.resolve("JsonRpc.kt"), "package page.lsp\n\nclass JsonRpc")
+        Files.writeString(dir.resolve("LspTransport.kt"), "package page.lsp\n\nclass LspTransport(val rpc: JsonRpc)")
+        Files.writeString(dir.resolve("LspClient.kt"), "package page.lsp\n\nclass LspClient {\n    val rpc = JsonRpc()\n}")
+        val other = Files.createDirectories(root.resolve("src/page/other"))
+        Files.writeString(other.resolve("Other.kt"), "package page.other\n\nclass Other(val rpc: JsonRpc)")
+        val slice = ImportGraphProvider(root).nodesForProject(null, null)
+        val intoRpc = slice.edges.filter { it.to.endsWith("JsonRpc.kt") }
+        assertEquals(2, intoRpc.size)
+        assertEquals(setOf(2, 3), intoRpc.map { it.evidence?.line }.toSet())
+    }
+
+    @Test
+    fun `a file does not link to itself through its own name`(@TempDir root: Path) {
+        val dir = Files.createDirectories(root.resolve("src/sample"))
+        val text = "package sample\n\nclass Node(val next: Node?)"
+        val active = dir.resolve("Node.kt")
+        Files.writeString(active, text)
+        assertTrue(ImportGraphProvider(root).nodesForFile(active, text).edges.isEmpty())
+    }
 }

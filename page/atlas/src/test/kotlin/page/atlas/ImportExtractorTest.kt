@@ -844,4 +844,51 @@ class ImportExtractorTest {
             analysis.relations,
         )
     }
+
+    @Test
+    fun `kotlin references keep the first line each capitalised name appears on`() {
+        val text = """
+            package page.lsp
+
+            import page.core.Env
+
+            class LspTransport(
+                private val process: ProcessTransport,
+            ) {
+                var client: LspClient? = null
+                fun start() = process.start(Env.serverEnv(), Options())
+                fun list(): List<ProcessTransport> = emptyList()
+            }
+        """.trimIndent()
+        val refs = ImportExtractor.analyze(Path.of("LspTransport.kt"), text).references
+        assertEquals(5, refs["ProcessTransport"]?.line)
+        assertEquals(7, refs["LspClient"]?.line)
+        assertEquals(8, refs["Options"]?.line)
+        assertEquals(8, refs["Env"]?.line)
+        assertTrue("page" !in refs && "process" !in refs && "Core" !in refs)
+    }
+
+    @Test
+    fun `java references cover field types and static receivers`() {
+        val text = """
+            package app;
+
+            class Service {
+                private final Repository repository;
+                int count() { return Limits.MAX; }
+            }
+        """.trimIndent()
+        val refs = ImportExtractor.analyze(Path.of("Service.java"), text).references
+        assertEquals(3, refs["Repository"]?.line)
+        assertEquals(4, refs["Limits"]?.line)
+    }
+
+    @Test
+    fun `languages without reference scanning report none`() {
+        val text = """
+            class A(B):
+                pass
+        """.trimIndent()
+        assertTrue(ImportExtractor.analyze(Path.of("a.py"), text).references.isEmpty())
+    }
 }
