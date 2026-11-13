@@ -359,6 +359,8 @@ internal fun IdeMainLayout(
                                 },
                                 loadFacts = loadPartFacts,
                                 onOpenFile = onOpenFile,
+                                root = workspace.rootDir,
+                                onBrowseFiles = { onEvent(IdeEvent.Panel.SelectSideView(page.app.mvi.SideView.FILES)) },
                             )
                             page.app.mvi.SideView.FILES -> FileTreePanel(
                                 root = workspace.rootDir,
