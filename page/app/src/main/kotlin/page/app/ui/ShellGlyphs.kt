@@ -277,16 +277,6 @@ internal fun AppMarkGlyph(size: Dp = 14.dp) {
     }
 }
 
-@Composable
-internal fun PairGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.1f
-        drawCircle(color = tint, radius = w * 0.2f, center = Offset(w * 0.38f, h * 0.42f), style = Stroke(width = strokeW))
-        drawCircle(color = tint, radius = w * 0.2f, center = Offset(w * 0.62f, h * 0.42f), style = Stroke(width = strokeW))
-    }
-}
 
 @Composable
 internal fun GlassGlyph(tint: Color, size: Dp = 14.dp) {
@@ -304,38 +294,7 @@ internal fun GlassGlyph(tint: Color, size: Dp = 14.dp) {
     }
 }
 
-@Composable
-internal fun EchoGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val strokeW = w * 0.1f
-        val center = Offset(w * 0.5f, h * 0.5f)
-        drawCircle(color = tint, radius = w * 0.32f, center = center, style = Stroke(width = strokeW))
-        drawLine(color = tint, start = center, end = Offset(w * 0.5f, h * 0.28f), strokeWidth = strokeW, cap = StrokeCap.Round)
-        drawLine(color = tint, start = center, end = Offset(w * 0.66f, h * 0.58f), strokeWidth = strokeW, cap = StrokeCap.Round)
-    }
-}
 
-@Composable
-internal fun AiGlyph(tint: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val p = Path().apply {
-            moveTo(w * 0.5f, h * 0.1f)
-            lineTo(w * 0.59f, h * 0.41f)
-            lineTo(w * 0.9f, h * 0.5f)
-            lineTo(w * 0.59f, h * 0.59f)
-            lineTo(w * 0.5f, h * 0.9f)
-            lineTo(w * 0.41f, h * 0.59f)
-            lineTo(w * 0.1f, h * 0.5f)
-            lineTo(w * 0.41f, h * 0.41f)
-            close()
-        }
-        drawPath(p, color = tint)
-    }
-}
 
 @Composable
 internal fun CommandGlyph(tint: Color, size: Dp = 14.dp) {

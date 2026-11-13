@@ -301,6 +301,15 @@ internal fun IdeMainLayout(
             onStopRun = onStopRun,
             onOpenRunDialog = onOpenRunDialog,
             ui = ui,
+            center = {
+                PillarSwitch(
+                    atlasActive = summaryVisible && projectMap != null,
+                    onAtlasToggle = { onSummaryVisibleChange(!summaryVisible) },
+                    currentPalette = palette,
+                    onSelectPalette = onSelectPalette,
+                    onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
+                )
+            },
         )
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             ActivityRail(
@@ -531,14 +540,6 @@ internal fun IdeMainLayout(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                PillarPill(
-                    atlasActive = summaryVisible && projectMap != null,
-                    onAtlasToggle = { onSummaryVisibleChange(!summaryVisible) },
-                    currentPalette = palette,
-                    onSelectPalette = onSelectPalette,
-                    onCommandPalette = { onEvent(IdeEvent.Palette.QuickOpen) },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                )
             }
             }
             AnimatedVisibility(
