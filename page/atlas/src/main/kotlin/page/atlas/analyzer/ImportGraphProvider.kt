@@ -22,6 +22,7 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     private val index = WorkspaceIndex(root)
     private val cache = HashMap<String, CachedAnalysis>()
     private val declarationCache = HashMap<String, CachedDeclarations>()
+    private val contentCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
     private val declarations = DeclarationIndex(index) { cachedDeclarations(it) }
 
     val staticCalls: StaticCallHierarchySource by lazy {
@@ -219,7 +220,13 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
 
     private fun projectContents(): List<Pair<Path, String>> =
         index.files().filter { ImportExtractor.supports(it) }.mapNotNull { file ->
-            runCatching { file.toAbsolutePath().normalize() to Files.readString(file) }.getOrNull()
+            val resolved = file.toAbsolutePath().normalize()
+            val key = resolved.toString()
+            val mtime = runCatching { Files.getLastModifiedTime(resolved).toMillis() }.getOrNull() ?: return@mapNotNull null
+            val cached = contentCache[key]
+            val text = if (cached != null && cached.first == mtime) cached.second
+            else runCatching { Files.readString(resolved) }.getOrNull()?.also { contentCache[key] = mtime to it } ?: return@mapNotNull null
+            resolved to text
         }
 
     private fun usersOf(active: Path, text: String, contents: List<Pair<Path, String>>): List<GraphNode> {
