@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -391,9 +392,10 @@ internal fun IdeMainLayout(
                     ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeSidebar(it)) })
                 }
             }
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             GlassSurface(
                 level = GlassSurfaceLevel.Flat,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
             ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (installManagerOpen != null) {
@@ -564,6 +566,103 @@ internal fun IdeMainLayout(
                 }
             }
             }
+            val bottomDockTotal = page.app.mvi.defaultOutputHeight()
+            fun panelOpen(panelKey: String): Boolean = when (panelKey) {
+                "problems" -> ui.problemsOpen
+                "todo" -> ui.todoOpen
+                "terminal" -> ui.terminalOpen
+                else -> ui.outputOpen
+            }
+            val dockOrder = remember { mutableStateListOf<String>() }
+            listOf("problems", "todo", "terminal", "output").forEach { panelKey ->
+                if (panelOpen(panelKey) && panelKey !in dockOrder) dockOrder.add(panelKey)
+            }
+            val bottomPerTarget = bottomDockTotal /
+                listOf("problems", "todo", "terminal", "output").count { panelOpen(it) }.coerceAtLeast(1)
+            val referencesInPanel = referencesState != null && referencesState.surface == ReferencesSurface.Panel
+            if (dockOrder.isNotEmpty() || codeAction.review != null || referencesInPanel) {
+                Spacer(Modifier.height(8.dp))
+                GlassSurface(level = GlassSurfaceLevel.Flat, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                dockOrder.forEach { panel ->
+                    key(panel) {
+                        val open = panelOpen(panel)
+                        val heightAnim = remember { Animatable(0.dp, Dp.VectorConverter) }
+                        LaunchedEffect(open, bottomPerTarget) {
+                            heightAnim.animateTo(if (open) bottomPerTarget else 0.dp, tween(180))
+                            if (!panelOpen(panel)) dockOrder.remove(panel)
+                        }
+                        val bottomPer = heightAnim.value
+                        if (bottomPer > 0.dp) {
+                        when (panel) {
+                            "problems" -> ProblemsPanel(
+                                diagnostics = scopedDiagnostics,
+                                onJump = onJumpToProblem,
+                                onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
+                                height = bottomPer,
+                                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeProblems(it)) },
+                                collapsedKeys = ui.problemsCollapsed,
+                                onCollapsedKeysChange = { onEvent(IdeEvent.Panel.ProblemsCollapsedChanged(it)) },
+                                fileOrder = ui.problemsFileOrder,
+                                onFileOrderChange = { onEvent(IdeEvent.Panel.ProblemsFileOrderChanged(it)) },
+                            )
+                            "todo" -> TodoPanel(
+                                items = todoItems,
+                                onJump = onJumpToProblem,
+                                onClose = { onEvent(IdeEvent.Panel.CloseTodo) },
+                                height = bottomPer,
+                                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTodo(it)) },
+                                collapsedKeys = ui.todoCollapsed,
+                                onCollapsedKeysChange = { onEvent(IdeEvent.Panel.TodoCollapsedChanged(it)) },
+                                fileOrder = ui.todoFileOrder,
+                                onFileOrderChange = { onEvent(IdeEvent.Panel.TodoFileOrderChanged(it)) },
+                            )
+                            "terminal" -> TerminalPanel(
+                                manager = terminalManager,
+                                onPanelClose = { onEvent(IdeEvent.Panel.CloseTerminal) },
+                                height = bottomPer,
+                                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTerminal(it)) },
+                            )
+                            "output" -> OutputPanel(
+                                state = outputState,
+                                onClose = { onEvent(IdeEvent.Panel.CloseOutput) },
+                                onClear = onOutputClear,
+                                onStop = onStopRun,
+                                height = bottomPer,
+                                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeOutput(it)) },
+                            )
+                        }
+                        }
+                    }
+                }
+                val review = codeAction.review
+                if (review != null) {
+                    CodeActionReviewPanel(
+                        action = review,
+                        currentUri = codeAction.uri,
+                        currentText = codeAction.text,
+                        height = ui.referencesHeight,
+                        onApply = { entry ->
+                            codeAction.onClosePanel()
+                            codeAction.onApply(entry)
+                        },
+                        onDismiss = codeAction.onClosePanel,
+                    )
+                }
+                if (referencesState != null && referencesState.surface == ReferencesSurface.Panel) {
+                    ReferencesPanel(
+                        state = referencesState,
+                        onJump = onJumpToProblem,
+                        onClose = onReferencesClose,
+                        height = ui.referencesHeight,
+                        onResizeDelta = { onEvent(IdeEvent.Panel.ResizeReferences(it)) },
+                        linePreviewFor = linePreviewFor,
+                    )
+                }
+                }
+                }
+            }
+            }
             AnimatedVisibility(
                 visible = ui.atlasOpen,
                 enter = expandHorizontally(tween(180), expandFrom = Alignment.End) + fadeIn(tween(180)),
@@ -582,94 +681,6 @@ internal fun IdeMainLayout(
                 }
             }
             }
-        }
-        val bottomDockTotal = page.app.mvi.defaultOutputHeight()
-        fun panelOpen(panelKey: String): Boolean = when (panelKey) {
-            "problems" -> ui.problemsOpen
-            "todo" -> ui.todoOpen
-            "terminal" -> ui.terminalOpen
-            else -> ui.outputOpen
-        }
-        val dockOrder = remember { mutableStateListOf<String>() }
-        listOf("problems", "todo", "terminal", "output").forEach { panelKey ->
-            if (panelOpen(panelKey) && panelKey !in dockOrder) dockOrder.add(panelKey)
-        }
-        val bottomPerTarget = bottomDockTotal /
-            listOf("problems", "todo", "terminal", "output").count { panelOpen(it) }.coerceAtLeast(1)
-        dockOrder.forEach { panel ->
-            key(panel) {
-                val open = panelOpen(panel)
-                val heightAnim = remember { Animatable(0.dp, Dp.VectorConverter) }
-                LaunchedEffect(open, bottomPerTarget) {
-                    heightAnim.animateTo(if (open) bottomPerTarget else 0.dp, tween(180))
-                    if (!panelOpen(panel)) dockOrder.remove(panel)
-                }
-                val bottomPer = heightAnim.value
-                if (bottomPer > 0.dp) {
-                when (panel) {
-                    "problems" -> ProblemsPanel(
-                        diagnostics = scopedDiagnostics,
-                        onJump = onJumpToProblem,
-                        onClose = { onEvent(IdeEvent.Panel.CloseProblems) },
-                        height = bottomPer,
-                        onResizeDelta = { onEvent(IdeEvent.Panel.ResizeProblems(it)) },
-                        collapsedKeys = ui.problemsCollapsed,
-                        onCollapsedKeysChange = { onEvent(IdeEvent.Panel.ProblemsCollapsedChanged(it)) },
-                        fileOrder = ui.problemsFileOrder,
-                        onFileOrderChange = { onEvent(IdeEvent.Panel.ProblemsFileOrderChanged(it)) },
-                    )
-                    "todo" -> TodoPanel(
-                        items = todoItems,
-                        onJump = onJumpToProblem,
-                        onClose = { onEvent(IdeEvent.Panel.CloseTodo) },
-                        height = bottomPer,
-                        onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTodo(it)) },
-                        collapsedKeys = ui.todoCollapsed,
-                        onCollapsedKeysChange = { onEvent(IdeEvent.Panel.TodoCollapsedChanged(it)) },
-                        fileOrder = ui.todoFileOrder,
-                        onFileOrderChange = { onEvent(IdeEvent.Panel.TodoFileOrderChanged(it)) },
-                    )
-                    "terminal" -> TerminalPanel(
-                        manager = terminalManager,
-                        onPanelClose = { onEvent(IdeEvent.Panel.CloseTerminal) },
-                        height = bottomPer,
-                        onResizeDelta = { onEvent(IdeEvent.Panel.ResizeTerminal(it)) },
-                    )
-                    "output" -> OutputPanel(
-                        state = outputState,
-                        onClose = { onEvent(IdeEvent.Panel.CloseOutput) },
-                        onClear = onOutputClear,
-                        onStop = onStopRun,
-                        height = bottomPer,
-                        onResizeDelta = { onEvent(IdeEvent.Panel.ResizeOutput(it)) },
-                    )
-                }
-                }
-            }
-        }
-        val review = codeAction.review
-        if (review != null) {
-            CodeActionReviewPanel(
-                action = review,
-                currentUri = codeAction.uri,
-                currentText = codeAction.text,
-                height = ui.referencesHeight,
-                onApply = { entry ->
-                    codeAction.onClosePanel()
-                    codeAction.onApply(entry)
-                },
-                onDismiss = codeAction.onClosePanel,
-            )
-        }
-        if (referencesState != null && referencesState.surface == ReferencesSurface.Panel) {
-            ReferencesPanel(
-                state = referencesState,
-                onJump = onJumpToProblem,
-                onClose = onReferencesClose,
-                height = ui.referencesHeight,
-                onResizeDelta = { onEvent(IdeEvent.Panel.ResizeReferences(it)) },
-                linePreviewFor = linePreviewFor,
-            )
         }
         GlobalStatusBar(
             editor = editor,
