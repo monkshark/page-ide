@@ -198,16 +198,90 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     fun fileFacts(files: List<Path>): Map<Path, FileFacts> {
         index.refreshIfStale()
         return index.withSnapshot {
+            val targets = files.map { it.toAbsolutePath().normalize() }.filter { ImportExtractor.supports(it) }
+            if (targets.isEmpty()) return@withSnapshot emptyMap()
             val contents = projectContents()
-            val byPath = contents.toMap()
-            files.map { it.toAbsolutePath().normalize() }.filter { ImportExtractor.supports(it) }.associateWith { file ->
-                val text = byPath[file] ?: runCatching { Files.readString(file) }.getOrDefault("")
-                FileFacts(
-                    usedBy = usersOf(file, text, contents).size,
-                    inLoop = neighboursOf(computeFile(file, text), file.toString()).cycle.isNotEmpty(),
-                )
+            val siblings = siblingIndex(contents.map { it.first })
+            if (contents.any { ImportResolver.requiresDeclarations(it.first) }) declarations.refreshIfStale { _, _ -> }
+            val textOf = contents.toMap()
+            val byName = HashMap<String, MutableList<Path>>()
+            for (target in targets) {
+                val text = textOf[target] ?: continue
+                val names = buildSet {
+                    add(target.fileName.toString().substringBeforeLast('.'))
+                    addAll(ImportExtractor.analyzeDeclarations(target, text).symbols)
+                }
+                for (name in names) if (name.isNotBlank()) byName.getOrPut(name) { ArrayList() }.add(target)
+            }
+            val users = HashMap<Path, Int>()
+            for ((file, text) in contents) {
+                val tokens = tokensOf(file, text)
+                val hits = LinkedHashSet<Path>()
+                for ((name, owners) in byName) if (name in tokens) hits += owners
+                hits.remove(file)
+                if (hits.isEmpty()) continue
+                val out = outgoingOf(file, siblings)
+                for (target in hits) if (target.toString() in out) users[target] = (users[target] ?: 0) + 1
+            }
+            targets.associateWith { target ->
+                FileFacts(usedBy = users[target] ?: 0, inLoop = reachesItself(target, siblings))
             }
         }
+    }
+
+    private val outgoingCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Set<String>>>()
+    private val tokenCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Set<String>>>()
+    @Volatile private var fileSetStamp: Int = 0
+
+    private fun siblingIndex(files: List<Path>): Map<Path, Map<String, String>> {
+        val stamp = files.hashCode()
+        if (stamp != fileSetStamp) {
+            outgoingCache.clear()
+            fileSetStamp = stamp
+        }
+        return files.groupBy { it.parent }
+            .mapValues { (_, group) -> group.associate { it.fileName.toString().substringBeforeLast('.') to it.toString() } }
+    }
+
+    private fun mtimeOf(file: Path): Long? = runCatching { Files.getLastModifiedTime(file).toMillis() }.getOrNull()
+
+    private fun tokensOf(file: Path, text: String): Set<String> {
+        val key = file.toString()
+        val mtime = mtimeOf(file) ?: return emptySet()
+        tokenCache[key]?.let { if (it.first == mtime) return it.second }
+        val tokens = IDENTIFIER.findAll(text).mapTo(HashSet()) { it.value }
+        tokenCache[key] = mtime to tokens
+        return tokens
+    }
+
+    private fun outgoingOf(file: Path, siblings: Map<Path, Map<String, String>>): Set<String> {
+        val id = file.toString()
+        val mtime = mtimeOf(file) ?: return emptySet()
+        outgoingCache[id]?.let { if (it.first == mtime) return it.second }
+        val analysis = cachedAnalysis(file) ?: return emptySet()
+        val targets = LinkedHashSet<String>()
+        for (raw in mergeByTarget(analysis.imports)) {
+            for (resolved in ImportResolver.resolveAll(raw, file, index, declarations)) targets += nodeId(resolved)
+        }
+        val local = siblings[file.parent].orEmpty()
+        for (name in analysis.references.keys) local[name]?.let { targets += it }
+        for (relation in analysis.relations) local[relation.typeName.substringAfterLast('.').substringAfterLast(':')]?.let { targets += it }
+        targets -= id
+        outgoingCache[id] = mtime to targets
+        return targets
+    }
+
+    private fun reachesItself(file: Path, siblings: Map<Path, Map<String, String>>): Boolean {
+        val id = file.toString()
+        val seen = HashSet<String>()
+        val queue = ArrayDeque(outgoingOf(file, siblings))
+        while (queue.isNotEmpty() && seen.size < LOOP_SEARCH_LIMIT) {
+            val next = queue.removeFirst()
+            if (next == id) return true
+            if (!seen.add(next)) continue
+            queue.addAll(outgoingOf(Path.of(next), siblings))
+        }
+        return false
     }
 
     private fun projectContents(): List<Pair<Path, String>> =
@@ -389,6 +463,8 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
     private companion object {
         const val MAX_NODES = 100
         const val PROJECT_MAX_NODES = 300
+        const val LOOP_SEARCH_LIMIT = 20_000
+        val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
         const val MAX_CACHE = 2048
     }
 }
