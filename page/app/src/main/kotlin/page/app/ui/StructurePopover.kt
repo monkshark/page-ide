@@ -86,7 +86,7 @@ fun StructurePopover(
                 StructureView.USES -> "$fileName uses ${neighbours.uses.size} files" to "What this file needs to work."
                 StructureView.CYCLE -> "This file is in a loop" to "Each file needs the next one. Removing any one arrow ends the loop."
             }
-            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(title, color = colors.text, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Box(
@@ -126,7 +126,7 @@ fun StructurePopover(
                 }
             }
             Box(Modifier.fillMaxWidth().heightIn(max = 1.dp).background(colors.outline))
-            Text("Click a file to open it · Esc to close", color = colors.faint, fontSize = 11.5.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp))
+            Text("Click a file to open it · Esc to close", color = colors.faint, fontSize = 11.5.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
     }
 }
@@ -143,7 +143,7 @@ private fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
             .background(if (selected) colors.primarySoft else colors.surfaceOverlay)
             .border(1.dp, if (selected) colors.primary.copy(alpha = 0.5f) else colors.outline, shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 3.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
 
@@ -152,7 +152,7 @@ private fun FileRow(node: GraphNode, note: String?, onOpen: (Path) -> Unit) {
     val colors = Glass.colors
     val path = node.path?.toNioPath()
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(enabled = path != null) { path?.let(onOpen) }.padding(horizontal = 8.dp, vertical = 5.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(enabled = path != null) { path?.let(onOpen) }.padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(node.label, color = colors.text, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

@@ -148,9 +148,9 @@ fun WelcomeScreen(
                 color = Glass.colors.muted,
             )
 
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(24.dp))
             Divider()
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(24.dp))
 
             SectionLabel("Start")
             ActionRow(
@@ -165,7 +165,7 @@ fun WelcomeScreen(
             ) {}
 
             if (recents.isNotEmpty()) {
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(24.dp))
                 SectionLabel("Recent")
                 CompositionLocalProvider(
                     LocalContextMenuRepresentation provides CompactContextMenuRepresentation,
@@ -215,7 +215,7 @@ fun WelcomeScreen(
                     tint = Glass.colors.faint,
                     modifier = Modifier.size(13.dp),
                 )
-                Spacer(Modifier.width(9.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = "Drop a folder anywhere to open",
                     fontFamily = EditorFontFamily,
@@ -322,7 +322,7 @@ private fun Wordmark() {
         )
         Box(
             modifier = Modifier
-                .padding(start = 9.dp, bottom = 7.dp)
+                .padding(start = 8.dp, bottom = 8.dp)
                 .size(8.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(Glass.colors.primary),
@@ -401,7 +401,7 @@ private fun ActionRow(
                 .background(Glass.colors.primary),
         )
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -419,7 +419,7 @@ private fun ActionRow(
                     modifier = Modifier.size(16.dp),
                 )
             }
-            Spacer(Modifier.width(13.dp))
+            Spacer(Modifier.width(12.dp))
             Text(
                 text = title,
                 fontFamily = FontFamily.SansSerif,

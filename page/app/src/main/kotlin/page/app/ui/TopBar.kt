@@ -233,7 +233,7 @@ private fun RunDropdown(
                 },
             )
             if (state.configs.isNotEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -251,7 +251,7 @@ private fun RunDropdown(
                     )
                 }
             }
-            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
