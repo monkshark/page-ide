@@ -1,6 +1,5 @@
 package page.app
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -8,12 +7,6 @@ import kotlinx.coroutines.runBlocking
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
-import page.atlas.interaction.OverviewSelection
-import page.atlas.render.AtlasViewState
-import page.atlas.render.AtlasViewTab
-import page.atlas.render.MapFilterState
-import page.atlas.render.MapViewState
-import page.atlas.render.OverviewViewState
 import page.editor.SplitOrientation
 import page.editor.UndoGroupTracker
 import page.runtime.TerminalManager
@@ -39,20 +32,12 @@ class SessionCoordinatorTest {
         return dir
     }
 
-    private fun coordinator(
-        root: Path,
-        atlasMapView: MapViewState = MapViewState(),
-        atlasView: AtlasViewState = AtlasViewState(),
-        atlasOverviewState: OverviewViewState = OverviewViewState(),
-    ): SessionCoordinator =
+    private fun coordinator(root: Path): SessionCoordinator =
         SessionCoordinator(
             editorWorkspace = editorWorkspace,
             layoutUiState = layoutUiState,
             workspaceState = workspaceState,
             terminalManagerProvider = { TerminalManager(root, scope) },
-            atlasMapView = atlasMapView,
-            atlasView = atlasView,
-            atlasOverviewState = atlasOverviewState,
         )
 
     @Test
@@ -121,86 +106,6 @@ class SessionCoordinatorTest {
         assertEquals(280f, snap.sidebarWidth)
         assertTrue(snap.problemsOpen)
         assertTrue(snap.todoOpen)
-    }
-
-    @Test
-    fun `atlas map view round-trips through save and restore`() {
-        val ws = newWorkspace()
-        val view = MapViewState()
-        view.pan = Offset(33f, -7f)
-        view.scale = 1.4f
-        view.userOffsets["box"] = Offset(5f, 6f)
-        view.expandOrder.add("dir")
-        view.expandedDirs = setOf("dir")
-        view.filter = MapFilterState(focusDir = "dir", hiddenDirs = setOf("h"), mutedDirs = setOf("m"))
-        view.pinnedIds = setOf("p1", "p2")
-        SessionStore.save(ws, coordinator(ws, view).snapshot())
-
-        val restored = MapViewState()
-        runBlocking { coordinator(ws, restored).restore(ws) }
-
-        assertEquals(Offset(33f, -7f), restored.pan)
-        assertEquals(1.4f, restored.scale)
-        assertTrue(restored.fitted)
-        assertEquals(Offset(5f, 6f), restored.userOffsets["box"])
-        assertEquals(listOf("dir"), restored.expandOrder.toList())
-        assertEquals(setOf("dir"), restored.expandedDirs)
-        assertEquals("dir", restored.filter.focusDir)
-        assertEquals(setOf("h"), restored.filter.hiddenDirs)
-        assertEquals(setOf("m"), restored.filter.mutedDirs)
-        assertEquals(setOf("p1", "p2"), restored.pinnedIds)
-    }
-
-    @Test
-    fun `atlas overview drill and camera round-trip`() {
-        val ws = newWorkspace()
-        val overview = OverviewViewState()
-        overview.selection = OverviewSelection(drillPath = listOf("ws/app", "ws/app/ui"))
-        overview.camera.savedViews["ws/app"] = Offset(10f, 20f) to 1.2f
-        overview.camera.pan = Offset(-4f, 8f)
-        overview.camera.scale = 1.5f
-        SessionStore.save(ws, coordinator(ws, atlasOverviewState = overview).snapshot())
-
-        val restored = OverviewViewState()
-        runBlocking { coordinator(ws, atlasOverviewState = restored).restore(ws) }
-
-        assertEquals(listOf("ws/app", "ws/app/ui"), restored.selection.drillPath)
-        assertEquals(Offset(10f, 20f) to 1.2f, restored.camera.savedViews["ws/app"])
-        val scopeKey = listOf("ws/app", "ws/app/ui").joinToString(" ")
-        assertEquals(Offset(-4f, 8f) to 1.5f, restored.camera.savedViews[scopeKey])
-        assertEquals(Offset(-4f, 8f), restored.camera.pan)
-        assertEquals(1.5f, restored.camera.scale)
-        assertTrue(restored.camera.fitted)
-    }
-
-    @Test
-    fun `atlas graph camera and view tab round-trip`() {
-        val ws = newWorkspace()
-        val view = AtlasViewState()
-        view.yaw = 1.1f
-        view.pitch = 0.3f
-        view.zoomUser = 2f
-        layoutUiState.atlasViewTab = AtlasViewTab.PROBLEMS
-        SessionStore.save(ws, coordinator(ws, atlasView = view).snapshot())
-
-        layoutUiState.atlasViewTab = AtlasViewTab.MODULES
-        val restored = AtlasViewState()
-        runBlocking { coordinator(ws, atlasView = restored).restore(ws) }
-
-        assertEquals(1.1f, restored.yaw)
-        assertEquals(0.3f, restored.pitch)
-        assertEquals(2f, restored.zoomUser)
-        assertEquals(AtlasViewTab.PROBLEMS, layoutUiState.atlasViewTab)
-    }
-
-    @Test
-    fun `restore without atlas map keeps the view unfitted`() {
-        val ws = newWorkspace()
-        SessionStore.save(ws, SessionFile())
-        val restored = MapViewState()
-        runBlocking { coordinator(ws, restored).restore(ws) }
-        assertFalse(restored.fitted)
-        assertEquals(0f, restored.scale)
     }
 
     @Test

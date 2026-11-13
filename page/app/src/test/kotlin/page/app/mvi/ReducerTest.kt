@@ -10,7 +10,6 @@ import page.app.ReferencesSurface
 import page.app.PendingClose
 import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
-import page.atlas.render.AtlasViewTab
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
@@ -69,92 +68,11 @@ class ReducerTest {
     }
 
     @Test
-    fun `toggle atlas opens expanded by default and toggles off`() {
-        val s = AppState()
-        val opened = reduce(s, IdeEvent.Panel.ToggleAtlas)
-        assertFalse(opened.layout.atlasOpen)
-        assertEquals(ExpandedPanel.ATLAS, opened.layout.expandedPanel)
-        val toggledOff = reduce(opened, IdeEvent.Panel.ToggleAtlas)
-        assertFalse(toggledOff.layout.atlasOpen)
-        assertEquals(ExpandedPanel.NONE, toggledOff.layout.expandedPanel)
-    }
-
-    @Test
     fun `close atlas closes the call graph dock`() {
         val open = reduce(AppState(), IdeEvent.Panel.ShowAtlasCalls)
         assertTrue(open.layout.atlasOpen)
         val closed = reduce(open, IdeEvent.Panel.CloseAtlas)
         assertFalse(closed.layout.atlasOpen)
-    }
-
-    @Test
-    fun `focus in atlas expands on exploration tab`() {
-        val s = AppState().copy(
-            layout = AppState().layout.copy(atlasOpen = false, atlasViewTab = AtlasViewTab.PROBLEMS),
-        )
-        val focused = reduce(s, IdeEvent.Panel.FocusInAtlas)
-        assertEquals(ExpandedPanel.ATLAS, focused.layout.expandedPanel)
-        assertEquals(AtlasViewTab.FILE, focused.layout.atlasViewTab)
-    }
-
-    @Test
-    fun `show atlas calls opens the dock and leaves atlas collapsed`() {
-        val s = AppState().copy(
-            layout = AppState().layout.copy(atlasOpen = false, expandedPanel = ExpandedPanel.ATLAS),
-        )
-        val shown = reduce(s, IdeEvent.Panel.ShowAtlasCalls)
-        assertTrue(shown.layout.atlasOpen)
-        assertEquals(ExpandedPanel.NONE, shown.layout.expandedPanel)
-    }
-
-    @Test
-    fun `atlas project mode change replaces flag`() {
-        val s = AppState()
-        val on = reduce(s, IdeEvent.Panel.AtlasProjectModeChanged(true))
-        assertTrue(on.layout.atlasProjectMode)
-        val off = reduce(on, IdeEvent.Panel.AtlasProjectModeChanged(false))
-        assertFalse(off.layout.atlasProjectMode)
-    }
-
-    @Test
-    fun `atlas vcs overlay defaults on and change replaces flag`() {
-        val s = AppState()
-        assertTrue(s.layout.atlasVcsOverlay)
-        val off = reduce(s, IdeEvent.Panel.AtlasVcsOverlayChanged(false))
-        assertFalse(off.layout.atlasVcsOverlay)
-        val on = reduce(off, IdeEvent.Panel.AtlasVcsOverlayChanged(true))
-        assertTrue(on.layout.atlasVcsOverlay)
-    }
-
-    @Test
-    fun `atlas follow active defaults off and change replaces flag`() {
-        val s = AppState()
-        assertFalse(s.layout.atlasFollowActive)
-        val on = reduce(s, IdeEvent.Panel.AtlasFollowActiveChanged(true))
-        assertTrue(on.layout.atlasFollowActive)
-        val off = reduce(on, IdeEvent.Panel.AtlasFollowActiveChanged(false))
-        assertFalse(off.layout.atlasFollowActive)
-    }
-
-    @Test
-    fun `atlas view tab defaults to relations and change replaces value`() {
-        val s = AppState()
-        assertEquals(AtlasViewTab.MODULES, s.layout.atlasViewTab)
-        val analysis = reduce(s, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.PROBLEMS))
-        assertEquals(AtlasViewTab.PROBLEMS, analysis.layout.atlasViewTab)
-        val back = reduce(analysis, IdeEvent.Panel.AtlasViewTabChanged(AtlasViewTab.MODULES))
-        assertEquals(AtlasViewTab.MODULES, back.layout.atlasViewTab)
-    }
-
-    @Test
-    fun `expand panel to atlas closes dock and collapse resets`() {
-        val s = reduce(AppState(), IdeEvent.Panel.ShowAtlasCalls)
-        assertTrue(s.layout.atlasOpen)
-        val expanded = reduce(s, IdeEvent.Panel.ExpandPanel(ExpandedPanel.ATLAS))
-        assertEquals(ExpandedPanel.ATLAS, expanded.layout.expandedPanel)
-        assertFalse(expanded.layout.atlasOpen)
-        val collapsed = reduce(expanded, IdeEvent.Panel.CollapsePanel)
-        assertEquals(ExpandedPanel.NONE, collapsed.layout.expandedPanel)
     }
 
     @Test
