@@ -296,7 +296,7 @@ fun FileTreePanel(
             },
             target = panelDropTarget,
         ),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = androidx.compose.ui.graphics.Color.Transparent,
     ) {
         CompositionLocalProvider(LocalContextMenuRepresentation provides CompactContextMenuRepresentation) {
             Column(modifier = Modifier.fillMaxSize()) {
