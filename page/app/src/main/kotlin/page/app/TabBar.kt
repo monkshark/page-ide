@@ -121,6 +121,7 @@ fun TabBar(
     contextActions: TabContextActions? = null,
     showCloseButton: Boolean = true,
     onEmptyAreaClick: (() -> Unit)? = null,
+    partOf: (java.nio.file.Path) -> String? = { null },
     modifier: Modifier = Modifier,
 ) {
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
@@ -279,6 +280,7 @@ fun TabBar(
                                             alpha = if (isDragged) 0f else 1f,
                                             onClose = { onClose(index) },
                                             showCloseButton = showCloseButton,
+                                            partOf = partOf,
                                         )
                                     }
                                 } else {
@@ -290,6 +292,7 @@ fun TabBar(
                                         alpha = if (isDragged) 0f else 1f,
                                         onClose = { onClose(index) },
                                         showCloseButton = showCloseButton,
+                                        partOf = partOf,
                                     )
                                 }
                             }
@@ -312,6 +315,7 @@ fun TabBar(
                             alpha = 1f,
                             onClose = {},
                             showCloseButton = showCloseButton,
+                            partOf = partOf,
                         )
                     }
                 }
@@ -403,8 +407,10 @@ private fun TabChip(
     alpha: Float,
     onClose: () -> Unit,
     showCloseButton: Boolean = true,
+    partOf: (java.nio.file.Path) -> String? = { null },
 ) {
     val name = tab.path.fileName?.toString() ?: tab.path.toString()
+    val part = remember(tab.path) { partOf(tab.path) }
     val bg = if (isActive) MaterialTheme.colorScheme.background else Color.Transparent
     val nameColor =
         if (isActive) MaterialTheme.colorScheme.onBackground
@@ -426,14 +432,16 @@ private fun TabChip(
                 .drawBehind {
                     if (isActive) {
                         val h = 2.dp.toPx()
-                        drawRect(
+                        val inset = 12.dp.toPx()
+                        drawRoundRect(
                             color = activeUnderline,
-                            topLeft = Offset(0f, size.height - h),
-                            size = Size(size.width, h),
+                            topLeft = Offset(inset, size.height - h),
+                            size = Size(size.width - inset * 2, h),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2, h / 2),
                         )
                     }
                 }
-                .padding(start = 12.dp, end = 6.dp),
+                .padding(start = 12.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (tab.isPinned) {
@@ -441,7 +449,21 @@ private fun TabChip(
                 Spacer(Modifier.width(6.dp))
             }
             page.workspace.FileTypeIcon(path = tab.path, isDirectory = false, size = 14.dp)
-            Spacer(Modifier.width(7.dp))
+            Spacer(Modifier.width(8.dp))
+            if (part != null) {
+                Text(
+                    text = part,
+                    style = LocalTextStyle.current.copy(
+                        color = Glass.colors.faint,
+                        fontSize = 11.sp,
+                        fontFamily = page.ui.EditorFontFamily,
+                        lineHeight = 12.sp,
+                        lineHeightStyle = CenterTight,
+                    ),
+                    maxLines = 1,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text(
                 text = name,
                 style = LocalTextStyle.current.copy(
@@ -461,12 +483,6 @@ private fun TabChip(
                 Spacer(Modifier.width(8.dp))
             }
         }
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-        )
     }
 }
 
