@@ -57,12 +57,12 @@ class PartsPanelTest {
 
     @Test
     fun `relations name the open file in plain words`() {
-        assertEquals("1 file uses LspTransport", partRelation(PartTie(1, false), "LspTransport.kt"))
-        assertEquals("2 files use LspTransport", partRelation(PartTie(2, false), "LspTransport.kt"))
-        assertEquals("Used by LspTransport", partRelation(PartTie(0, true), "LspTransport.kt"))
-        assertEquals("2 files use LspTransport · Used by LspTransport", partRelation(PartTie(2, true), "LspTransport.kt"))
-        assertNull(partRelation(null, "LspTransport.kt"))
-        assertNull(partRelation(PartTie(0, false), "LspTransport.kt"))
+        assertEquals("Uses this file", relationLabel(PartTie(1, false)))
+        assertEquals("Uses this file", relationLabel(PartTie(2, false)))
+        assertEquals("Used by this file", relationLabel(PartTie(0, true)))
+        assertEquals("Uses this file · Used by this file", relationLabel(PartTie(2, true)))
+        assertNull(relationLabel(null))
+        assertNull(relationLabel(PartTie(0, false)))
     }
 
     @Test
@@ -94,8 +94,8 @@ class PartsPanelTest {
             }
         }
         onNodeWithText("Highest layer first").assertIsDisplayed()
-        onNodeWithText("1 file uses LspTransport").assertIsDisplayed()
-        onNodeWithText("Used by LspTransport").assertIsDisplayed()
+        onNodeWithTag("relation-app").assertTextEquals("Uses this file")
+        onNodeWithTag("relation-core").assertTextEquals("Used by this file")
         onNodeWithText("Other files").assertIsDisplayed()
         assertEquals(0, onAllNodes(hasText("Descriptions are not shown")).fetchSemanticsNodes().size)
         waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("loop")).fetchSemanticsNodes().isNotEmpty() }
@@ -150,9 +150,9 @@ class PartsPanelTest {
         }
         onNodeWithTag("relation-core").performClick()
         onNodeWithText("page/core").assertIsDisplayed()
-        onNodeWithTag("pinned-label").assertTextEquals("Used by LspTransport")
+        onNodeWithTag("pinned-label").assertTextEquals("Used by this file, 1 file")
         onNodeWithTag("relation-app").performClick()
-        onNodeWithTag("pinned-label").assertTextEquals("Uses LspTransport")
+        onNodeWithTag("pinned-label").assertTextEquals("Uses this file, 1 file")
         onNodeWithText("Main.kt").assertIsDisplayed()
     }
 
@@ -203,7 +203,7 @@ class PartsPanelTest {
             }
         }
         waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("9")).fetchSemanticsNodes().isNotEmpty() }
-        fun order() = onAllNodes(hasText(".kt", substring = true)).fetchSemanticsNodes()
+        fun order() = onAllNodes(hasText(".kt", substring = true) and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("part-files"))).fetchSemanticsNodes()
             .mapNotNull { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text }
             .filter { it in counts.keys }
         assertEquals(listOf("JsonRpc.kt", "LspClient.kt", "LspTransport.kt"), order())
@@ -271,5 +271,17 @@ class PartsPanelTest {
         val many = (1..5).map { file("app/F$it.kt") }
         assertEquals("app depends on LspTransport.kt through F1.kt, F2.kt, F3.kt and 2 more", spineTip(app, false, "LspTransport.kt", RelatedFiles(many, emptyList())))
         assertEquals("Files outside every part", spineTip(project.part(ProjectMapBuilder.OTHER_ID)!!, false, "LspTransport.kt", none))
+    }
+
+    @Test
+    fun `the context line breaks the users down by part`() {
+        val m = FileMargins(
+            needs = listOf(Need(node("core/Env.kt"), 3)),
+            usedBy = listOf(node("app/Main.kt"), node("lsp/LspClient.kt"), node("lsp/JsonRpc.kt")),
+            cycle = emptyList(),
+        )
+        assertEquals("Used by 3 files (2 in lsp, 1 in app). Uses 1 file", contextSummary(project, m))
+        assertEquals("Used by no files. Uses 0 files", contextSummary(project, FileMargins(emptyList(), emptyList(), emptyList())))
+        assertNull(contextSummary(project, null))
     }
 }

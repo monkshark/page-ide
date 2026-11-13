@@ -66,16 +66,26 @@ internal fun partTiers(map: ProjectMap): List<List<MapPart>> =
         .toSortedMap(compareByDescending { it })
         .values.map { tier -> tier.sortedByDescending { it.fileCount } }
 
-internal fun partRelation(tie: PartTie?, fileName: String?): String? {
-    if (tie == null || fileName == null) return null
-    val name = fileName.substringBeforeLast('.')
-    val users = when {
-        tie.users == 1 -> "1 file uses $name"
-        tie.users > 1 -> "${tie.users} files use $name"
-        else -> null
-    }
-    val needed = if (tie.needed) "Used by $name" else null
-    return listOfNotNull(users, needed).joinToString(" · ").ifEmpty { null }
+internal fun relationLabel(tie: PartTie?): String? = when {
+    tie == null -> null
+    tie.users > 0 && tie.needed -> "Uses this file · Used by this file"
+    tie.users > 0 -> "Uses this file"
+    tie.needed -> "Used by this file"
+    else -> null
+}
+
+private fun files(n: Int): String = if (n == 1) "1 file" else "$n files"
+
+internal fun contextSummary(map: ProjectMap, margins: FileMargins?): String? {
+    if (margins == null) return null
+    val byPart = margins.usedBy
+        .mapNotNull { node -> node.path?.toNioPath()?.toAbsolutePath()?.normalize()?.let { map.partOf(it) } }
+        .groupingBy { it.name }
+        .eachCount()
+        .entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+    val users = if (margins.usedBy.isEmpty()) "Used by no files"
+    else "Used by ${files(margins.usedBy.size)}" + (if (byPart.isEmpty()) "" else " (" + byPart.joinToString(", ") { "${it.value} in ${it.key}" } + ")")
+    return "$users. Uses ${files(margins.needs.size)}"
 }
 
 internal fun factCaption(facts: FileFacts?): String? = when {
@@ -197,6 +207,13 @@ internal fun PartsPanel(
             }
         },
     ) {
+        if (current != null) {
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp).testTag("parts-context")) {
+                Text(current.fileName.toString(), color = colors.text, fontSize = 12.sp, fontFamily = EditorFontFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                contextSummary(map, margins)?.let { Text(it, color = colors.muted, fontSize = 12.sp, lineHeight = 16.sp) }
+            }
+            SpineLegend(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
+        }
         Row(
             Modifier
                 .fillMaxWidth()
@@ -270,7 +287,7 @@ internal fun PartsPanel(
                     PartRow(
                         part = part,
                         spineTip = spineTip(part, part.id == currentPart?.id, current?.fileName?.toString(), relatedByPart(part.id)),
-                        relation = if (part.id == currentPart?.id) null else partRelation(ties[part.id], current?.fileName?.toString()),
+                        relation = if (part.id == currentPart?.id) null else relationLabel(ties[part.id]),
                         here = part.id == currentPart?.id,
                         selected = part.id == selectedId,
                         weight = part.fileCount.toFloat() / maxCount,
@@ -308,7 +325,7 @@ internal fun PartsPanel(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f),
                 )
-                partFolder(selected, root)?.let { Text(it, color = colors.faint, fontSize = 11.sp, fontFamily = EditorFontFamily, maxLines = 1) }
+                partFolder(selected, root)?.let { Text(it, color = colors.muted, fontSize = 11.sp, fontFamily = EditorFontFamily, maxLines = 1) }
             }
             if (currentPart != null && selected.id != currentPart.id) {
                 Text(
@@ -328,13 +345,13 @@ internal fun PartsPanel(
             var byUsers by remember { mutableStateOf(false) }
             FilterField(query, { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth().focusRequester(filterFocus))
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("File", color = colors.faint, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("File", color = colors.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 Row(
                     Modifier.clickable { byUsers = !byUsers }.testTag("parts-sort"),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Used by", color = if (byUsers) colors.muted else colors.faint, fontSize = 11.sp)
+                    Text("Users", color = if (byUsers) colors.text else colors.muted, fontSize = 11.sp)
                     if (byUsers) FoldChevron(open = true, tint = colors.muted)
                 }
             }
@@ -349,13 +366,12 @@ internal fun PartsPanel(
                 (related.all + ordered).filter { query.isBlank() || it.fileName.toString().contains(query.trim(), ignoreCase = true) }
             }
             val maxUsers = facts.values.maxOfOrNull { it.usedBy }?.coerceAtLeast(1) ?: 1
-            val openName = current?.fileName?.toString()?.substringBeforeLast('.')
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp).testTag("part-files")) {
-                if (!related.isEmpty() && openName != null) {
+                if (!related.isEmpty()) {
                     item(key = "pinned-label") {
                         Text(
-                            if (related.users.isNotEmpty()) "Uses $openName" else "Used by $openName",
-                            color = colors.faint,
+                            (if (related.users.isNotEmpty()) "Uses this file" else "Used by this file") + ", " + files(related.all.size),
+                            color = colors.muted,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp).testTag("pinned-label"),
                         )
@@ -418,7 +434,7 @@ private fun PartRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Text(part.fileCount.toString(), color = colors.faint, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
+            Text(part.fileCount.toString(), color = colors.muted, fontSize = 11.sp, lineHeight = 20.sp, fontFamily = EditorFontFamily)
         }
         if (relation != null) {
             Text(
@@ -479,7 +495,7 @@ private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: 
             }
             Text(
                 factCaption(facts).orEmpty(),
-                color = (if (facts?.inLoop == true) colors.warn else colors.faint).let { it.copy(alpha = it.alpha * dim) },
+                color = (if (facts?.inLoop == true) colors.warn else colors.muted).let { it.copy(alpha = it.alpha * dim) },
                 fontSize = 11.sp,
                 fontFamily = EditorFontFamily,
                 textAlign = TextAlign.End,
@@ -537,4 +553,24 @@ private fun FilterField(value: String, onChange: (String) -> Unit, modifier: Mod
             }
         },
     )
+}
+
+@Composable
+private fun SpineLegend(modifier: Modifier = Modifier) {
+    val colors = Glass.colors
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Canvas(Modifier.width(8.dp).height(8.dp)) { drawCircle(colors.primary) }
+            Text("open file's part", color = colors.muted, fontSize = 11.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Canvas(Modifier.width(10.dp).height(10.dp)) {
+                val s = size.width
+                val stroke = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                drawLine(colors.primary, Offset(s / 2, s * 0.1f), Offset(s / 2, s * 0.8f), 1.4.dp.toPx(), StrokeCap.Round)
+                drawPath(GPath().apply { moveTo(s * 0.25f, s * 0.55f); lineTo(s / 2, s * 0.8f); lineTo(s * 0.75f, s * 0.55f) }, colors.primary, style = stroke)
+            }
+            Text("uses", color = colors.muted, fontSize = 11.sp)
+        }
+    }
 }
