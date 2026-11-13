@@ -5,12 +5,14 @@ import java.nio.file.Path
 import page.atlas.graph.CodeGraphProvider
 import page.atlas.graph.DependencyDigest
 import page.atlas.graph.EdgeKind
+import page.atlas.graph.FileMargins
 import page.atlas.graph.FileRole
 import page.atlas.graph.GraphEdge
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.graph.NodeKind
 import page.atlas.graph.SourceEvidence
+import page.atlas.graph.marginsOf
 import page.atlas.toFilePath
 
 class ImportGraphProvider(root: Path) : CodeGraphProvider {
@@ -186,6 +188,43 @@ class ImportGraphProvider(root: Path) : CodeGraphProvider {
         if (!ImportExtractor.supports(path)) return null
         dependencyDigest()
         return page.atlas.graph.neighboursOf(cachedSlice, nodeId(path))
+    }
+
+    fun margins(path: Path, text: String): FileMargins {
+        index.refreshIfStale()
+        return index.withSnapshot {
+        if (!ImportExtractor.supports(path)) return@withSnapshot FileMargins.EMPTY
+        val active = path.toAbsolutePath().normalize()
+        val slice = computeFile(active, text)
+        marginsOf(slice, active.toString(), usersOf(active, text))
+        }
+    }
+
+    private fun usersOf(active: Path, text: String): List<GraphNode> {
+        val names = buildSet {
+            add(active.fileName.toString().substringBeforeLast('.'))
+            addAll(ImportExtractor.analyzeDeclarations(active, text).symbols)
+        }.filter { it.isNotBlank() }
+        if (names.isEmpty()) return emptyList()
+        val activeId = active.toString()
+        val candidates = index.files().filter { file ->
+            ImportExtractor.supports(file) && nodeId(file) != activeId &&
+                runCatching { Files.readString(file) }.getOrNull()?.let { content -> names.any { content.contains(it) } } == true
+        }
+        if (candidates.any { ImportResolver.requiresDeclarations(it) }) declarations.refreshIfStale { _, _ -> }
+        return candidates.mapNotNull { file ->
+            val analysis = cachedAnalysis(file) ?: return@mapNotNull null
+            if (!linksTo(file, analysis, active, names)) return@mapNotNull null
+            val resolved = file.toAbsolutePath().normalize()
+            GraphNode(resolved.toString(), resolved.fileName.toString(), resolved.toFilePath(), NodeKind.WORKSPACE_FILE)
+        }.sortedBy { it.label.lowercase() }
+    }
+
+    private fun linksTo(file: Path, analysis: FileAnalysis, active: Path, names: Collection<String>): Boolean {
+        if (file.toAbsolutePath().normalize().parent == active.parent && analysis.references.keys.any { it in names }) return true
+        return analysis.imports.any { raw ->
+            ImportResolver.resolveAll(raw, file, index, declarations).any { it.toAbsolutePath().normalize() == active }
+        }
     }
 
     fun dependentCountOf(path: Path): Int? = fileRole(path)?.dependents
