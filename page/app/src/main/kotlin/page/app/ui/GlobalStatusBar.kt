@@ -252,17 +252,31 @@ internal fun runtimeInfoFor(
     }
 }
 
+internal enum class LspDot { READY, WAITING, PROBLEM }
+
+internal fun lspDotFor(text: String): LspDot = when {
+    listOf("failed", "missing", "not installed").any { it in text } -> LspDot.PROBLEM
+    listOf("starting", "idle", "not started").any { it in text } -> LspDot.WAITING
+    else -> LspDot.READY
+}
+
 @Composable
 private fun LspLifecycleItem(text: String, onClick: (() -> Unit)? = null) {
     val colors = Glass.colors
-    val color = if (onClick != null) colors.primary else colors.muted
+    val color = if (onClick != null) colors.text else colors.muted
     val mod = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Row(verticalAlignment = Alignment.CenterVertically, modifier = mod) {
         Box(
             modifier = Modifier
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(colors.success),
+                .background(
+                    when (lspDotFor(text)) {
+                        LspDot.READY -> colors.success
+                        LspDot.WAITING -> colors.faint
+                        LspDot.PROBLEM -> colors.danger
+                    },
+                ),
         )
         Spacer(Modifier.width(6.dp))
         Text(
