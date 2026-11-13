@@ -443,6 +443,21 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
             atlasNeighbours = runCatching { atlasProvider.fileNeighbours(path) }.getOrNull()
         }
     }
+    var atlasMargins by remember { mutableStateOf<page.atlas.graph.FileMargins?>(null) }
+    var atlasMarginsPath by remember { mutableStateOf<java.nio.file.Path?>(null) }
+    LaunchedEffect(atlasProvider, focusedActivePath, focusedActiveText) {
+        val path = focusedActivePath
+        if (path != atlasMarginsPath) {
+            atlasMargins = null
+            atlasMarginsPath = path
+        }
+        val provider = atlasProvider ?: return@LaunchedEffect
+        if (path == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(700)
+        atlasMargins = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { provider.margins(path, focusedActiveText) }.getOrNull()
+        }
+    }
     val projectMap by androidx.compose.runtime.produceState<page.atlas.graph.ProjectMap?>(null, rootDir) {
         value = null
         val root = rootDir ?: return@produceState
@@ -782,6 +797,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     settings = app.settingsBinding(),
                     atlasFileRole = atlasFileRole,
                     atlasNeighbours = atlasNeighbours,
+                    atlasMargins = atlasMargins,
+                    loadPartFacts = { files -> atlasProvider?.fileFacts(files).orEmpty() },
                     projectMap = projectMap,
                     summaryVisible = summaryVisible,
                     onSummaryVisibleChange = setSummaryVisible,

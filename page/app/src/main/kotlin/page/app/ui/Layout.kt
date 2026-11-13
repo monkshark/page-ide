@@ -176,6 +176,8 @@ internal fun IdeMainLayout(
     settings: SettingsBinding = SettingsBinding(),
     atlasFileRole: FileRole? = null,
     atlasNeighbours: page.atlas.graph.FileNeighbours? = null,
+    atlasMargins: page.atlas.graph.FileMargins? = null,
+    loadPartFacts: (List<Path>) -> Map<Path, page.atlas.graph.FileFacts> = { emptyMap() },
     projectMap: page.atlas.graph.ProjectMap? = null,
     summaryVisible: Boolean = false,
     onSummaryVisibleChange: (Boolean) -> Unit = {},
@@ -320,7 +322,7 @@ internal fun IdeMainLayout(
                     .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 8.dp),
             ) {
             val sidebarView = ui.activeSideView
-            var lastSidebarView by remember { mutableStateOf(page.app.mvi.SideView.FILES) }
+            var lastSidebarView by remember { mutableStateOf(page.app.mvi.SideView.PARTS) }
             if (sidebarView != null) lastSidebarView = sidebarView
             AnimatedVisibility(
                 visible = sidebarView != null,
@@ -338,6 +340,17 @@ internal fun IdeMainLayout(
                             onSelect = { if (it != ui.activeSideView) onEvent(IdeEvent.Panel.SelectSideView(it)) },
                         ) {
                         when (lastSidebarView) {
+                            page.app.mvi.SideView.PARTS -> PartsPanel(
+                                map = projectMap,
+                                currentFile = editor.focused().book.active?.path,
+                                ties = remember(projectMap, atlasMargins) {
+                                    val map = projectMap
+                                    val margins = atlasMargins
+                                    if (map != null && margins != null) page.atlas.graph.partTies(map, margins) else emptyMap()
+                                },
+                                loadFacts = loadPartFacts,
+                                onOpenFile = onOpenFile,
+                            )
                             page.app.mvi.SideView.FILES -> FileTreePanel(
                                 root = workspace.rootDir,
                                 expanded = workspace.expanded,

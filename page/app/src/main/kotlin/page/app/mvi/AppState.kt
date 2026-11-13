@@ -19,12 +19,12 @@ import page.ui.GlassPalette
 import java.nio.file.Path
 
 
-internal enum class SideView { FILES }
+internal enum class SideView { PARTS, FILES }
 
 internal enum class Pillar { PAIR, GLASS, ATLAS, ECHO }
 
 internal data class LayoutState(
-    val activeSideView: SideView? = SideView.FILES,
+    val activeSideView: SideView? = SideView.PARTS,
     val sidebarWidth: Dp = 260.dp,
     val problemsOpen: Boolean = false,
     val problemsHeight: Dp = 220.dp,

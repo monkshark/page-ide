@@ -103,17 +103,23 @@ class ReducerTest {
     }
 
     @Test
-    fun `side view defaults to files`() {
-        assertEquals(SideView.FILES, AppState().layout.activeSideView)
+    fun `side view defaults to parts`() {
+        assertEquals(SideView.PARTS, AppState().layout.activeSideView)
+    }
+
+    @Test
+    fun `select side view replaces active view`() {
+        val files = reduce(AppState(), IdeEvent.Panel.SelectSideView(SideView.FILES))
+        assertEquals(SideView.FILES, files.layout.activeSideView)
     }
 
     @Test
     fun `reselecting active side view collapses to null`() {
         val s = AppState()
-        val collapsed = reduce(s, IdeEvent.Panel.SelectSideView(SideView.FILES))
+        val collapsed = reduce(s, IdeEvent.Panel.SelectSideView(SideView.PARTS))
         assertNull(collapsed.layout.activeSideView)
-        val reopened = reduce(collapsed, IdeEvent.Panel.SelectSideView(SideView.FILES))
-        assertEquals(SideView.FILES, reopened.layout.activeSideView)
+        val reopened = reduce(collapsed, IdeEvent.Panel.SelectSideView(SideView.PARTS))
+        assertEquals(SideView.PARTS, reopened.layout.activeSideView)
     }
 
     @Test
