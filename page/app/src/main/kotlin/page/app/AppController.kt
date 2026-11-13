@@ -504,7 +504,7 @@ internal class AppController(
     val stopActiveRun: () -> Unit = { dispatch(IdeEvent.Run.Stop) }
     val openRunDialog: () -> Unit = { dispatch(IdeEvent.Chrome.OpenRunDialog) }
     val openSettings: () -> Unit = { appState.settingsDialogOpen = true }
-    var onToggleProjectSummary: () -> Unit = {}
+    var onToggleMargins: () -> Unit = {}
 
     private var lastSideView = page.app.mvi.SideView.PARTS
 
@@ -566,7 +566,7 @@ internal class AppController(
 
         override fun showAllActions() { layoutUiState.actionPalette = true }
         override fun cyclePalette() = this@AppController.cyclePalette()
-        override fun toggleProjectSummary() = onToggleProjectSummary()
+        override fun toggleMargins() = onToggleMargins()
     }
 
     val handleShortcut: (KeyEvent) -> Boolean = { event -> ActionDispatcher.handle(event, actionHost) }

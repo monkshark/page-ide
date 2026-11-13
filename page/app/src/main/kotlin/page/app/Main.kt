@@ -485,7 +485,8 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
         summaryChoice = visible
         if (!visible) rootDir?.let { summarySeen.markSeen(it) }
     }
-    SideEffect { app.onToggleProjectSummary = { setSummaryVisible(!summaryVisible) } }
+    var marginsOpen by remember { mutableStateOf(true) }
+    SideEffect { app.onToggleMargins = { marginsOpen = !marginsOpen } }
 
     val openInTab = app.openInTab
     val openInTabAt = app.openInTabAt
@@ -798,6 +799,9 @@ private fun androidx.compose.ui.window.ApplicationScope.AppContent() {
                     atlasFileRole = atlasFileRole,
                     atlasNeighbours = atlasNeighbours,
                     atlasMargins = atlasMargins,
+                    atlasMarginsPath = atlasMarginsPath,
+                    marginsOpen = marginsOpen,
+                    onToggleMargins = { marginsOpen = !marginsOpen },
                     loadPartFacts = { files -> atlasProvider?.fileFacts(files).orEmpty() },
                     projectMap = projectMap,
                     summaryVisible = summaryVisible,

@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -175,6 +176,7 @@ fun EditorPanel(
     onShowCallGraph: ((line: Int, character: Int) -> Unit)? = null,
     onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
     workspaceRoot: Path? = null,
+    margins: page.app.ui.MarginsBinding? = null,
     editorFocusVersion: Int = 0,
     initialFoldedStartLines: Set<Int> = emptySet(),
     onFoldStartLinesChange: (Set<Int>) -> Unit = {},
@@ -1046,7 +1048,20 @@ fun EditorPanel(
         }
     }
 
-    Column(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
+    var panelWidthPx by remember { mutableStateOf(0) }
+    val panelDensity = androidx.compose.ui.platform.LocalDensity.current
+    val marginsBinding = margins?.takeIf { binding ->
+        binding.path == activePath && with(panelDensity) { panelWidthPx.toDp() } >= page.app.ui.MarginsMinEditorWidth
+    }
+    val marginLineHeight = with(panelDensity) { editorLineHeight.toDp() }
+    val visibleOriginalLines = remember(gutterLines) { gutterLines.map { it.originalLine } }
+    val separatorColor = page.ui.Glass.colors.separator
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.background)
+            .then(androidx.compose.ui.Modifier.onSizeChanged { panelWidthPx = it.width }),
+    ) {
+        if (marginsBinding != null) page.app.ui.MarginHeaders(marginsBinding.margins)
         if (search != null) {
             SearchBar(
                 state = search,
@@ -1075,19 +1090,38 @@ fun EditorPanel(
                         }
                     }
                 }
+                .drawBehind {
+                    if (marginsBinding == null) return@drawBehind
+                    val hairline = separatorColor
+                    val left = page.app.ui.NeedsMarginWidth.toPx()
+                    val right = size.width - page.app.ui.UsedByMarginWidth.toPx()
+                    drawRect(hairline, topLeft = Offset(left, 0f), size = Size(1.dp.toPx(), size.height))
+                    drawRect(hairline, topLeft = Offset(right, 0f), size = Size(1.dp.toPx(), size.height))
+                }
                 .verticalScroll(scrollState)
                 .drawBehind {
                     if (!pageSettings.editor.highlightCurrentLine) return@drawBehind
                     val lineH = editorLineHeight.toPx()
                     val topPad = 16.dp.toPx()
                     val y = topPad + caret.line * lineH
+                    val left = if (marginsBinding != null) page.app.ui.NeedsMarginWidth.toPx() else 0f
+                    val right = if (marginsBinding != null) page.app.ui.UsedByMarginWidth.toPx() else 0f
                     drawRect(
                         color = currentLineBg,
-                        topLeft = Offset(0f, y),
-                        size = Size(size.width, lineH),
+                        topLeft = Offset(left, y),
+                        size = Size(size.width - left - right, lineH),
                     )
                 },
         ) {
+            if (marginsBinding != null) {
+                page.app.ui.NeedsMargin(
+                    binding = marginsBinding,
+                    rowOf = { page.app.ui.visualRow(it, visibleOriginalLines) },
+                    lineHeight = marginLineHeight,
+                    topPadding = 16.dp,
+                    minHeight = 0.dp,
+                )
+            }
             if (pageSettings.editor.showLineNumbers) {
                 LineNumberGutter(
                     lines = gutterLines,
@@ -1611,6 +1645,18 @@ fun EditorPanel(
                     )
                 },
             )
+            if (marginsBinding != null) {
+                page.app.ui.UsedByMargin(
+                    binding = marginsBinding,
+                    anchorRow = page.app.ui.visualRow(
+                        page.app.ui.anchorLine(value.text, marginsBinding.path.fileName.toString()),
+                        visibleOriginalLines,
+                    ),
+                    lineHeight = marginLineHeight,
+                    topPadding = 16.dp,
+                    minHeight = 0.dp,
+                )
+            }
         }
     }
 
