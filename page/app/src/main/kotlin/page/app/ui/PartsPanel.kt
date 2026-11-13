@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -407,6 +408,14 @@ internal fun PartsPanel(
                 }
                 items(files, key = { it.toString() }) { file ->
                     val fact = facts[file]
+                    if (!related.isEmpty() && file == files.firstOrNull { it !in related.all }) {
+                        Text(
+                            "Everything else in ${selected.name}",
+                            color = colors.muted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 2.dp),
+                        )
+                    }
                     PartFileRow(file, fact, fact?.let { it.usedBy.toFloat() / maxUsers }, file == current, factsLoading, onOpenFile, pinned = file in related.all, flashTick = flashTick)
                 }
             }
@@ -539,8 +548,9 @@ private fun PartFileRow(
                         else -> Color.Transparent
                     },
                 )
-                .border(1.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(6.dp))
+                .border(2.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(6.dp))
                 .onFocusChanged { focused = it.isFocused }
+                .semantics { if (current) stateDescription = "Open in the editor" }
                 .clickable { onOpenFile(file) }
                 .testTag("file-row-${file.fileName}")
                 .padding(horizontal = 8.dp),
