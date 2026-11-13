@@ -48,6 +48,7 @@ internal fun TopBar(
     onStopRun: () -> Unit,
     onOpenRunDialog: () -> Unit,
     ui: page.app.state.LayoutUiState,
+    onOpenSettings: () -> Unit = {},
     center: @Composable () -> Unit = {},
 ) {
     val colors = Glass.colors
@@ -111,8 +112,15 @@ internal fun TopBar(
                 icon = { tint -> StopGlyph(tint = tint) },
                 enabledIconTint = colors.danger,
             )
+            TopBarAction(
+                label = "Settings",
+                enabled = true,
+                onClick = onOpenSettings,
+                icon = { tint -> SettingsGlyph(tint = tint) },
+                enabledIconTint = colors.muted,
+            )
             if (chrome != null) {
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 WindowControls(chrome, Modifier.fillMaxHeight())
             }
         }

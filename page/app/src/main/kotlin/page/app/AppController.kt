@@ -550,6 +550,9 @@ internal class AppController(
 
         override fun toggleProblems() { layoutUiState.problemsOpen = !layoutUiState.problemsOpen }
         override fun toggleTodo() { layoutUiState.todoOpen = !layoutUiState.todoOpen }
+        override fun toggleSidebar() {
+            layoutUiState.activeSideView = if (layoutUiState.activeSideView == null) page.app.mvi.SideView.FILES else null
+        }
         override fun toggleSplit() { editorWorkspace.splitEnabled = !editorWorkspace.splitEnabled }
         override fun toggleSplitOrientation() {
             editorWorkspace.splitOrientation =

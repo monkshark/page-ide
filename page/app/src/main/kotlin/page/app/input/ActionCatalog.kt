@@ -184,6 +184,13 @@ object ActionCatalog {
             binding = Binding(Key.Six, primary = true, shift = true),
         ) { it.toggleTodo() },
         ActionSpec(
+            id = "view.sidebar",
+            label = "Toggle Sidebar",
+            group = ActionGroup.View,
+            binding = Binding(Key.One, alt = true),
+            macBinding = Binding(Key.One, primary = true),
+        ) { it.toggleSidebar() },
+        ActionSpec(
             id = "view.split",
             label = "Split Editor",
             group = ActionGroup.View,

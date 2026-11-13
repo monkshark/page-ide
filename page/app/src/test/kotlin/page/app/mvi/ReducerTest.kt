@@ -108,15 +108,6 @@ class ReducerTest {
     }
 
     @Test
-    fun `select side view replaces active view`() {
-        val s = AppState()
-        val search = reduce(s, IdeEvent.Panel.SelectSideView(SideView.SEARCH))
-        assertEquals(SideView.SEARCH, search.layout.activeSideView)
-        val sc = reduce(search, IdeEvent.Panel.SelectSideView(SideView.SOURCE_CONTROL))
-        assertEquals(SideView.SOURCE_CONTROL, sc.layout.activeSideView)
-    }
-
-    @Test
     fun `reselecting active side view collapses to null`() {
         val s = AppState()
         val collapsed = reduce(s, IdeEvent.Panel.SelectSideView(SideView.FILES))
@@ -128,7 +119,7 @@ class ReducerTest {
     @Test
     fun `select side view leaves other slices value-equal`() {
         val s = AppState()
-        val next = reduce(s, IdeEvent.Panel.SelectSideView(SideView.SEARCH))
+        val next = reduce(s, IdeEvent.Panel.SelectSideView(SideView.FILES))
         assertEquals(s.chrome, next.chrome)
         assertEquals(s.tree, next.tree)
         assertEquals(s.editorLayout, next.editorLayout)

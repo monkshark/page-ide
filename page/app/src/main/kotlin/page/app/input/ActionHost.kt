@@ -28,6 +28,7 @@ interface ActionHost {
 
     fun toggleProblems()
     fun toggleTodo()
+    fun toggleSidebar()
     fun toggleSplit()
     fun toggleSplitOrientation()
 
