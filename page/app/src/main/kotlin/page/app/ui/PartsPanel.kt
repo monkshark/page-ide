@@ -107,6 +107,23 @@ internal fun relatedFiles(map: ProjectMap, margins: FileMargins?, partId: String
     )
 }
 
+internal fun spineTip(part: MapPart, here: Boolean, openFile: String?, related: RelatedFiles): String {
+    val name = if (part.id == ProjectMapBuilder.OTHER_ID) "Other files" else part.name
+    if (openFile == null) return name
+    fun list(paths: List<Path>): String {
+        val names = paths.map { it.fileName.toString() }
+        return if (names.size <= 3) names.joinToString(", ") else names.take(3).joinToString(", ") + " and ${names.size - 3} more"
+    }
+    return when {
+        here -> "$openFile is in $name"
+        related.users.isNotEmpty() && related.needs.isNotEmpty() -> "$name and $openFile depend on each other through ${list(related.all)}"
+        related.users.isNotEmpty() -> "$name depends on $openFile through ${list(related.users)}"
+        related.needs.isNotEmpty() -> "$openFile depends on $name through ${list(related.needs)}"
+        part.id == ProjectMapBuilder.OTHER_ID -> "Files outside every part"
+        else -> "$name has no link to $openFile"
+    }
+}
+
 @Composable
 internal fun PartsPanel(
     map: ProjectMap?,
@@ -165,6 +182,8 @@ internal fun PartsPanel(
     fun shown(part: MapPart): Boolean = !folded || part.id == currentPart?.id || part.id == selectedId || tieOf(part) == SpineTie.USER || tieOf(part) == SpineTie.NEEDED
     val ordered = (tiers.flatten() + listOfNotNull(other)).filter(::shown)
     val hiddenCount = tiers.sumOf { it.size } + (if (other != null) 1 else 0) - ordered.size
+    val relatedCache = remember(map, margins) { HashMap<String, RelatedFiles>() }
+    fun relatedByPart(id: String): RelatedFiles = relatedCache.getOrPut(id) { relatedFiles(map, margins, id) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val filterFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     Column(
@@ -250,6 +269,7 @@ internal fun PartsPanel(
                 for (part in group) {
                     PartRow(
                         part = part,
+                        spineTip = spineTip(part, part.id == currentPart?.id, current?.fileName?.toString(), relatedByPart(part.id)),
                         relation = if (part.id == currentPart?.id) null else partRelation(ties[part.id], current?.fileName?.toString()),
                         here = part.id == currentPart?.id,
                         selected = part.id == selectedId,
@@ -353,6 +373,7 @@ internal fun PartsPanel(
 @Composable
 private fun PartRow(
     part: MapPart,
+    spineTip: String,
     relation: String?,
     here: Boolean,
     selected: Boolean,
@@ -364,10 +385,13 @@ private fun PartRow(
     val colors = Glass.colors
     val other = part.id == ProjectMapBuilder.OTHER_ID
     var focused by remember { mutableStateOf(false) }
+    Row(modifier.fillMaxWidth()) {
+    page.ui.GlassTooltip(text = spineTip) {
+        Box(Modifier.width(20.dp).height(28.dp).testTag("spine-${part.id}"))
+    }
     Column(
-        modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp)
+        Modifier
+            .weight(1f)
             .clip(RoundedCornerShape(6.dp))
             .background(if (here) colors.surfaceRaised else Color.Transparent)
             .border(
@@ -408,6 +432,7 @@ private fun PartRow(
         }
         WeightBar(weight, if (here) colors.primary.copy(alpha = 0.7f) else colors.text.copy(alpha = 0.22f), Modifier.padding(top = 4.dp, bottom = 2.dp).fillMaxWidth())
     }
+}
 }
 
 @Composable

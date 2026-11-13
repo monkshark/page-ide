@@ -258,4 +258,18 @@ class PartsPanelTest {
         onNodeWithTag("file-row-Env.kt").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Enter) }
         assertEquals(file("core/Env.kt"), opened)
     }
+
+    @Test
+    fun `the spine explains each dot with real file names`() {
+        val app = project.part("app")!!
+        val core = project.part("core")!!
+        val none = RelatedFiles(emptyList(), emptyList())
+        assertEquals("LspTransport.kt is in lsp", spineTip(project.part("lsp")!!, true, "LspTransport.kt", none))
+        assertEquals("app depends on LspTransport.kt through Main.kt", spineTip(app, false, "LspTransport.kt", RelatedFiles(listOf(file("app/Main.kt")), emptyList())))
+        assertEquals("LspTransport.kt depends on core through Env.kt", spineTip(core, false, "LspTransport.kt", RelatedFiles(emptyList(), listOf(file("core/Env.kt")))))
+        assertEquals("core has no link to LspTransport.kt", spineTip(core, false, "LspTransport.kt", none))
+        val many = (1..5).map { file("app/F$it.kt") }
+        assertEquals("app depends on LspTransport.kt through F1.kt, F2.kt, F3.kt and 2 more", spineTip(app, false, "LspTransport.kt", RelatedFiles(many, emptyList())))
+        assertEquals("Files outside every part", spineTip(project.part(ProjectMapBuilder.OTHER_ID)!!, false, "LspTransport.kt", none))
+    }
 }
