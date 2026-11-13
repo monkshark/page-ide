@@ -48,6 +48,7 @@ internal fun TopBar(
     onStopRun: () -> Unit,
     onOpenRunDialog: () -> Unit,
     ui: page.app.state.LayoutUiState,
+    center: @Composable () -> Unit = {},
 ) {
     val colors = Glass.colors
     val chrome = LocalWindowChrome.current
@@ -55,6 +56,7 @@ internal fun TopBar(
         modifier = Modifier.fillMaxWidth().height(36.dp),
         color = Color.Transparent,
     ) {
+        Box(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
@@ -113,6 +115,8 @@ internal fun TopBar(
                 Spacer(Modifier.width(6.dp))
                 WindowControls(chrome, Modifier.fillMaxHeight())
             }
+        }
+        Box(Modifier.align(Alignment.Center)) { center() }
         }
     }
 }
