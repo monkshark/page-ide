@@ -93,7 +93,7 @@ class PartsPanelTest {
                 )
             }
         }
-        onNodeWithText("Highest layer first").assertIsDisplayed()
+        onNodeWithTag("parts-all").performClick()
         onNodeWithTag("relation-app").assertTextEquals("Uses this file")
         onNodeWithTag("relation-core").assertTextEquals("Used by this file")
         onNodeWithText("Other files").assertIsDisplayed()
@@ -163,6 +163,7 @@ class PartsPanelTest {
                 PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
             }
         }
+        onNodeWithTag("parts-all").performClick()
         assertEquals(0, onAllNodes(hasText("Back to lsp")).fetchSemanticsNodes().size)
         onNodeWithTag("part-core").performClick()
         onNodeWithTag("parts-back").assertTextEquals("Back to lsp")
@@ -172,19 +173,20 @@ class PartsPanelTest {
     }
 
     @Test
-    fun `folding the stack keeps only the parts tied to the open file`() = runComposeUiTest {
+    fun `the stack opens on the parts linked to the open file`() = runComposeUiTest {
         setContent {
             GlassTheme {
                 PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = mapOf("core" to PartTie(0, true)), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
             }
         }
-        onNodeWithTag("parts-fold").performClick()
         assertEquals(0, onAllNodes(androidx.compose.ui.test.hasTestTag("part-app")).fetchSemanticsNodes().size)
         onNodeWithTag("part-core").assertIsDisplayed()
         onNodeWithTag("part-lsp").assertIsDisplayed()
-        onNodeWithTag("parts-more").assertTextEquals("3 more parts")
+        onNodeWithText("Show 3 more parts").assertIsDisplayed()
         onNodeWithTag("parts-more").performClick()
         onNodeWithTag("part-app").assertIsDisplayed()
+        onNodeWithTag("parts-linked").performClick()
+        assertEquals(0, onAllNodes(androidx.compose.ui.test.hasTestTag("part-app")).fetchSemanticsNodes().size)
     }
 
     @Test
@@ -232,6 +234,7 @@ class PartsPanelTest {
                 )
             }
         }
+        onNodeWithTag("parts-all").performClick()
         waitUntil(timeoutMillis = 3_000) { onAllNodes(hasText("7")).fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("part-core").performClick()
         waitUntil(timeoutMillis = 3_000) { calls >= 2 }
@@ -247,6 +250,7 @@ class PartsPanelTest {
                 PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = { opened = it }, root = root)
             }
         }
+        onNodeWithTag("parts-all").performClick()
         onNodeWithTag("part-core").requestFocus()
         onNodeWithTag("part-core").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Enter) }
         onNodeWithText("page/core").assertIsDisplayed()

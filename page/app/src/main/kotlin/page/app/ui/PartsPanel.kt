@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -188,7 +191,7 @@ internal fun PartsPanel(
         }
     }
     val rowTops = remember(map) { mutableStateMapOf<String, Float>() }
-    var folded by remember(map) { mutableStateOf(false) }
+    var folded by remember(map, currentPart?.id) { mutableStateOf(currentPart != null) }
     fun shown(part: MapPart): Boolean = !folded || part.id == currentPart?.id || part.id == selectedId || tieOf(part) == SpineTie.USER || tieOf(part) == SpineTie.NEEDED
     val ordered = (tiers.flatten() + listOfNotNull(other)).filter(::shown)
     val hiddenCount = tiers.sumOf { it.size } + (if (other != null) 1 else 0) - ordered.size
@@ -196,8 +199,10 @@ internal fun PartsPanel(
     fun relatedByPart(id: String): RelatedFiles = relatedCache.getOrPut(id) { relatedFiles(map, margins, id) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val filterFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize()) {
+    val panelHeight = maxHeight
     Column(
-        modifier.fillMaxSize().onPreviewKeyEvent { event ->
+        Modifier.fillMaxSize().onPreviewKeyEvent { event ->
             if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
             when (event.key) {
                 androidx.compose.ui.input.key.Key.DirectionDown -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
@@ -214,18 +219,13 @@ internal fun PartsPanel(
             }
             SpineLegend(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable { folded = !folded }
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-                .testTag("parts-fold"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            FoldChevron(open = !folded, tint = colors.muted)
-            Text("Highest layer first", color = colors.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            Text("${tiers.sumOf { it.size }}", color = colors.faint, fontSize = 11.sp, fontFamily = EditorFontFamily)
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)) {
+            SegmentedSwitch(
+                options = listOf("Linked to this file", "All parts"),
+                selectedIndex = if (folded) 0 else 1,
+                onSelect = { folded = it == 0 },
+                tags = listOf("parts-linked", "parts-all"),
+            )
         }
         val spineColor = colors.primary
         val baseColor = colors.text.copy(alpha = 0.10f)
@@ -235,6 +235,8 @@ internal fun PartsPanel(
         Column(
             Modifier
                 .fillMaxWidth()
+                .heightIn(max = panelHeight * 0.46f)
+                .verticalScroll(rememberScrollState())
                 .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
                 .testTag("parts-spine")
                 .drawBehind {
@@ -304,15 +306,18 @@ internal fun PartsPanel(
                 }
             }
             if (folded && hiddenCount > 0) {
-                Text(
-                    "$hiddenCount more parts",
-                    color = colors.faint,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .padding(start = 28.dp, top = 4.dp)
+                Box(
+                    Modifier
+                        .padding(start = 24.dp, top = 4.dp)
+                        .height(24.dp)
+                        .clip(RoundedCornerShape(4.dp))
                         .clickable { folded = false }
+                        .padding(horizontal = 4.dp)
                         .testTag("parts-more"),
-                )
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text("Show $hiddenCount more parts", color = colors.muted, fontSize = 12.sp)
+                }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
@@ -384,6 +389,7 @@ internal fun PartsPanel(
             }
         }
     }
+}
 }
 
 @Composable
@@ -571,6 +577,32 @@ private fun SpineLegend(modifier: Modifier = Modifier) {
                 drawPath(GPath().apply { moveTo(s * 0.25f, s * 0.55f); lineTo(s / 2, s * 0.8f); lineTo(s * 0.75f, s * 0.55f) }, colors.primary, style = stroke)
             }
             Text("uses", color = colors.muted, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun SegmentedSwitch(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, tags: List<String>, modifier: Modifier = Modifier) {
+    val colors = Glass.colors
+    val outer = RoundedCornerShape(8.dp)
+    Row(
+        modifier.clip(outer).background(colors.background).border(1.dp, colors.text.copy(alpha = 0.28f), outer).padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        options.forEachIndexed { i, label ->
+            val on = i == selectedIndex
+            Box(
+                Modifier
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (on) colors.surfaceRaised else Color.Transparent)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 8.dp)
+                    .testTag(tags[i]),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, color = if (on) colors.text else colors.muted, fontSize = 12.sp)
+            }
         }
     }
 }
