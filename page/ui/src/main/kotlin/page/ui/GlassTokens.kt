@@ -444,7 +444,7 @@ private val SignatureColors = glassColors(
     onPrimary = Color(0xFF191C22),
     accent = Color(0xFF67B9BA),
     text = Color(0xFFC4C6CE),
-    muted = Color(0xFF8A92A6),
+    muted = Color(0xFF9AA1B2),
     error = Color(0xFFF2727F),
     warn = Color(0xFFE7B45C),
     success = Color(0xFF5BD6A0),
@@ -457,7 +457,7 @@ private val SignatureColors = glassColors(
     highlightEdge = Color(0x12FFFFFF),
     separator = Color(0x0DFFFFFF),
     primarySoft = Color(0x247D8EDB),
-    faint = Color(0xFF5A6273),
+    faint = Color(0xFF838B9D),
     danger = Color(0xFFF2727F),
 )
 
