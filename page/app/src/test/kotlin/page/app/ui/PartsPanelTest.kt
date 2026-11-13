@@ -149,4 +149,19 @@ class PartsPanelTest {
         onNodeWithTag("pinned-label").assertTextEquals("Uses LspTransport")
         onNodeWithText("Main.kt").assertIsDisplayed()
     }
+
+    @Test
+    fun `picking another part offers the way back to the open file's part`() = runComposeUiTest {
+        setContent {
+            GlassTheme {
+                PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
+            }
+        }
+        assertEquals(0, onAllNodes(hasText("Back to lsp")).fetchSemanticsNodes().size)
+        onNodeWithTag("part-core").performClick()
+        onNodeWithTag("parts-back").assertTextEquals("Back to lsp")
+        onNodeWithTag("parts-back").performClick()
+        onNodeWithText("page/lsp").assertIsDisplayed()
+        assertEquals(0, onAllNodes(hasText("Back to lsp")).fetchSemanticsNodes().size)
+    }
 }

@@ -1,6 +1,7 @@
 package page.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -243,6 +244,20 @@ internal fun PartsPanel(
                 )
                 partFolder(selected, root)?.let { Text(it, color = colors.faint, fontSize = 11.sp, fontFamily = EditorFontFamily, maxLines = 1) }
             }
+            if (currentPart != null && selected.id != currentPart.id) {
+                Text(
+                    "Back to ${currentPart.name}",
+                    color = colors.primary,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .padding(start = 16.dp, bottom = 8.dp)
+                        .clickable {
+                            selectedId = currentPart.id
+                            pinnedFor = null
+                        }
+                        .testTag("parts-back"),
+                )
+            }
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) {
                 Text("File", color = colors.faint, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 Text("Used by", color = colors.faint, fontSize = 11.sp)
@@ -294,7 +309,8 @@ private fun PartRow(
             .fillMaxWidth()
             .padding(start = 20.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(if (here || selected) colors.surfaceRaised else Color.Transparent)
+            .background(if (here) colors.surfaceRaised else Color.Transparent)
+            .border(1.dp, if (selected && !here) colors.text.copy(alpha = 0.16f) else Color.Transparent, RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
             .testTag("part-${part.id}"),
