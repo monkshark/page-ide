@@ -28,6 +28,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path as GPath
@@ -160,7 +165,19 @@ internal fun PartsPanel(
     fun shown(part: MapPart): Boolean = !folded || part.id == currentPart?.id || part.id == selectedId || tieOf(part) == SpineTie.USER || tieOf(part) == SpineTie.NEEDED
     val ordered = (tiers.flatten() + listOfNotNull(other)).filter(::shown)
     val hiddenCount = tiers.sumOf { it.size } + (if (other != null) 1 else 0) - ordered.size
-    Column(modifier.fillMaxSize()) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val filterFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    Column(
+        modifier.fillMaxSize().onPreviewKeyEvent { event ->
+            if (event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (event.key) {
+                androidx.compose.ui.input.key.Key.DirectionDown -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Next)
+                androidx.compose.ui.input.key.Key.DirectionUp -> focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Previous)
+                androidx.compose.ui.input.key.Key.Slash -> runCatching { filterFocus.requestFocus() }.isSuccess
+                else -> false
+            }
+        },
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -289,7 +306,7 @@ internal fun PartsPanel(
             }
             var query by remember(selected.id) { mutableStateOf("") }
             var byUsers by remember { mutableStateOf(false) }
-            FilterField(query, { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth())
+            FilterField(query, { query = it }, Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth().focusRequester(filterFocus))
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("File", color = colors.faint, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 Row(
@@ -346,13 +363,23 @@ private fun PartRow(
 ) {
     val colors = Glass.colors
     val other = part.id == ProjectMapBuilder.OTHER_ID
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier
             .fillMaxWidth()
             .padding(start = 20.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(if (here) colors.surfaceRaised else Color.Transparent)
-            .border(1.dp, if (selected && !here) colors.text.copy(alpha = 0.16f) else Color.Transparent, RoundedCornerShape(6.dp))
+            .border(
+                1.dp,
+                when {
+                    focused -> colors.primary
+                    selected && !here -> colors.text.copy(alpha = 0.16f)
+                    else -> Color.Transparent
+                },
+                RoundedCornerShape(6.dp),
+            )
+            .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
             .padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
             .testTag("part-${part.id}"),
@@ -398,13 +425,17 @@ private fun WeightBar(fraction: Float, fill: Color, modifier: Modifier = Modifie
 @Composable
 private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: Boolean, stale: Boolean, onOpenFile: (Path) -> Unit) {
     val colors = Glass.colors
+    var focused by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth().height(28.dp)) {
         Row(
             Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(6.dp))
                 .background(if (current) colors.surfaceRaised else Color.Transparent)
+                .border(1.dp, if (focused) colors.primary else Color.Transparent, RoundedCornerShape(6.dp))
+                .onFocusChanged { focused = it.isFocused }
                 .clickable { onOpenFile(file) }
+                .testTag("file-row-${file.fileName}")
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),

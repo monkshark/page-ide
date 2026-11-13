@@ -8,6 +8,10 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import page.atlas.graph.FileFacts
@@ -233,5 +237,25 @@ class PartsPanelTest {
         waitUntil(timeoutMillis = 3_000) { calls >= 2 }
         onNodeWithTag("parts-back").performClick()
         onNodeWithTag("file-users-JsonRpc.kt", useUnmergedTree = true).assertTextEquals("7")
+    }
+
+    @Test
+    fun `the keyboard moves through rows, picks with enter and jumps to the filter`() = runComposeUiTest {
+        var opened: Path? = null
+        setContent {
+            GlassTheme {
+                PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = emptyMap(), loadFacts = { emptyMap() }, onOpenFile = { opened = it }, root = root)
+            }
+        }
+        onNodeWithTag("part-core").requestFocus()
+        onNodeWithTag("part-core").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Enter) }
+        onNodeWithText("page/core").assertIsDisplayed()
+        onNodeWithTag("part-core").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionDown) }
+        onNodeWithTag("part-other").assertIsFocused()
+        onNodeWithTag("part-other").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Slash) }
+        onNodeWithTag("parts-filter").assertIsFocused()
+        onNodeWithTag("file-row-Env.kt").requestFocus()
+        onNodeWithTag("file-row-Env.kt").performKeyInput { pressKey(androidx.compose.ui.input.key.Key.Enter) }
+        assertEquals(file("core/Env.kt"), opened)
     }
 }
