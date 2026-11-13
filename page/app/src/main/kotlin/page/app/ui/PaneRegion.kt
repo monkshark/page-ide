@@ -68,6 +68,7 @@ internal fun PaneRegion(
     linePreviewFor: (String, Int) -> String? = { _, _ -> null },
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
     margins: MarginsBinding? = null,
+    partOf: (Path) -> String? = { null },
     onMarginsShownChange: (Boolean) -> Unit = {},
     workspaceRoot: Path? = null,
     usedElsewhere: (Path?) -> (String) -> Boolean = { { false } },
@@ -97,6 +98,7 @@ internal fun PaneRegion(
     ) {
         TabBar(
             book = pane.book,
+            partOf = partOf,
             onActivate = { idx ->
                 onPaneFocus(side)
                 editor.activateTab(side, idx)
