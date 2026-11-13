@@ -279,7 +279,7 @@ private fun PickerHeader(mode: PickMode, onClose: () -> Unit) {
         ) {
             Text(
                 text = FilePickerModel.modeTag(mode),
-                style = LocalTextStyle.current.copy(fontSize = 10.sp, letterSpacing = 0.6.sp).centered(),
+                style = LocalTextStyle.current.copy(fontSize = 11.sp).centered(),
                 color = colors.primary,
             )
         }
@@ -499,8 +499,8 @@ private fun PickerRail(current: Path, recents: List<Path>, onNavigate: (Path) ->
 @Composable
 private fun RailLabel(text: String) {
     Text(
-        text = text.uppercase(),
-        style = LocalTextStyle.current.copy(fontSize = 10.sp, letterSpacing = 1.sp).centered(),
+        text = text,
+        style = LocalTextStyle.current.copy(fontSize = 12.sp).centered(),
         color = Glass.colors.faint,
         modifier = Modifier.padding(start = 35.dp, end = 12.dp, bottom = 5.dp),
     )
@@ -577,8 +577,8 @@ private fun PickerColumn(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = title.uppercase(),
-                style = LocalTextStyle.current.copy(fontSize = 10.sp, letterSpacing = 1.sp).centered(),
+                text = title,
+                style = LocalTextStyle.current.copy(fontSize = 12.sp).centered(),
                 color = colors.faint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -717,8 +717,8 @@ private fun PickerFooter(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = (if (overwriting != null) "Already exists" else "Selected").uppercase(),
-                style = LocalTextStyle.current.copy(fontSize = 10.sp, letterSpacing = 1.sp).centered(),
+                text = if (overwriting != null) "Already exists" else "Selected",
+                style = LocalTextStyle.current.copy(fontSize = 12.sp).centered(),
                 color = if (overwriting != null) colors.warn else colors.faint,
             )
             Text(

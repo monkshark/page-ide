@@ -112,7 +112,7 @@ fun StructurePopover(
                         }
                         for ((group, files) in groupedFiles(nodes, groupOf)) {
                             if (group.isNotEmpty()) {
-                                Text(group.uppercase(), color = colors.faint, fontSize = 10.sp, letterSpacing = 1.sp, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 3.dp))
+                                Text(group, color = colors.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 3.dp))
                             }
                             files.forEach { FileRow(it, null, onOpen) }
                         }

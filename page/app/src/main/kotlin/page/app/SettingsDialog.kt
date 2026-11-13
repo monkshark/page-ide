@@ -402,11 +402,9 @@ private fun SettingsSidebar(
 @Composable
 private fun GroupLabel(text: String, first: Boolean) {
     Text(
-        text = text.uppercase(),
-        color = Glass.colors.faint,
-        fontSize = Glass.type.label,
-        fontWeight = FontWeight.Medium,
-        letterSpacing = 1.6.sp,
+        text = text,
+        color = Glass.colors.muted,
+        fontSize = Glass.type.ui,
         modifier = Modifier.padding(start = 10.dp, top = if (first) 4.dp else 12.dp, bottom = 6.dp),
     )
 }
