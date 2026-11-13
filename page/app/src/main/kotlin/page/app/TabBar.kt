@@ -70,7 +70,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.outlined.Link
@@ -106,7 +105,6 @@ data class TabContextActions(
     val onMoveToOtherPane: ((Int) -> Unit)?,
     val onSplit: ((Int) -> Unit)?,
     val onRename: (Int) -> Unit,
-    val onOpenInAtlas: ((Path) -> Unit)? = null,
 )
 
 @Composable
@@ -363,9 +361,6 @@ private fun buildTabMenuItems(
     }
     items += IconContextMenuItem("Show in Explorer", Icons.Outlined.FolderOpen) {
         actions.onShowInExplorer(index)
-    }
-    actions.onOpenInAtlas?.let { fn ->
-        items += IconContextMenuItem("Open in Atlas", Icons.Outlined.Hub) { fn(tab.path) }
     }
     actions.onMoveToOtherPane?.let { fn ->
         items += IconContextMenuItem("Move to Other Pane", Icons.Outlined.SwapHoriz) { fn(index) }

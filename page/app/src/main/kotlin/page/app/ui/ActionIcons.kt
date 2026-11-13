@@ -59,7 +59,6 @@ internal object ActionIcons {
 
         "page.actions" -> Icons.AutoMirrored.Outlined.ListAlt
         "page.cycleTheme" -> Icons.Outlined.Palette
-        "page.atlasFocus" -> Icons.Outlined.Hub
 
         else -> null
     }
