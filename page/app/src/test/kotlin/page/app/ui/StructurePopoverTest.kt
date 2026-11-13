@@ -2,6 +2,7 @@ package page.app.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -70,7 +71,7 @@ class StructurePopoverTest {
     fun `the close button dismisses it`() = runComposeUiTest {
         var dismissed = false
         setContent { GlassTheme { StructurePopover(StructureView.USED_BY, "X.kt", neighbours, groupOf, {}, {}, { dismissed = true }) } }
-        onNodeWithText("✕").performClick()
+        onNodeWithTag("structure-popover-close").performClick()
         assertTrue(dismissed)
     }
 

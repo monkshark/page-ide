@@ -114,7 +114,15 @@ fun SearchBar(
                 Spacer(Modifier.width(4.dp))
                 IconChip(label = ">", onClick = onNext, enabled = state.matches.isNotEmpty())
                 Spacer(Modifier.width(8.dp))
-                IconChip(label = "×", onClick = onClose, enabled = true)
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(24.dp)
+                        .clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    page.ui.CloseMark(tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             if (state.replaceVisible) {
                 Row(

@@ -1,5 +1,6 @@
 package page.app.ui
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,7 +89,12 @@ fun StructurePopover(
             Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(title, color = colors.text, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text("✕", color = colors.faint, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onDismiss).padding(horizontal = 4.dp, vertical = 2.dp))
+                    Box(
+                        Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).clickable(onClick = onDismiss).testTag("structure-popover-close"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        page.ui.CloseMark(tint = colors.faint)
+                    }
                 }
                 Text(lede, color = colors.muted, fontSize = 12.sp)
             }

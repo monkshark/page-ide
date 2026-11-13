@@ -376,7 +376,7 @@ private fun CloseButton(onClose: () -> Unit) {
             .clickable(interactionSource = interaction, indication = null, onClick = onClose),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = "✕", color = if (hovered) colors.text else colors.muted, fontSize = Glass.type.body)
+        page.ui.CloseMark(tint = if (hovered) colors.text else colors.muted, size = 12.dp)
     }
 }
 
