@@ -468,7 +468,7 @@ private fun TabChip(
                 text = name,
                 style = LocalTextStyle.current.copy(
                     color = nameColor,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
                     lineHeight = 12.sp,
                     lineHeightStyle = CenterTight,

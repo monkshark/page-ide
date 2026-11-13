@@ -96,7 +96,7 @@ fun TodoPanel(
                 Text(
                     text = "TODO",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 for (kw in todoOrder) {
@@ -187,7 +187,7 @@ private fun TodoFileHeader(
         Text(
             text = path.fileName?.toString() ?: path.toString(),
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         val parent = path.parent?.toString().orEmpty()
@@ -225,7 +225,7 @@ private fun TodoRow(
         Text(
             text = entry.keyword,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = todoKeywordColor(entry.keyword),
         )
         Text(
@@ -265,7 +265,7 @@ private fun TodoFilterChip(
             text = "$count $label",
             style = MaterialTheme.typography.labelSmall,
             color = textColor,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
         )
     }
 }

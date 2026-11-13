@@ -146,7 +146,7 @@ private fun PopupHeader(
             text = state.symbolName,
             style = MaterialTheme.typography.labelSmall,
             fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = Glass.colors.primary,
         )
         Box(modifier = Modifier.weight(1f))
@@ -180,7 +180,7 @@ private fun FileHeader(path: Path, count: Int) {
         Text(
             text = path.fileName?.toString() ?: path.toString(),
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = Glass.colors.text,
         )
         Text(
@@ -300,7 +300,7 @@ private fun previewText(preview: String?, ref: ReferenceLocation): androidx.comp
     return buildAnnotatedString {
         append(body.substring(0, start))
         if (end > start) {
-            pushStyle(SpanStyle(fontWeight = FontWeight.SemiBold))
+            pushStyle(SpanStyle(fontWeight = FontWeight.Medium))
             append(body.substring(start, end))
             pop()
         }

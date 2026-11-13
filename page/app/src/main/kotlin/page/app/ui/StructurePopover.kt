@@ -27,7 +27,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -88,7 +87,7 @@ fun StructurePopover(
             }
             Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, color = colors.text, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(title, color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     Box(
                         Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).clickable(onClick = onDismiss).testTag("structure-popover-close"),
                         contentAlignment = Alignment.Center,
@@ -108,7 +107,7 @@ fun StructurePopover(
             Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState()).padding(6.dp)) {
                 when (view) {
                     StructureView.CYCLE -> neighbours.cycle.forEachIndexed { i, n ->
-                        if (i > 0) Text("↓ needs", color = colors.warn, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(start = 18.dp, top = 2.dp, bottom = 2.dp))
+                        if (i > 0) Text("↓ needs", color = colors.warn, fontSize = 12.sp, fontFamily = page.ui.EditorFontFamily, modifier = Modifier.padding(start = 16.dp, top = 2.dp, bottom = 2.dp))
                         FileRow(n, if (i == 0 || i == neighbours.cycle.lastIndex) "this file" else null, onOpen)
                     }
                     else -> {
@@ -126,7 +125,7 @@ fun StructurePopover(
                 }
             }
             Box(Modifier.fillMaxWidth().heightIn(max = 1.dp).background(colors.outline))
-            Text("Click a file to open it · Esc to close", color = colors.faint, fontSize = 11.5.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Text("Click a file to open it · Esc to close", color = colors.faint, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
     }
 }
@@ -138,7 +137,7 @@ private fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
         color = if (selected) colors.text else colors.muted,
-        fontSize = 11.5.sp,
+        fontSize = 12.sp,
         modifier = Modifier.clip(shape)
             .background(if (selected) colors.primarySoft else colors.surfaceOverlay)
             .border(1.dp, if (selected) colors.primary.copy(alpha = 0.5f) else colors.outline, shape)
@@ -155,10 +154,10 @@ private fun FileRow(node: GraphNode, note: String?, onOpen: (Path) -> Unit) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable(enabled = path != null) { path?.let(onOpen) }.padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(node.label, color = colors.text, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(node.label, color = colors.text, fontSize = 13.sp, fontFamily = page.ui.EditorFontFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (note != null) {
             Spacer(Modifier.width(8.dp))
-            Text(note, color = colors.faint, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Text(note, color = colors.faint, fontSize = 11.sp, fontFamily = page.ui.EditorFontFamily)
         }
     }
 }

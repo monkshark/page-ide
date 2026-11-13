@@ -162,7 +162,7 @@ fun ProblemsPanel(
                 Text(
                     text = "Problems",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = Glass.colors.text,
                 )
                 if (errorCount > 0) ProblemBadge(errorCount, "errors", Glass.colors.error)
@@ -315,7 +315,7 @@ private fun ProblemFileHeader(
             Text(
                 text = path.fileName?.toString() ?: path.toString(),
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             val parent = path.parent?.toString().orEmpty()

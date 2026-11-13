@@ -103,7 +103,7 @@ private fun Header(
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = colors.text,
         )
         Text(
@@ -122,7 +122,7 @@ private fun Header(
         Text(
             text = "Apply",
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = if (partial) colors.warn else colors.primary,
             modifier = Modifier
                 .clip(RoundedCornerShape(Glass.radius.xs))
