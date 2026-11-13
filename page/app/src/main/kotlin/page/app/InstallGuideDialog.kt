@@ -1118,10 +1118,10 @@ private fun GuideSystemNote(info: SystemInstall) {
             alignment = LineHeightStyle.Alignment.Center,
             trim = LineHeightStyle.Trim.Both,
         )
-        Box(Modifier.size(7.dp).clip(CircleShape).border(1.5.dp, Glass.colors.accent, CircleShape))
+        Box(Modifier.size(7.dp).clip(CircleShape).border(1.5.dp, Glass.colors.muted, CircleShape))
         Text(
             text = "Detected on system" + (info.version?.let { " · $it" } ?: ""),
-            color = Glass.colors.accent,
+            color = Glass.colors.muted,
             style = LocalTextStyle.current.copy(
                 fontSize = 11.sp,
                 lineHeight = 11.sp,

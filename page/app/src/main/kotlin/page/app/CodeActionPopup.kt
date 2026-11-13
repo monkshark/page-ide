@@ -105,7 +105,7 @@ fun CodeActionPopup(
                     Text(
                         text = "Open in panel",
                         style = MaterialTheme.typography.labelSmall,
-                        color = colors.accent,
+                        color = colors.primary,
                         modifier = Modifier.clickable { onOpenInPanel() },
                     )
                 }

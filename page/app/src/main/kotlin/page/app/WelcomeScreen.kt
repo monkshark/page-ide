@@ -156,13 +156,11 @@ fun WelcomeScreen(
             ActionRow(
                 icon = Icons.Outlined.FolderOpen,
                 title = "Open folder…",
-                accentHover = false,
                 onClick = onOpenFolder,
             ) {}
             ActionRow(
                 icon = Icons.Outlined.CreateNewFolder,
                 title = "New project",
-                accentHover = false,
                 onClick = onNewProject,
             ) {}
 
@@ -191,7 +189,6 @@ fun WelcomeScreen(
                             ActionRow(
                                 icon = Icons.Outlined.Folder,
                                 title = project.fileName?.toString() ?: project.toString(),
-                                accentHover = true,
                                 onClick = { onOpenRecent(project) },
                             ) {
                                 Text(
@@ -328,7 +325,7 @@ private fun Wordmark() {
                 .padding(start = 9.dp, bottom = 7.dp)
                 .size(8.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(Glass.colors.accent),
+                .background(Glass.colors.primary),
         )
     }
 }
@@ -342,7 +339,7 @@ private fun DocsLink() {
         text = "Documentation",
         fontFamily = EditorFontFamily,
         fontSize = 11.sp,
-        color = if (hovered) Glass.colors.accent else Glass.colors.muted,
+        color = if (hovered) Glass.colors.primary else Glass.colors.muted,
         modifier = Modifier
             .hoverable(interaction)
             .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)))
@@ -374,14 +371,13 @@ private fun Divider() {
 private fun ActionRow(
     icon: ImageVector,
     title: String,
-    accentHover: Boolean,
     onClick: () -> Unit,
     trailing: @Composable () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val railHeight by animateDpAsState(if (hovered) 20.dp else 0.dp, tween(140))
-    val hoverTint = if (accentHover) Glass.colors.accent else Glass.colors.primary
+    val hoverTint = Glass.colors.primary
     val tileBg = if (hovered) hoverTint.copy(alpha = 0.14f) else Glass.colors.surface
     val tileBorder = if (hovered) hoverTint else Glass.colors.outline
     val iconTint = if (hovered) hoverTint else Glass.colors.muted
@@ -401,8 +397,8 @@ private fun ActionRow(
                 .padding(start = 3.dp)
                 .width(2.dp)
                 .height(railHeight)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Glass.colors.accent),
+                .clip(RoundedCornerShape(1.dp))
+                .background(Glass.colors.primary),
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 11.dp, vertical = 9.dp),

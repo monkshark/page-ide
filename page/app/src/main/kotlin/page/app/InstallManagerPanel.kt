@@ -559,7 +559,7 @@ private fun StatusPill(installed: Boolean, version: String?, onSystem: Boolean) 
     val shape = RoundedCornerShape(50)
     val (text, color) = when {
         installed -> ("Installed" + (version?.let { " · $it" } ?: "")) to Glass.colors.success
-        onSystem -> "On system" to Glass.colors.accent
+        onSystem -> "On system" to Glass.colors.muted
         else -> return
     }
     Text(
@@ -670,7 +670,7 @@ private fun SystemBadge() {
         Modifier
             .size(7.dp)
             .clip(CircleShape)
-            .border(1.5.dp, Glass.colors.accent, CircleShape),
+            .border(1.5.dp, Glass.colors.muted, CircleShape),
     )
 }
 
@@ -685,11 +685,11 @@ private fun SystemNote(info: SystemInstall) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
-            Modifier.size(7.dp).clip(CircleShape).border(1.5.dp, Glass.colors.accent, CircleShape),
+            Modifier.size(7.dp).clip(CircleShape).border(1.5.dp, Glass.colors.muted, CircleShape),
         )
         Text(
             text = "Also on system" + (info.version?.let { " · $it" } ?: ""),
-            color = Glass.colors.accent,
+            color = Glass.colors.muted,
             style = LocalTextStyle.current.copy(
                 fontSize = 11.sp,
                 lineHeight = 11.sp,

@@ -161,7 +161,7 @@ internal fun GlobalStatusBar(
             }
             TodoStatusBadge(
                 count = todoCount,
-                color = MaterialTheme.colorScheme.secondary,
+                color = Glass.colors.muted,
                 onClick = onTodoToggle,
             )
             val showActivities = lspActivities.isNotEmpty()
