@@ -164,4 +164,20 @@ class PartsPanelTest {
         onNodeWithText("page/lsp").assertIsDisplayed()
         assertEquals(0, onAllNodes(hasText("Back to lsp")).fetchSemanticsNodes().size)
     }
+
+    @Test
+    fun `folding the stack keeps only the parts tied to the open file`() = runComposeUiTest {
+        setContent {
+            GlassTheme {
+                PartsPanel(map = project, currentFile = file("lsp/LspTransport.kt"), ties = mapOf("core" to PartTie(0, true)), loadFacts = { emptyMap() }, onOpenFile = {}, root = root)
+            }
+        }
+        onNodeWithTag("parts-fold").performClick()
+        assertEquals(0, onAllNodes(androidx.compose.ui.test.hasTestTag("part-app")).fetchSemanticsNodes().size)
+        onNodeWithTag("part-core").assertIsDisplayed()
+        onNodeWithTag("part-lsp").assertIsDisplayed()
+        onNodeWithTag("parts-more").assertTextEquals("3 more parts")
+        onNodeWithTag("parts-more").performClick()
+        onNodeWithTag("part-app").assertIsDisplayed()
+    }
 }

@@ -152,9 +152,21 @@ internal fun PartsPanel(
         }
     }
     val rowTops = remember(map) { mutableStateMapOf<String, Float>() }
-    val ordered = tiers.flatten() + listOfNotNull(other)
+    var folded by remember(map) { mutableStateOf(false) }
+    fun shown(part: MapPart): Boolean = !folded || part.id == currentPart?.id || part.id == selectedId || tieOf(part) == SpineTie.USER || tieOf(part) == SpineTie.NEEDED
+    val ordered = (tiers.flatten() + listOfNotNull(other)).filter(::shown)
+    val hiddenCount = tiers.sumOf { it.size } + (if (other != null) 1 else 0) - ordered.size
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { folded = !folded }
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+                .testTag("parts-fold"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            FoldChevron(open = !folded, tint = colors.muted)
             Text("Highest layer first", color = colors.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Text("${tiers.sumOf { it.size }}", color = colors.faint, fontSize = 11.sp, fontFamily = EditorFontFamily)
         }
@@ -208,6 +220,8 @@ internal fun PartsPanel(
         ) {
             val groups = tiers.mapIndexed { i, tier -> if (i == tiers.lastIndex) tier + listOfNotNull(other) else tier }
                 .let { if (tiers.isEmpty() && other != null) listOf(listOf(other)) else it }
+                .map { group -> group.filter(::shown) }
+                .filter { it.isNotEmpty() }
             groups.forEachIndexed { index, group ->
                 if (index > 0) {
                     Box(Modifier.padding(start = 20.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth().height(1.dp).background(colors.separator))
@@ -230,6 +244,17 @@ internal fun PartsPanel(
                         modifier = Modifier.onGloballyPositioned { rowTops[part.id] = it.positionInParent().y },
                     )
                 }
+            }
+            if (folded && hiddenCount > 0) {
+                Text(
+                    "$hiddenCount more parts",
+                    color = colors.faint,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .padding(start = 28.dp, top = 4.dp)
+                        .clickable { folded = false }
+                        .testTag("parts-more"),
+                )
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
@@ -396,5 +421,24 @@ private fun PartFileRow(file: Path, facts: FileFacts?, weight: Float?, current: 
                     .clip(RoundedCornerShape(1.dp)).background(colors.primary),
             )
         }
+    }
+}
+
+@Composable
+private fun FoldChevron(open: Boolean, tint: Color) {
+    androidx.compose.foundation.Canvas(Modifier.width(12.dp).height(12.dp)) {
+        val s = size.width
+        val path = GPath().apply {
+            if (open) {
+                moveTo(s * 0.25f, s * 0.375f)
+                lineTo(s * 0.5f, s * 0.625f)
+                lineTo(s * 0.75f, s * 0.375f)
+            } else {
+                moveTo(s * 0.375f, s * 0.25f)
+                lineTo(s * 0.625f, s * 0.5f)
+                lineTo(s * 0.375f, s * 0.75f)
+            }
+        }
+        drawPath(path, tint, style = Stroke(1.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
