@@ -70,6 +70,6 @@ fun GlassTheme(palette: GlassPalette = GlassPalette.Signature, content: @Composa
         )
     }
     CompositionLocalProvider(LocalGlassTokens provides tokens) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme, typography = GlassTypography, content = content)
     }
 }
