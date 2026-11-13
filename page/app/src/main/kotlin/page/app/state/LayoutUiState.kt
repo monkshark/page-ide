@@ -9,10 +9,8 @@ import page.app.DeleteEntryDialogState
 import page.app.RenameEntryDialogState
 import page.app.filetree.LargeCopyDialogState
 import page.app.filetree.PasteEntryDialogState
-import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeStore
 import page.app.mvi.SideView
-import page.atlas.render.AtlasViewTab
 import page.editor.IndexedFile
 import page.lsp.DocumentSymbolEntry
 
@@ -74,27 +72,6 @@ internal class LayoutUiState(private val store: IdeStore = IdeStore()) {
     var atlasWidth: Dp
         get() = store.layout.atlasWidth
         set(value) = store.updateLayout { it.copy(atlasWidth = value) }
-    var atlasProjectMode: Boolean
-        get() = store.layout.atlasProjectMode
-        set(value) = store.updateLayout { it.copy(atlasProjectMode = value) }
-    var atlasViewTab: AtlasViewTab
-        get() = store.layout.atlasViewTab
-        set(value) = store.updateLayout { it.copy(atlasViewTab = value) }
-    var atlasVcsOverlay: Boolean
-        get() = store.layout.atlasVcsOverlay
-        set(value) = store.updateLayout { it.copy(atlasVcsOverlay = value) }
-    var atlasFollowActive: Boolean
-        get() = store.layout.atlasFollowActive
-        set(value) = store.updateLayout { it.copy(atlasFollowActive = value) }
-    var atlasFileFocus: String?
-        get() = store.layout.atlasFileFocus
-        set(value) = store.updateLayout { it.copy(atlasFileFocus = value) }
-    var atlasFileWidth: Dp
-        get() = store.layout.atlasFileWidth
-        set(value) = store.updateLayout { it.copy(atlasFileWidth = value) }
-    var expandedPanel: ExpandedPanel
-        get() = store.layout.expandedPanel
-        set(value) = store.updateLayout { it.copy(expandedPanel = value) }
 
     var createDialog: CreateEntryDialogState?
         get() = store.dialogs.createDialog

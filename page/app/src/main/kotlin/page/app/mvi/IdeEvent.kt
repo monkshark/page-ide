@@ -11,7 +11,6 @@ import page.app.PendingClose
 import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
-import page.atlas.render.AtlasViewTab
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
 import page.lsp.RenameWorkspaceEdit
@@ -42,19 +41,8 @@ internal sealed interface IdeEvent {
         data object CloseTerminal : Panel
         data object ToggleOutput : Panel
         data object CloseOutput : Panel
-        data object ToggleAtlas : Panel
         data object CloseAtlas : Panel
-        data object FocusInAtlas : Panel
         data object ShowAtlasCalls : Panel
-        data class ShowAtlasFile(val fileId: String) : Panel
-        data object CloseAtlasFile : Panel
-        data class ResizeAtlasFile(val deltaDp: Dp) : Panel
-        data class AtlasProjectModeChanged(val enabled: Boolean) : Panel
-        data class AtlasViewTabChanged(val tab: AtlasViewTab) : Panel
-        data class AtlasVcsOverlayChanged(val enabled: Boolean) : Panel
-        data class AtlasFollowActiveChanged(val enabled: Boolean) : Panel
-        data class ExpandPanel(val target: ExpandedPanel) : Panel
-        data object CollapsePanel : Panel
         data class ResizeSidebar(val deltaDp: Dp) : Panel
         data class ResizeProblems(val deltaDp: Dp) : Panel
         data class ResizeTodo(val deltaDp: Dp) : Panel

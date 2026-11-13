@@ -49,19 +49,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import page.app.*
-import page.app.mvi.ExpandedPanel
 import page.app.mvi.IdeEvent
 import page.atlas.graph.FileRole
 import page.atlas.graph.GraphNode
 import page.atlas.graph.GraphSlice
 import page.atlas.toFilePath
-import page.atlas.render.AtlasContent
-import page.atlas.render.AtlasFilePanel
 import page.atlas.render.CallGraphPanel
-import page.atlas.render.VcsMark
-import page.atlas.render.AtlasViewState
-import page.atlas.render.MapViewState
-import page.atlas.render.OverviewViewState
+import page.atlas.render.CallGraphState
 import page.app.state.EditorWorkspaceState
 import page.app.state.LayoutUiState
 import page.app.state.WorkspaceState
@@ -181,22 +175,14 @@ internal fun IdeMainLayout(
     usageRevision: Int = 0,
     tabContextActionsFor: (PaneSide) -> TabContextActions? = { null },
     settings: SettingsBinding = SettingsBinding(),
-    atlasSlice: GraphSlice = GraphSlice.EMPTY,
-    atlasMapView: MapViewState = remember { MapViewState() },
-    atlasView: AtlasViewState = remember { AtlasViewState() },
-    atlasOverviewState: OverviewViewState = remember { OverviewViewState() },
-    atlasLoadProgress: page.atlas.analyzer.ProjectAnalysisProgress? = null,
     atlasFileRole: FileRole? = null,
     atlasNeighbours: page.atlas.graph.FileNeighbours? = null,
     projectMap: page.atlas.graph.ProjectMap? = null,
     summaryVisible: Boolean = false,
     onSummaryVisibleChange: (Boolean) -> Unit = {},
     atlasProjectCycles: List<List<GraphNode>> = emptyList(),
-    onAtlasFocusActive: (() -> Unit)? = null,
-    atlasVcsMarks: Map<String, VcsMark> = emptyMap(),
-    atlasActiveId: String? = null,
     atlasCallsSlice: GraphSlice = GraphSlice.EMPTY,
-    atlasCallsView: AtlasViewState = remember { AtlasViewState() },
+    atlasCallsState: CallGraphState = remember { CallGraphState() },
     onAtlasCallsExpand: (String) -> Unit = {},
     onAtlasCallsOpen: (String) -> Unit = {},
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
@@ -255,7 +241,6 @@ internal fun IdeMainLayout(
     val installGuideOpen by (shellCtrl?.installGuideOpen ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
     var runtimeDialogOpen by remember { mutableStateOf<String?>(null) }
     var installManagerOpen by remember { mutableStateOf<String?>(null) }
-    var atlasFileSlice by remember { mutableStateOf(GraphSlice.EMPTY) }
     val runtimeVersions = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeSources = remember { mutableStateOf(mapOf<String, String>()) }
     val runtimeBuildFileVersions = remember { mutableStateOf(mapOf<String, String>()) }
@@ -301,7 +286,6 @@ internal fun IdeMainLayout(
                 ui.titleMenu != null -> { ui.titleMenu = null; true }
                 installManagerOpen != null -> { installManagerOpen = null; true }
                 settingsPanelOpen -> { onSettingsPanelClose(); true }
-                ui.atlasFileFocus != null -> { onEvent(IdeEvent.Panel.CloseAtlasFile); true }
                 else -> false
             }
         } else false
@@ -580,28 +564,9 @@ internal fun IdeMainLayout(
                     slice = atlasCallsSlice,
                     width = ui.atlasWidth,
                     onClose = { onEvent(IdeEvent.Panel.CloseAtlas) },
-                    callsView = atlasCallsView,
+                    state = atlasCallsState,
                     onSelect = onAtlasCallsExpand,
                     onOpen = onAtlasCallsOpen,
-                )
-                }
-            }
-            AnimatedVisibility(
-                visible = ui.atlasFileFocus != null,
-                enter = expandHorizontally(tween(180), expandFrom = Alignment.End) + fadeIn(tween(180)),
-                exit = shrinkHorizontally(tween(180), shrinkTowards = Alignment.End) + fadeOut(tween(180)),
-            ) {
-                Row(modifier = Modifier.fillMaxHeight()) {
-                ResizeHandle(onDeltaDp = { onEvent(IdeEvent.Panel.ResizeAtlasFile(it)) })
-                AtlasFilePanel(
-                    slice = atlasFileSlice,
-                    fileId = ui.atlasFileFocus ?: "",
-                    width = ui.atlasFileWidth,
-                    onClose = { onEvent(IdeEvent.Panel.CloseAtlasFile) },
-                    onOpenFile = { id, path ->
-                        onOpenFile(path)
-                        onEvent(IdeEvent.Panel.ShowAtlasFile(id))
-                    },
                 )
                 }
             }
@@ -847,10 +812,6 @@ internal fun IdeMainLayout(
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(top = 48.dp, end = 16.dp), contentAlignment = Alignment.TopEnd) {
             ProjectSummaryCard(summaryMap, onDismiss = { onSummaryVisibleChange(false) })
         }
-    }
-    when (ui.expandedPanel) {
-        ExpandedPanel.ATLAS -> Unit
-        ExpandedPanel.NONE -> Unit
     }
     }
 }

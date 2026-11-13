@@ -11,7 +11,6 @@ import page.app.PendingClose
 import page.app.ReferencesQueryState
 import page.app.RenameEntryDialogState
 import page.app.filetree.PasteEntryDialogState
-import page.atlas.render.AtlasViewTab
 import page.editor.SplitOrientation
 import page.editor.SplitPaneState
 import page.lsp.CodeActionEntry
@@ -19,7 +18,6 @@ import page.runtime.RunConfigsState
 import page.ui.GlassPalette
 import java.nio.file.Path
 
-internal enum class ExpandedPanel { NONE, ATLAS }
 
 internal enum class SideView { FILES, SEARCH, SOURCE_CONTROL }
 
@@ -43,13 +41,6 @@ internal data class LayoutState(
     val referencesHeight: Dp = 220.dp,
     val atlasOpen: Boolean = false,
     val atlasWidth: Dp = 360.dp,
-    val atlasProjectMode: Boolean = false,
-    val atlasViewTab: AtlasViewTab = AtlasViewTab.MODULES,
-    val atlasVcsOverlay: Boolean = true,
-    val atlasFollowActive: Boolean = false,
-    val atlasFileFocus: String? = null,
-    val atlasFileWidth: Dp = 260.dp,
-    val expandedPanel: ExpandedPanel = ExpandedPanel.NONE,
 )
 
 internal data class ChromeState(
