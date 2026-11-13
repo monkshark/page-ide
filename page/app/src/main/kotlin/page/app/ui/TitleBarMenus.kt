@@ -172,6 +172,6 @@ private fun MenuButton(
             )
             .hoverable(interaction)
             .clickable { onClick(x) }
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }

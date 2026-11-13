@@ -106,7 +106,7 @@ fun CompactMenuItem(
             .clickable(enabled = enabled) { onClick() }
             .padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (icon != null) {
             Icon(

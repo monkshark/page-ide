@@ -186,7 +186,7 @@ private fun OutputHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(28.dp)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

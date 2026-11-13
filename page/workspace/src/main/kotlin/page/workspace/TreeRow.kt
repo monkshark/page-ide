@@ -70,9 +70,9 @@ import java.awt.datatransfer.DataFlavor
 import java.nio.file.Files
 import java.nio.file.Path
 
-private val RowHeight = 22.dp
+private val RowHeight = 24.dp
 private val ChevronSlot = 18.dp
-private val IndentStep = 14.dp
+private val IndentStep = 16.dp
 private val EdgePadding = 8.dp
 
 private val TreeCenterTight = LineHeightStyle(
