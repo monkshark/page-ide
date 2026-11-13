@@ -26,6 +26,7 @@ import page.app.mvi.SideView
 import page.ui.Glass
 
 internal fun sideViewLabel(view: SideView): String = when (view) {
+    SideView.PARTS -> "Parts"
     SideView.FILES -> "Files"
 }
 

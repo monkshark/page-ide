@@ -506,6 +506,8 @@ internal class AppController(
     val openSettings: () -> Unit = { appState.settingsDialogOpen = true }
     var onToggleProjectSummary: () -> Unit = {}
 
+    private var lastSideView = page.app.mvi.SideView.PARTS
+
     private val actionHost = object : ActionHost {
         override val hasSearch: Boolean get() = focused().search != null
 
@@ -551,7 +553,9 @@ internal class AppController(
         override fun toggleProblems() { layoutUiState.problemsOpen = !layoutUiState.problemsOpen }
         override fun toggleTodo() { layoutUiState.todoOpen = !layoutUiState.todoOpen }
         override fun toggleSidebar() {
-            layoutUiState.activeSideView = if (layoutUiState.activeSideView == null) page.app.mvi.SideView.FILES else null
+            val current = layoutUiState.activeSideView
+            if (current != null) lastSideView = current
+            layoutUiState.activeSideView = if (current == null) lastSideView else null
         }
         override fun toggleSplit() { editorWorkspace.splitEnabled = !editorWorkspace.splitEnabled }
         override fun toggleSplitOrientation() {
