@@ -221,7 +221,7 @@ private fun TodoRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(modifier = Modifier.size(8.dp).background(todoKeywordColor(entry.keyword), CircleShape))
+        Box(modifier = Modifier.size(6.dp).background(todoKeywordColor(entry.keyword), CircleShape))
         Text(
             text = entry.keyword,
             style = MaterialTheme.typography.labelSmall,
@@ -260,7 +260,7 @@ private fun TodoFilterChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(modifier = Modifier.size(7.dp).background(color, CircleShape))
+        Box(modifier = Modifier.size(6.dp).background(color, CircleShape))
         Text(
             text = "$count $label",
             style = MaterialTheme.typography.labelSmall,

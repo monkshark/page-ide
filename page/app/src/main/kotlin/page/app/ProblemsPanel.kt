@@ -421,7 +421,7 @@ private fun ProblemRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+            Box(modifier = Modifier.size(6.dp).background(color, CircleShape))
             Text(
                 text = "${entry.diagnostic.start.line + 1}:${entry.diagnostic.start.character + 1}",
                 style = MaterialTheme.typography.bodySmall,
@@ -441,7 +441,7 @@ private fun ProblemRow(
 @Composable
 private fun ProblemBadge(count: Int, label: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(modifier = Modifier.size(7.dp).background(color, CircleShape))
+        Box(modifier = Modifier.size(6.dp).background(color, CircleShape))
         Text(
             text = "$count $label",
             style = MaterialTheme.typography.labelSmall,

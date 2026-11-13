@@ -441,11 +441,11 @@ private fun DiagnosticBadge(
     Row(
         modifier = rowMod,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(6.dp)
                 .background(color, CircleShape),
         )
         Text(
@@ -468,11 +468,11 @@ private fun TodoStatusBadge(
     Row(
         modifier = rowMod,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(6.dp)
                 .background(color, CircleShape),
         )
         Text(
@@ -561,7 +561,7 @@ private fun StructureChip(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (color != null) {
-                Box(modifier = Modifier.size(8.dp).background(color, CircleShape))
+                Box(modifier = Modifier.size(6.dp).background(color, CircleShape))
             }
             Text(
                 text = label,
