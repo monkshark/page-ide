@@ -160,7 +160,7 @@ private fun PopupHeader(
             Text(
                 text = "Open in panel",
                 style = MaterialTheme.typography.labelSmall,
-                color = Glass.colors.accent,
+                color = Glass.colors.primary,
                 modifier = Modifier.clickable { onOpenInPanel() }.padding(horizontal = 4.dp),
             )
         }

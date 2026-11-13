@@ -432,9 +432,9 @@ private fun SidebarRow(cat: SettingsCategory, selected: Boolean, onClick: () -> 
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 2.dp)
-                    .size(width = 2.5.dp, height = 18.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.accent),
+                    .size(width = 2.dp, height = 16.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(colors.primary),
             )
         }
         Row(
