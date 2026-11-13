@@ -1,5 +1,7 @@
 package page.app
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
 import page.runtime.*
 import page.workspace.*
 
@@ -425,12 +427,15 @@ private fun TerminalTabChip(
                                 color = fg,
                             )
                         }
-                        Text(
-                            text = "x",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = fg,
-                            modifier = Modifier.clickable { onClose() },
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .clickable { onClose() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            page.ui.CloseMark(tint = fg, size = 8.dp)
+                        }
                     }
                 }
             }

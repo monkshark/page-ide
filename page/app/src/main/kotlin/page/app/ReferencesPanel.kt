@@ -99,12 +99,7 @@ fun ReferencesPanel(
                 }
                 CountBadge(state.results.size)
                 Box(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Close",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { onClose() }.padding(4.dp),
-                )
+                page.app.ui.PanelCloseButton(onClose = onClose)
             }
             Box(
                 modifier = Modifier

@@ -530,11 +530,7 @@ private fun ManagerDetailPane(
                                     .clickable { confirmDeleteVersion = v },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text(
-                                    text = "✕",
-                                    color = Glass.colors.danger.copy(alpha = 0.7f),
-                                    style = centeredStyle.copy(fontSize = 12.sp, lineHeight = 12.sp),
-                                )
+                                page.ui.CloseMark(tint = Glass.colors.danger.copy(alpha = 0.7f))
                             }
                         }
                     }

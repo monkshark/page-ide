@@ -1,5 +1,6 @@
 package page.app
 
+import androidx.compose.ui.draw.clip
 import page.runtime.*
 import page.workspace.*
 
@@ -489,6 +490,7 @@ private fun CloseButton(dirty: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .width(16.dp)
             .height(16.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
             .background(
                 color = if (isHovered)
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -501,17 +503,14 @@ private fun CloseButton(dirty: Boolean, onClick: () -> Unit) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = if (showDot) "●" else "×",
-            style = LocalTextStyle.current.copy(
-                color = if (showDot)
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily.Monospace,
-                fontSize = if (showDot) 10.sp else 12.sp,
-                lineHeight = 12.sp,
-                lineHeightStyle = CenterTight,
-            ),
-        )
+        if (showDot) {
+            Box(
+                Modifier.width(6.dp).height(6.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        } else {
+            page.ui.CloseMark(tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
