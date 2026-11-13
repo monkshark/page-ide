@@ -67,7 +67,6 @@ internal fun PaneRegion(
     onReferencesOpenInPanel: () -> Unit = {},
     linePreviewFor: (String, Int) -> String? = { _, _ -> null },
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
-    onShowInAtlas: (Path) -> Unit = {},
     workspaceRoot: Path? = null,
     usedElsewhere: (Path?) -> (String) -> Boolean = { { false } },
     usageRevision: Int = 0,

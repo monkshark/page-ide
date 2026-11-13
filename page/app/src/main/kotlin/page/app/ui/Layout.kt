@@ -92,7 +92,6 @@ internal data class FileTreePanelActions(
     val onDeleteEntry: (Path) -> Unit,
     val onDeleteEntries: (Set<Path>) -> Unit,
     val onRevealInFiles: (Path) -> Unit,
-    val onOpenInAtlas: ((Path) -> Unit)? = null,
     val onCopyPath: (Path) -> Unit,
     val onCopyRelativePath: (Path) -> Unit,
     val onPasteInto: (Path) -> Unit,
@@ -201,7 +200,6 @@ internal fun IdeMainLayout(
     onAtlasCallsExpand: (String) -> Unit = {},
     onAtlasCallsOpen: (String) -> Unit = {},
     onShowCallGraph: (Path, Int, Int) -> Unit = { _, _, _ -> },
-    onShowInAtlas: (Path) -> Unit = {},
     palette: GlassPalette = GlassPalette.Signature,
     onSelectPalette: (GlassPalette) -> Unit = {},
 ) {
@@ -213,7 +211,6 @@ internal fun IdeMainLayout(
     val onDeleteEntry = fileTree.onDeleteEntry
     val onDeleteEntries = fileTree.onDeleteEntries
     val onRevealInFiles = fileTree.onRevealInFiles
-    val onOpenInAtlas = fileTree.onOpenInAtlas
     val onCopyPath = fileTree.onCopyPath
     val onCopyRelativePath = fileTree.onCopyRelativePath
     val onPasteInto = fileTree.onPasteInto
@@ -380,7 +377,6 @@ internal fun IdeMainLayout(
                                 onDeleteOne = onDeleteEntry,
                                 onDeleteMany = onDeleteEntries,
                                 onReveal = onRevealInFiles,
-                                onOpenInAtlas = onOpenInAtlas,
                                 onCopyPath = onCopyPath,
                                 onCopyRelativePath = onCopyRelativePath,
                                 onPasteInto = onPasteInto,
@@ -470,7 +466,6 @@ internal fun IdeMainLayout(
                                 onReferencesOpenInPanel = onReferencesOpenInPanel,
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
-                                onShowInAtlas = onShowInAtlas,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.PRIMARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),
@@ -512,7 +507,6 @@ internal fun IdeMainLayout(
                                 onReferencesOpenInPanel = onReferencesOpenInPanel,
                                 linePreviewFor = linePreviewFor,
                                 onShowCallGraph = onShowCallGraph,
-                                onShowInAtlas = onShowInAtlas,
                                 workspaceRoot = workspace.rootDir,
                                 editorFocusVersion = if (editor.focusedPane == PaneSide.SECONDARY) editorFocusVersion else 0,
                                 initialFoldedStartLines = foldedLinesFor(editor.secondaryPane.book.active?.path),
@@ -553,7 +547,6 @@ internal fun IdeMainLayout(
                         onReferencesOpenInPanel = onReferencesOpenInPanel,
                         linePreviewFor = linePreviewFor,
                         onShowCallGraph = onShowCallGraph,
-                        onShowInAtlas = onShowInAtlas,
                         workspaceRoot = workspace.rootDir,
                         editorFocusVersion = editorFocusVersion,
                         initialFoldedStartLines = foldedLinesFor(editor.primaryPane.book.active?.path),

@@ -32,7 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -174,7 +173,6 @@ fun EditorPanel(
     onReferencesDismiss: () -> Unit = {},
     referenceLinePreview: (String, Int) -> String? = { _, _ -> null },
     onShowCallGraph: ((line: Int, character: Int) -> Unit)? = null,
-    onShowInAtlas: (() -> Unit)? = null,
     onRequestInlayHints: ((startLine: Int, startCharacter: Int, endLine: Int, endCharacter: Int) -> CompletableFuture<List<InlayHintItem>>)? = null,
     workspaceRoot: Path? = null,
     editorFocusVersion: Int = 0,
@@ -1564,21 +1562,11 @@ fun EditorPanel(
                             },
                         )
                     }
-                    val showInAtlas = onShowInAtlas
-                    if (showInAtlas != null) {
-                        add(
-                            page.ui.EditorContextAction(
-                                label = "Show in Atlas",
-                                icon = Icons.Outlined.Hub,
-                                shortcut = page.app.input.ActionCatalog.labelOf("page.atlasFocus"),
-                            ) { showInAtlas() },
-                        )
-                    }
                     val callGraph = onShowCallGraph
                     if (callGraph != null) {
                         add(
                             page.ui.EditorContextAction(
-                                label = "Show Call Graph in Atlas",
+                                label = "Show Call Graph",
                                 icon = Icons.Outlined.AccountTree,
                             ) {
                                 val text = value.text

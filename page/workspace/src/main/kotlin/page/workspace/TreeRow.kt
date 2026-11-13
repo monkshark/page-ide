@@ -36,7 +36,6 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FolderOpen
-import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.SubdirectoryArrowRight
@@ -105,7 +104,6 @@ fun TreeRow(
     onCopyFiles: (Set<Path>) -> Unit,
     onPasteInto: (Path) -> Unit,
     onOpenMany: (Set<Path>) -> Unit,
-    onOpenInAtlas: ((Path) -> Unit)? = null,
     dragState: TreeDragState? = null,
     onDragStartFrom: ((Path, TreeDragController.Mode) -> Unit)? = null,
     onDragRelease: (() -> Unit)? = null,
@@ -225,9 +223,6 @@ fun TreeRow(
                 }
                 if (!multi) {
                     if (isNotEmpty()) add(ContextMenuItem(MENU_SEPARATOR) {})
-                    if (onOpenInAtlas != null && !node.isDirectory) {
-                        add(ContextMenuItem("Open in Atlas") { onOpenInAtlas(node.path) })
-                    }
                     add(ContextMenuItem("Show in Explorer") { onReveal(node.path) })
                     add(ContextMenuItem("Copy path") { onCopyPath(node.path) })
                     add(ContextMenuItem("Copy relative path") { onCopyRelativePath(node.path) })
@@ -382,7 +377,6 @@ private fun treeMenuIcon(label: String): androidx.compose.ui.graphics.vector.Ima
     label.startsWith("Rename") -> Icons.Outlined.DriveFileRenameOutline
     label.startsWith("Delete") -> Icons.Outlined.DeleteOutline
     label.startsWith("Show in Explorer") -> Icons.Outlined.FolderOpen
-    label == "Open in Atlas" -> Icons.Outlined.Hub
     label == "Copy path" -> Icons.Outlined.Link
     label == "Copy relative path" -> Icons.Outlined.SubdirectoryArrowRight
     else -> null
