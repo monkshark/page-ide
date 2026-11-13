@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 
 object Glass {
     val colors: GlassColors
@@ -54,6 +55,11 @@ fun GlassTheme(palette: GlassPalette = GlassPalette.Signature, content: @Composa
             surfaceVariant = c.surfaceL3,
             onSurfaceVariant = c.muted,
             outline = c.outline,
+            outlineVariant = c.outline,
+            tertiary = c.muted,
+            inverseSurface = c.surfaceRaised,
+            inverseOnSurface = c.text,
+            surfaceTint = Color.Transparent,
             error = c.danger,
         ) else darkColorScheme(
             primary = c.primary,
@@ -66,6 +72,11 @@ fun GlassTheme(palette: GlassPalette = GlassPalette.Signature, content: @Composa
             surfaceVariant = c.surfaceL3,
             onSurfaceVariant = c.muted,
             outline = c.outline,
+            outlineVariant = c.outline,
+            tertiary = c.muted,
+            inverseSurface = c.surfaceRaised,
+            inverseOnSurface = c.text,
+            surfaceTint = Color.Transparent,
             error = c.danger,
         )
     }
